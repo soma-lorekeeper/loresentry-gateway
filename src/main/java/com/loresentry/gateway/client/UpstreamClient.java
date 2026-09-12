@@ -3,6 +3,7 @@ package com.loresentry.gateway.client;
 import java.util.Map;
 
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -31,6 +32,19 @@ public abstract class UpstreamClient {
 
     public Map<String, Object> health() {
         return get("/health");
+    }
+
+    public Map<String, Object> databaseHealth() {
+        try {
+            return restClient.get()
+                    .uri("/health/db")
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    })
+                    .body(JSON_OBJECT);
+        } catch (RestClientException exception) {
+            throw new UpstreamException(name, name + " call to /health/db failed", exception);
+        }
     }
 
     protected Map<String, Object> get(String uri) {
