@@ -12,6 +12,7 @@ Cloudflare → ALB → gateway → authentication · content · ai-chat · graph
 
 - Single public API surface for clients
 - Routing to internal services
+- The CORS boundary for every browser client
 - **API composition** — fan out to several services and merge one response
 - Verifying the caller's identity and forwarding it inward
 - Hiding the internal service topology from clients
@@ -147,6 +148,9 @@ rather than leaking a stack trace:
 | `loresentry.upstream.content.base-url` | `http://content-api` | |
 | `spring.http.clients.connect-timeout` | `2s` | Applies to every outbound client. |
 | `spring.http.clients.read-timeout` | `10s` | Raise this before proxying AI streaming responses. |
+| `loresentry.cors.allowed-origin-patterns` | see below | Browser origins allowed to call the API. |
+| `loresentry.cors.allow-credentials` | `true` | Needed for cookie-based sessions. |
+| `loresentry.cors.max-age` | `1h` | How long a browser may cache a preflight response. |
 
 Any of them can be overridden by environment variable, e.g.
 `LORESENTRY_UPSTREAM_GRAPHRAG_BASEURL`.
@@ -154,6 +158,47 @@ Any of them can be overridden by environment variable, e.g.
 Timeouts are currently global. Once upstreams have genuinely different latency
 profiles — a graph query against Neptune is not an auth lookup — give each client
 its own `HttpClientSettings` instead.
+
+### CORS
+
+The gateway is the only service a browser talks to, so it is the only place CORS
+is configured. The internal services have none, and need none.
+
+```yaml
+loresentry:
+  cors:
+    allowed-origin-patterns:
+      - https://loresentry.com
+      - https://*.loresentry.com     # www, app, and any future subdomain
+      - http://localhost:[*]         # local frontend on any port
+      - http://127.0.0.1:[*]
+```
+
+`allowedOriginPatterns` is used rather than `allowedOrigins` because
+`allowCredentials: true` forbids a literal `*` — the browser rejects a wildcard
+origin on a credentialed request. Patterns keep the wildcard while still echoing
+one concrete origin back per request, which is what the browser requires.
+
+The patterns are matched as whole origins, not substrings, so lookalikes are
+refused with `403`:
+
+| Origin | |
+| --- | --- |
+| `https://loresentry.com` | allowed |
+| `https://app.loresentry.com` | allowed |
+| `http://localhost:3000` | allowed |
+| `https://loresentry.com.evil.com` | **403** |
+| `https://loresentry.evil.com` | **403** |
+| `http://loresentry.com` | **403** — plain HTTP is not an allowed pattern |
+
+Spring adds `Vary: Origin` automatically, which matters once a CDN or Cloudflare
+caches API responses: without it a response allowing one origin could be served
+to another.
+
+Allowing `localhost` on **any** port is a deliberate development convenience —
+it lets a local frontend call the deployed API. It is also the loosest part of
+this policy, since it is paired with `allowCredentials: true`. Narrow it to the
+real frontend origins when the service handles anything worth stealing.
 
 ## Run locally
 
@@ -184,7 +229,7 @@ kubectl port-forward -n prod svc/content-api        8004:80
 ./gradlew build
 ```
 
-26 tests, no AWS or network access required:
+39 tests, no AWS or network access required:
 
 | Test | Covers |
 | --- | --- |
@@ -192,6 +237,7 @@ kubectl port-forward -n prod svc/content-api        8004:80
 | `client/UpstreamClientTest` | The shared `UpstreamClient` logic — `/` and `/health` calls, and failure wrapping — parameterized over all four clients against `MockRestServiceServer`. No Spring context. |
 | `config/UpstreamWiringTest` | That each client is wired to **its own** upstream host. Sentinel base URLs are injected and outbound requests recorded, so swapping two `RestClient` beans in `RestClientConfig` fails the build. |
 | `web/UpstreamRoutesTest` | That `/graph`, `/ai-chat`, `/auth` and `/content` reach the right client, and that an upstream failure becomes a `502`. |
+| `web/CorsTest` | Preflight and actual requests for six allowed origins and four rejected lookalikes, plus the advertised methods, max-age and `Vary` header. |
 
 `@RestClientTest` is **not** used for the client tests. Its auto-configured
 `MockRestServiceServer` can only bind to one `RestClient` per context, and this
