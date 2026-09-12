@@ -23,14 +23,32 @@ until every feature change has to pass through it.
 
 ## Stack, and why
 
-| | Choice |
+| | Version | Notes |
+| --- | --- | --- |
+| Java | **21** (LTS) | Virtual threads are stable here. Toolchain-pinned in `build.gradle`. |
+| Spring Boot | **4.1.1** | |
+| Spring Framework | 7.0.9 | Pulled in by Boot 4.1.1. |
+| Web stack | `spring-boot-starter-webmvc` | **Servlet MVC, not WebFlux.** Boot 4 renamed the old `-web` starter, so the choice is visible in the dependency list. |
+| Concurrency | Virtual threads | `spring.threads.virtual.enabled=true` |
+| HTTP client | `RestClient` via `spring-boot-starter-restclient` | Boot 4 split RestClient support out of the web starter. |
+| Build | Gradle 9.7.1 (wrapper) | No local Gradle install needed — use `./gradlew`. |
+| Container base | `eclipse-temurin:21-jdk-alpine` → `21-jre-alpine` | Multi-stage; the runtime image carries only the JRE. |
+
+### A note on "Spring Boot 3"
+
+This service was specified as Spring Boot 3. Spring Initializr no longer offers a
+3.x line — the available releases are 4.0.x and 4.1.x — so it is built on 4.1.1.
+The part of the decision that mattered, **MVC plus virtual threads rather than
+WebFlux**, is unchanged and is if anything more explicit on Boot 4.
+
+Four API differences will trip up any Boot 3 example you copy from:
+
+| Boot 3 | Boot 4.1 |
 | --- | --- |
-| Language | Java 21 (LTS) |
-| Framework | Spring Boot 4.1 |
-| Web stack | **Spring MVC**, not WebFlux |
-| Concurrency | **Virtual threads** (`spring.threads.virtual.enabled=true`) |
-| HTTP client | `RestClient` |
-| Build | Gradle wrapper |
+| `spring-boot-starter-web` | `spring-boot-starter-webmvc` |
+| `ClientHttpRequestFactorySettings` | `HttpClientSettings` |
+| `RestClient` in the web starter | separate `spring-boot-starter-restclient` |
+| `org.springframework.boot.test.autoconfigure.web.client.RestClientTest` | `org.springframework.boot.restclient.test.autoconfigure.RestClientTest` |
 
 ### Why Spring, when two services are FastAPI
 
