@@ -17,3 +17,9 @@ loresentry:
   upstream:
     graph-rag:
       base-url: http://graph-rag-api
+    ai-chat:
+      base-url: http://ai-chat-api
+    authentication:
+      base-url: http://authentication-api
+    content:
+      base-url: http://content-api

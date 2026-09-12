@@ -105,9 +105,13 @@ services and one client.
 | `GET` | `/health` | `{"status":"ok"}`. Used by the Kubernetes probes and the ALB target group. |
 | `GET` | `/` | `{"service":"gateway-api"}` |
 | `GET` | `/graph` | Calls `graph-rag` and returns its payload nested under `upstream`. |
+| `GET` | `/ai-chat` | Same, against `ai-chat`. |
+| `GET` | `/auth` | Same, against `authentication`. |
+| `GET` | `/content` | Same, against `content`. |
 
-`/graph` is the first composition endpoint and exists to prove the call chain
-end to end:
+The four upstream endpoints are **relay probes**, not finished API surface. They
+exist to prove each call chain end to end before the services have any domain
+logic, and each is the place the real endpoints for that service will go:
 
 ```json
 {
@@ -119,6 +123,11 @@ end to end:
 
 The `thread` field is there to make the virtual thread visible while the platform
 is being built out; drop it once that stops being interesting.
+
+Deliberately *not* done here: a single catch-all `/**` route that forwards
+anything to a matching service. That would turn the gateway into a reverse proxy,
+duplicating what the ALB already does, and leave nowhere to put composition,
+identity forwarding, or response reshaping. Each route is declared explicitly.
 
 When an upstream fails the gateway answers `502` with a body naming the upstream,
 rather than leaking a stack trace:
@@ -133,6 +142,9 @@ rather than leaking a stack trace:
 | --- | --- | --- |
 | `server.port` | `8000` | The platform convention; Spring's own default is 8080. |
 | `loresentry.upstream.graph-rag.base-url` | `http://graph-rag-api` | In-cluster Service DNS. |
+| `loresentry.upstream.ai-chat.base-url` | `http://ai-chat-api` | |
+| `loresentry.upstream.authentication.base-url` | `http://authentication-api` | |
+| `loresentry.upstream.content.base-url` | `http://content-api` | |
 | `spring.http.clients.connect-timeout` | `2s` | Applies to every outbound client. |
 | `spring.http.clients.read-timeout` | `10s` | Raise this before proxying AI streaming responses. |
 
@@ -150,7 +162,8 @@ its own `HttpClientSettings` instead.
 curl localhost:8000/health
 ```
 
-`/graph` needs `graph-rag` reachable. Either point it at a local instance:
+The upstream endpoints need their services reachable. Either point one at a local
+instance:
 
 ```bash
 ./gradlew bootRun --args='--loresentry.upstream.graph-rag.base-url=http://127.0.0.1:8001'
@@ -159,7 +172,10 @@ curl localhost:8000/health
 or at the cluster:
 
 ```bash
-kubectl port-forward -n prod svc/graph-rag-api 8001:80
+kubectl port-forward -n prod svc/graph-rag-api      8001:80
+kubectl port-forward -n prod svc/ai-chat-api        8002:80
+kubectl port-forward -n prod svc/authentication-api 8003:80
+kubectl port-forward -n prod svc/content-api        8004:80
 ```
 
 ## Test
@@ -168,9 +184,20 @@ kubectl port-forward -n prod svc/graph-rag-api 8001:80
 ./gradlew build
 ```
 
-Covers context startup, that virtual threads are actually enabled, and the
-upstream client's success and failure paths against `MockRestServiceServer`. No
-AWS or network access required.
+26 tests, no AWS or network access required:
+
+| Test | Covers |
+| --- | --- |
+| `GatewayApplicationTests` | Context startup, and that virtual threads are actually enabled. |
+| `client/UpstreamClientTest` | The shared `UpstreamClient` logic — `/` and `/health` calls, and failure wrapping — parameterized over all four clients against `MockRestServiceServer`. No Spring context. |
+| `config/UpstreamWiringTest` | That each client is wired to **its own** upstream host. Sentinel base URLs are injected and outbound requests recorded, so swapping two `RestClient` beans in `RestClientConfig` fails the build. |
+| `web/UpstreamRoutesTest` | That `/graph`, `/ai-chat`, `/auth` and `/content` reach the right client, and that an upstream failure becomes a `502`. |
+
+`@RestClientTest` is **not** used for the client tests. Its auto-configured
+`MockRestServiceServer` can only bind to one `RestClient` per context, and this
+application has four — the slice fails with *"MockServerRestClientCustomizer has
+been bound to more than one RestClient"*. Building the client by hand with
+`MockServerRestClientCustomizer` avoids the context entirely and runs faster.
 
 ## Deploy
 

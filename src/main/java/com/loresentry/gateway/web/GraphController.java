@@ -12,17 +12,15 @@ public class GraphController {
 
     private final GraphRagClient graphRagClient;
 
-    public GraphController(GraphRagClient graphRagClient) {
+    private final UpstreamRelay relay;
+
+    public GraphController(GraphRagClient graphRagClient, UpstreamRelay relay) {
         this.graphRagClient = graphRagClient;
+        this.relay = relay;
     }
 
     @GetMapping("/graph")
     public Map<String, Object> graph() {
-        Map<String, Object> upstream = graphRagClient.describe();
-
-        return Map.of(
-                "service", "gateway-api",
-                "thread", Thread.currentThread().toString(),
-                "upstream", Map.of("graph-rag", upstream));
+        return relay.describe(graphRagClient);
     }
 }

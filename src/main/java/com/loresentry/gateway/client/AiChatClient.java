@@ -4,9 +4,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
-public class GraphRagClient extends UpstreamClient {
+public class AiChatClient extends UpstreamClient {
 
-    public GraphRagClient(RestClient graphRagRestClient) {
-        super("graph-rag", graphRagRestClient);
+    public AiChatClient(RestClient aiChatRestClient) {
+        super("ai-chat", aiChatRestClient);
     }
 }
