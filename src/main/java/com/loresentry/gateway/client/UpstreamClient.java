@@ -4,6 +4,8 @@ import java.util.Map;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -44,6 +46,36 @@ public abstract class UpstreamClient {
                     .body(JSON_OBJECT);
         } catch (RestClientException exception) {
             throw new UpstreamException(name, name + " call to /health/db failed", exception);
+        }
+    }
+
+    protected ResponseEntity<Map<String, Object>> relayGet(String uri, Object... uriVariables) {
+        try {
+            return restClient.get()
+                    .uri(uri, uriVariables)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    })
+                    .toEntity(JSON_OBJECT);
+        } catch (RestClientException exception) {
+            throw new UpstreamException(name, name + " call to " + uri + " failed", exception);
+        }
+    }
+
+    protected ResponseEntity<Map<String, Object>> relayPost(String uri, Object body, Object... uriVariables) {
+        try {
+            RestClient.RequestBodySpec spec = restClient.post()
+                    .uri(uri, uriVariables)
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (body != null) {
+                spec.body(body);
+            }
+            return spec.retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    })
+                    .toEntity(JSON_OBJECT);
+        } catch (RestClientException exception) {
+            throw new UpstreamException(name, name + " call to " + uri + " failed", exception);
         }
     }
 

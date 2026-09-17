@@ -109,6 +109,9 @@ services and one client.
 | `GET` | `/ai-chat` | Same, against `ai-chat`. |
 | `GET` | `/auth` | Same, against `authentication`. |
 | `GET` | `/content` | Same, against `content`. |
+| `POST` | `/projects/{projectId}/images` | Forwards to `content`. Issues a presigned S3 PUT for one image. |
+| `POST` | `/projects/{projectId}/images/{imageId}/complete` | Forwards to `content`. Marks the upload finished after the browser has PUT the object. |
+| `GET` | `/projects/{projectId}/images/{imageId}` | Forwards to `content`. |
 
 The four upstream endpoints are **relay probes**, not finished API surface. They
 exist to prove each call chain end to end before the services have any domain
@@ -136,6 +139,18 @@ rather than leaking a stack trace:
 ```json
 { "error": "upstream_unavailable", "upstream": "graph-rag" }
 ```
+
+### Image upload routes
+
+The three `/projects/{projectId}/images…` routes are the first domain endpoints.
+They forward the JSON body and return the upstream's status code and body
+unchanged, so a `400`, `404` or `409` from `content` reaches the client as-is;
+only a transport failure becomes the gateway's own `502`. The image bytes never
+pass through here — `content` hands the browser a presigned S3 URL and the
+browser PUTs straight to the bucket. See `loresentry-content` for the contract.
+
+`projectId` and `imageId` are parsed as `UUID` before anything is forwarded, so a
+malformed id is a `400` here rather than a round trip to `content`.
 
 ## Configuration
 
