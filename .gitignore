@@ -40,3 +40,7 @@ out/
 
 ### Integration harness ###
 __pycache__/
+.local/
+.env
+.env.*
+!.env.local.example

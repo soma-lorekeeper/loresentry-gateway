@@ -1,14 +1,14 @@
 # BFF 인증·본인 계정 외부 API
 
-브라우저가 호출하는 초기 API 계약 초안이다. 확정한 인증·쿠키 정책을 바탕으로
-경로와 응답을 구체화했으며, 구현·프론트 연동 완료를 의미하지 않는다.
-도메인 API의 경로·응답 조합은 별도로 설계한다.
+구현된 BFF 인증·본인 계정 API 계약이다. 실제 Auth와의 연동은 검증했으며,
+프론트·브라우저와 운영 적용 상태는 [검증 기록](verification/LOREKEEPER-574.md)과
+[운영 준비](OPERATIONS.md)를 따른다. Content는 [별도 API 계약](CONTENT_API.md)에 정의한다.
 
 ## 공통 계약
 
 - 쿠키·CSRF·CORS는 [브라우저 보안](BROWSER_SECURITY.md)을 따른다.
 - 로그인·콜백·재발급·로그아웃은 유효한 AT를 필수로 요구하지 않는다.
-  본인 계정 API에는 AT 검증을 적용한다.
+  본인 계정·Content API에는 AT 검증 후 공유 저장소의 활성 세션 검사를 적용한다.
 - 요청 본문이 있는 계정 수정은 JSON을 사용한다. 재발급·로그아웃은 본문 없이 호출하며
   브라우저 쿠키에서 RT를 읽는다. 이 API들에서 본문·쿼리로 토큰을 받지 않는다.
 - 인증·본인 계정 응답에는 `Cache-Control: no-store`를 적용한다.
@@ -83,11 +83,16 @@ CSRF 등 공통 보안 검증으로 거절된 요청은 위 리다이렉트로 �
 | 401 | `ACCESS_TOKEN_MISSING` | AT 쿠키 부재 | `REFRESH` |
 | 401 | `ACCESS_TOKEN_EXPIRED` | 만료 외의 필수 검증은 통과한 AT의 만료 | `REFRESH` |
 | 401 | `ACCESS_TOKEN_INVALID` | 서명·발급자·사용 대상·토큰 종류 등 AT 검증 실패 | `RELOGIN` |
+| 401 | `SESSION_INVALID` | 활성 세션 부재·만료 또는 AT의 sid와 불일치 | `RELOGIN` |
+| 503 | `SESSION_UNAVAILABLE` | 세션 연결·ACL·500ms 시간 제한·손상 등으로 검증 불가 | `RETRY_LATER` |
 | 403 | `CSRF_REJECTED` | Origin·전용 헤더 검증 실패 | `NONE` |
 
 `REFRESH`는 RT가 실제로 유효하다는 보장이 아니라 재발급을 시도할 수 있다는 뜻이다.
 앞의 두 오류는 BFF가 내부 서비스에 전달하기 전에 생성한 경우에만 사용한다.
 내부 서비스의 401을 이 오류로 바꾸지 않는다.
+세션 오류에서는 재발급을 시도하지 않으며 실패 요청을 내부 서비스로 전달하지 않는다.
+AT·세션 검사 실패는 쿠키를 설정하거나 삭제하지 않는다. sid 없는 AT는
+ACCESS_TOKEN_INVALID로 거절하며 구 RT 저장 키를 조회하지 않는다.
 프론트의 재발급 조율과 원래 요청 1회 재시도는 [기존 계약](auth/REFRESH_FLOW.md)을 따른다.
 
 ## 재발급 응답

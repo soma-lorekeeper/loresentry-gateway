@@ -1,7 +1,8 @@
 # BFF Content 외부 API 계약
 
 LOREKEEPER-551. [조사 결과](CONTENT_CONTRACT_AUDIT.md)의 26개 경로·메서드와 JSON
-필드를 외부 계약으로 유지한다. 이 문서는 BFF 구현 기준이며 실제 적용 결과는 검증 기록으로 구분한다.
+필드를 외부 계약으로 유지한다. 해당 경로를 구현했고 실제 Content 연동 결과는
+[LOREKEEPER-574](verification/LOREKEEPER-574.md)에 기록했다.
 Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는다.
 
 ## 명시적 API와 데이터 경계
@@ -27,8 +28,8 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 
 최종 보호 API는 CSRF(변경 요청)·AT·활성 세션 검사 후 검증된 UUID만 사용한다.
 외부 X-User-Id, Cookie, Authorization은 도메인 서비스 전달 목록에서 제외하고 client가
-검증된 사용자 ID 하나로 X-User-Id를 구성한다. 인증은 별도 보안 딜리버러블에서 적용하며,
-구조 정렬만 완료된 중간 버전을 인증 완료로 취급하지 않는다.
+검증된 사용자 ID 하나로 X-User-Id를 구성한다. AT·활성 세션 검사는 현재 구현에 포함된다.
+과거 구조 정렬만 완료된 중간 버전을 인증 완료로 취급하지 않는다.
 
 | 헤더 | 처리 |
 |---|---|
@@ -53,7 +54,7 @@ Origin·credentials·preflight·CSRF 순서는 [브라우저 보안](BROWSER_SEC
 파일·에피소드 생성 및 버전 생성은 201이다. 휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는
 204이며 본문이 없다. 그 밖의 표에 정의된 결과는 200이다.
 
-프로젝트 last_file은 현재 null이고, 계약상 값이 있으면 id/title만 외부 DTO로 변환한다.
+프로젝트 last_file은 null 또는 최근 수정된 활성 문서의 id/title이며 외부 DTO로 변환한다.
 파일 생성은 요청 kind에 따라 문서와 에피소드 내부 DTO를 구분한다. 트리 응답은
 folders·episodes·documents의 정규화된 목록으로 유지한다.
 

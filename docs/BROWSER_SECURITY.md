@@ -61,7 +61,7 @@ Google 콜백은 기존 AT·RT 첨부를 요구하지 않고
 `Path=/`는 API 호스트의 전체 경로에 적용되며, 다른 호스트 전송이나 API 접근 권한을 뜻하지 않는다.
 실제 전송에는 SameSite 등 다른 쿠키 조건도 적용된다.
 
-BFF는 요청의 RT를 재발급·로그아웃에서만 사용한다. 일반 보호 API는 AT로 인증하고,
+BFF는 요청의 RT를 재발급·로그아웃에서만 사용한다. 일반 보호 API는 AT 검증 후 활성 세션을 조회하고,
 RT가 첨부되어도 인증 대체나 자동 재발급에 사용하지 않는다.
 내부 전달은 [내부 서비스 호출 계약](../../docs/bff/INTERNAL_SERVICE_CALLS.md#사용자-정보-전달)을 따른다.
 
@@ -126,10 +126,10 @@ CSRF와 CORS는 [환경별 프론트 Origin](#환경별-설정)을 공유한다.
 전체 서브도메인·모든 포트를 허용하는 패턴은 사용하지 않는다.
 
 CORS는 credentials를 허용하고, 허용된 출처에만 해당 Origin을 응답한다.
-초기 인증·본인 계정 API에 필요한 메서드는 `GET`, `HEAD`, `POST`, `PATCH`, `OPTIONS`,
-요청 헤더는 `Content-Type`, `X-LS-CSRF`로 제한한다.
-프론트 JavaScript에 추가로 노출하는 응답 헤더는 없으며, 사전 요청의 max-age는 기존 설정인 1시간을 유지한다.
-도메인 API가 추가되어 다른 메서드·헤더가 필요해지면 외부 API 계약과 함께 명시적으로 추가한다.
+인증·계정과 Content API의 메서드는 `GET`, `HEAD`, `POST`, `PATCH`, `PUT`, `DELETE`, `OPTIONS`,
+요청 헤더는 `Content-Type`, `X-LS-CSRF`, `If-Match`, `If-None-Match`, `X-Save-Id`로 제한한다.
+프론트 JavaScript에 `Location`을 노출하며 사전 요청의 max-age는 1시간이다.
+다른 메서드·헤더가 필요해지면 외부 API 계약과 함께 명시적으로 추가한다.
 CORS 응답의 `Vary: Origin`을 유지하고, 인증 응답은 공유 캐시에서 재사용하지 않는다.
 
 - CORS 사전 요청은 실제 인증·CSRF 검사보다 먼저 처리한다. 사전 요청에는 인증 쿠키나
@@ -162,7 +162,9 @@ SameSite는 추가 방어이며 이 검사를 대체하지 않는다. 허용된 
   사전 요청 없이 직접 호출해도 검사하며, 재발급·로그아웃을 포함해 실패 시 내부 호출·쿠키 변경이 없는지 확인한다.
 - 예외: 정상 CORS 사전 요청과 Google 페이지 이동·콜백을 차단하지 않는지 확인한다.
 
-## 남은 상세 설계
+## 현재 구현과 검증 상태
 
-초기 정책과 [외부 API 응답](EXTERNAL_API.md)은 정리했다.
-설정 파일 분리, 기존 CORS 패턴 교체와 위 검증은 구현 단계에 남아 있다.
+환경별 설정·정확한 Origin·CSRF·쿠키·AT와 세션 경계는 구현했고 일반·실제 서비스 통합
+검증을 통과했다. [외부 API](EXTERNAL_API.md)와 [검증 결과](verification/LOREKEEPER-573.md)를
+따른다. 위 목록의 실제 브라우저 항목은 [사용자 승인으로 이번 완료 범위에서 제외](verification/LOREKEEPER-574.md)했다.
+운영 배포 준비는 [별도 미완료 상태](OPERATIONS.md)다.

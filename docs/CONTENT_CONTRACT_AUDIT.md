@@ -4,6 +4,10 @@
 BFF `7ead2eb`의 코드를 비교했다. BFF 문서 이동 커밋 `483e2e5`는 별도로 보존한다.
 이 문서는 구현·배포 완료 기록이 아니라 기존 기능을 보존하기 위한 조사 결과다.
 
+이후 Content `d26a3d3`에서 last_file 갱신과 이미지 API가 추가됐다. 기존 26개 API의
+최신 연동 결과와 별도 연동이 필요한 이미지 범위는
+[LOREKEEPER-574 검증 기록](verification/LOREKEEPER-574.md)을 따른다. 아래 표는 최초 조사 시점의 기록이다.
+
 ## 확인한 근거
 
 - [Content 컨트롤러·DTO 원본](https://github.com/soma-lorekeeper/loresentry-content/tree/4158e2913c50da0e467f519e35fb6f4d4bd4fbaf/src/main/java/com/loresentry/content): `project/ProjectController`, `file/FileController`, `file/EpisodeController`, `document/DocumentController`, `document/VersionController`, `search/SearchController`.

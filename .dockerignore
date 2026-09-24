@@ -3,3 +3,7 @@
 .gradle
 build
 *.md
+.local
+.env
+.env.*
+integration
