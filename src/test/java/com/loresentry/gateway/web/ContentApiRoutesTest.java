@@ -26,7 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ContentApiController.class)
-@Import({ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class})
+@Import({ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class, com.loresentry.gateway.config.JsonConfiguration.class})
 @EnableConfigurationProperties(CorsProperties.class)
 class ContentApiRoutesTest {
     static final UUID USER = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d60");
@@ -78,5 +78,29 @@ class ContentApiRoutesTest {
                 .header("X-User-Id",USER).header("If-None-Match","\"etag\""))
             .andExpect(status().isOk()).andExpect(jsonPath("$.hits").isEmpty());
         verify(service).search(USER,ID,"유리 & +?",new Conditions(null,null,"\"etag\""));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"{\"name\":42}","{\"name\":true}","{\"name\":\"ok\",\"admin\":true}","{} {}","{"})
+    void rejectsInvalidInputWithoutInternalCall(String body) throws Exception {
+        mvc.perform(post("/projects").header("X-User-Id",USER).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.next_action").value("NONE"));
+        verifyNoInteractions(service);
+    }
+    @Test void invalidPathPreservesNotFoundContract() throws Exception {
+        mvc.perform(get("/files/not-a-uuid/content").header("X-User-Id",USER))
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"));
+        verifyNoInteractions(service);
+    }
+    @Test void mapsSafeBusinessErrorAndPreservesConflictSnapshot() throws Exception {
+        var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
+        var current = new ContentData.Content(ID,ID,"Latest","MANUSCRIPT",null,"body",List.of(),List.of(),false,4,9L,now);
+        given(service.saveContent(any(),any(),any(),any())).willThrow(
+            new com.loresentry.gateway.client.content.ContentCallFailure(409,"DOCUMENT_CONFLICT",current,null));
+        mvc.perform(put("/files/"+ID+"/content").header("X-User-Id",USER).contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DOCUMENT_CONFLICT"))
+            .andExpect(jsonPath("$.current.revision_no").value(9)).andExpect(jsonPath("$.base").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(header().string("Cache-Control","no-store"));
     }
 }

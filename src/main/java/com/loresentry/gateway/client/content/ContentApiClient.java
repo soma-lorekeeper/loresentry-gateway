@@ -8,11 +8,39 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import com.loresentry.gateway.client.UpstreamException;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.core.JacksonException;
+import org.springframework.web.client.ResourceAccessException;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Component
 public class ContentApiClient {
     private final RestClient client;
+    private static final JsonMapper JSON = JsonMapper.builder()
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, DeserializationFeature.ACCEPT_FLOAT_AS_INT)
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
+            .withCoercionConfig(tools.jackson.databind.type.LogicalType.Textual, config -> {
+                for (var shape : java.util.List.of(tools.jackson.databind.cfg.CoercionInputShape.Integer,
+                        tools.jackson.databind.cfg.CoercionInputShape.Float, tools.jackson.databind.cfg.CoercionInputShape.Boolean))
+                    config.setCoercion(shape, tools.jackson.databind.cfg.CoercionAction.Fail);
+            }).build();
+    private record Error(String code, String message, @JsonProperty("next_action") String nextAction,
+                         ContentData.Content current, ContentData.Snapshot base) {}
+    private static int errorStatus(String code) {
+        if (code == null) return 0;
+        return switch (code) {
+            case "INVALID_REQUEST", "INVALID_PROJECT_NAME", "INVALID_PROJECT_DESCRIPTION", "INVALID_FILE_TITLE",
+                    "INVALID_FILE_LOCATION", "INVALID_RELATION_TARGET" -> 400;
+            case "PROJECT_NOT_FOUND", "FILE_NOT_FOUND", "VERSION_NOT_FOUND", "NOT_FOUND" -> 404;
+            case "PROJECT_NAME_TAKEN", "PROJECT_NOT_TRASHED", "FILE_TITLE_TAKEN", "FILE_NOT_TRASHED",
+                    "DOCUMENT_LOCKED", "DOCUMENT_CONFLICT" -> 409;
+            case "INTERNAL_ERROR" -> 500;
+            default -> 0;
+        };
+    }
     public ContentApiClient(RestClient contentApiRestClient) { this.client = contentApiRestClient; }
     public record Conditions(String ifMatch, String saveId, String ifNoneMatch) {}
 
@@ -27,15 +55,31 @@ public class ContentApiClient {
                 if (conditions.ifNoneMatch() != null) request.header("If-None-Match", conditions.ifNoneMatch());
             }
             if (body != null) request.contentType(MediaType.APPLICATION_JSON).body(body);
-            var response = request.retrieve().toEntity(type);
-            if (response.getStatusCode().value() != expected || (type != Void.class && response.getBody() == null)) {
-                throw new UpstreamException("content", "Invalid Content response", null);
-            }
-            return response.getBody();
-        } catch (RestClientException failure) {
-            throw new UpstreamException("content", "Content request failed", failure);
+            return request.exchange((outgoing, response) -> {
+                int status = response.getStatusCode().value();
+                if (status == expected && type == Void.class) return null;
+                var contentType = response.getHeaders().getContentType();
+                if (contentType == null || !MediaType.APPLICATION_JSON.isCompatibleWith(contentType))
+                    throw ContentCallFailure.invalid();
+                if (status == expected) return ContentValidation.validate(JSON.readValue(response.getBody(), type));
+                if (status < 400) throw ContentCallFailure.invalid();
+                var error = JSON.readValue(response.getBody(), Error.class);
+                if (error == null || errorStatus(error.code()) != status || !"NONE".equals(error.nextAction())
+                        || error.message() == null) throw ContentCallFailure.invalid();
+                if ("DOCUMENT_CONFLICT".equals(error.code())) {
+                    ContentValidation.validate(error.current());
+                    if (error.base() != null) ContentValidation.validate(error.base());
+                    throw new ContentCallFailure(status, error.code(), error.current(), error.base());
+                }
+                throw new ContentCallFailure(status, error.code(), null, null);
+            });
+        } catch (ResourceAccessException failure) {
+            throw ContentCallFailure.unavailable();
+        } catch (RestClientException | JacksonException | IllegalArgumentException | NullPointerException failure) {
+            throw ContentCallFailure.invalid();
         }
     }
+
     public ContentData.Projects listProjects(UUID userId, Conditions conditions) {
         return call("GET", "/projects", Map.of(), userId, null, ContentData.Projects.class, 200, conditions);
     }

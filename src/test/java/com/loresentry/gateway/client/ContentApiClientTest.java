@@ -26,4 +26,38 @@ class ContentApiClientTest {
         assertThat(service.search(user,project,"유리 & +?",new Conditions(null,null,"\"tag\"")).hits()).isEmpty();
         server.verify();
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"{}","null","{\"projects\":[null]}","{\"projects\":[{}]}","{\"projects\":[]} {}","{\"projects\":false}"})
+    void rejectsMalformedOrIncompleteSuccess(String payload) {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        mocks.getServer().expect(requestTo("http://content.test/projects")).andRespond(withSuccess(payload,MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null))
+            .isInstanceOf(com.loresentry.gateway.client.content.ContentCallFailure.class)
+            .hasMessage("UPSTREAM_INVALID_RESPONSE");
+        mocks.getServer().verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"400,INVALID_REQUEST,NONE,INVALID_REQUEST", "409,DOCUMENT_LOCKED,NONE,DOCUMENT_LOCKED",
+        "404,FILE_NOT_FOUND,NONE,FILE_NOT_FOUND", "401,USER_CONTEXT_REQUIRED,RELOGIN,UPSTREAM_INVALID_RESPONSE",
+        "400,FILE_NOT_FOUND,NONE,UPSTREAM_INVALID_RESPONSE", "409,DOCUMENT_LOCKED,RELOGIN,UPSTREAM_INVALID_RESPONSE",
+        "500,SQL_ERROR,NONE,UPSTREAM_INVALID_RESPONSE", "409,DOCUMENT_CONFLICT,NONE,UPSTREAM_INVALID_RESPONSE"})
+    void validatesErrorContract(int status,String code,String action,String result) {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        mocks.getServer().expect(requestTo("http://content.test/projects")).andRespond(withStatus(org.springframework.http.HttpStatusCode.valueOf(status))
+            .contentType(MediaType.APPLICATION_JSON).body("{\"code\":\""+code+"\",\"message\":\"private SQL detail\",\"next_action\":\""+action+"\"}"));
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null))
+            .isInstanceOf(com.loresentry.gateway.client.content.ContentCallFailure.class).hasMessage(result);
+        mocks.getServer().verify();
+    }
+    @Test void ignoresUncontractedSensitiveResponseFields() {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        mocks.getServer().expect(requestTo("http://content.test/projects"))
+            .andRespond(withSuccess("{\"projects\":[],\"refresh_token\":\"secret\"}",MediaType.APPLICATION_JSON));
+        var dto=com.loresentry.gateway.web.content.ContentDtos.Projects.from(new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null));
+        assertThat(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(dto)).isEqualTo("{\"projects\":[]}");
+    }
 }
