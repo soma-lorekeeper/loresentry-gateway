@@ -15,7 +15,7 @@ import tools.jackson.core.JacksonException;
 @Component
 public class AuthApiClient {
     private final RestClient client;
-    private enum Operation { PREPARE, CALLBACK, REFRESH }
+    private enum Operation { PREPARE, CALLBACK, REFRESH, REVOKE }
     private static final JsonMapper JSON=JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
@@ -33,6 +33,9 @@ public class AuthApiClient {
     }
     public AuthData.Tokens refresh(String token) {
         return call(HttpMethod.POST,"/auth/tokens/refresh",null,new AuthData.Refresh(token),AuthData.Tokens.class,200,Operation.REFRESH);
+    }
+    public void revoke(String token) {
+        call(HttpMethod.POST,"/auth/tokens/revoke",null,new AuthData.Refresh(token),Void.class,204,Operation.REVOKE);
     }
     private <T> T call(HttpMethod method,String path,UUID user,Object body,Class<T> type,int expected,Operation operation) {
         try {
@@ -90,12 +93,14 @@ public class AuthApiClient {
         return switch(code) {
             case "INVALID_REQUEST" -> status==400&&"NONE".equals(action);
             case "INTERNAL_ERROR" -> status==500&&"NONE".equals(action);
-            case "LOGIN_UNAVAILABLE" -> operation!=Operation.REFRESH&&status==503&&"RESTART_LOGIN".equals(action);
+            case "LOGIN_UNAVAILABLE" -> (operation==Operation.PREPARE||operation==Operation.CALLBACK)&&status==503&&"RESTART_LOGIN".equals(action);
             case "OAUTH_REQUEST_INVALID","OAUTH_LOGIN_DENIED" -> operation==Operation.CALLBACK&&status==400&&"RESTART_LOGIN".equals(action);
             case "OAUTH_IDENTITY_INVALID" -> operation==Operation.CALLBACK&&status==401&&"RESTART_LOGIN".equals(action);
             case "REFRESH_REJECTED" -> operation==Operation.REFRESH&&status==401&&"RELOGIN".equals(action);
             case "REFRESH_UNAVAILABLE" -> operation==Operation.REFRESH&&status==503&&"RETRY_LATER".equals(action);
             case "REFRESH_OUTCOME_UNKNOWN" -> operation==Operation.REFRESH&&status==503&&"RELOGIN".equals(action);
+            case "INVALID_REFRESH_TOKEN" -> operation==Operation.REVOKE&&status==401&&"NONE".equals(action);
+            case "REVOCATION_UNCONFIRMED" -> operation==Operation.REVOKE&&status==503&&"NONE".equals(action);
             default -> false;
         };
     }

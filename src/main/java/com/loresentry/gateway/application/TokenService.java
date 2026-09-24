@@ -21,4 +21,14 @@ public class TokenService {
             throw AuthOperationFailure.refreshUnknown();
         }
     }
+    public enum Revocation { CONFIRMED, NOT_REQUESTED, REJECTED, UNCONFIRMED }
+    public Revocation revoke(String refreshToken) {
+        if(refreshToken==null||refreshToken.isBlank()) return Revocation.NOT_REQUESTED;
+        try {client.revoke(refreshToken);return Revocation.CONFIRMED;}
+        catch(AuthCallFailure failure) {
+            if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&"INVALID_REFRESH_TOKEN".equals(failure.code()))
+                return Revocation.REJECTED;
+            return Revocation.UNCONFIRMED;
+        }
+    }
 }
