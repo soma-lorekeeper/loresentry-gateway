@@ -3,6 +3,11 @@
 `run.py`는 PostgreSQL 18.4, Valkey 9.0.6, 실제 Auth와 BFF 두 프로세스를 격리 실행한다.
 브라우저의 쿠키 정책, 실제 Google 동의 화면, Content 및 운영 인프라 검증은 포함하지 않는다.
 
+`--content-source`를 지정하면 실제 Content의 기존 26개 API 회귀도 실행한다. 기본 Content
+커밋은 `d26a3d3a244bdebb79375290b9d032f232da5563`이며 `--content-ref`로 지정할 수 있다.
+Auth와 동일하게 Git 복사본만 빌드하고, 격리 PostgreSQL의 별도 `content` DB를 사용한다.
+이미지 API·S3 호출과 브라우저 검증은 포함하지 않는다.
+
 Linux 호스트에 Docker, Python 3, OpenSSL과 Auth Git 저장소가 있어야 한다. Java 21과
 Gradle은 컨테이너에서 실행한다. 최초 실행에는 이미지·빌드 의존성 다운로드가 필요하다.
 
@@ -10,6 +15,8 @@ Gradle은 컨테이너에서 실행한다. 최초 실행에는 이미지·빌드
 python3 integration/session/run.py
 # 다른 Auth 저장소/커밋을 검증할 때 명시한다.
 python3 integration/session/run.py --auth-source ../loresentry-authentication --auth-ref <commit>
+# 현재 노출한 Content API의 실제 DB 회귀까지 포함한다.
+python3 integration/session/run.py --content-source ../loresentry-content
 ```
 
 기본 Auth 커밋은 `e9d5b5b35dace0b9c7066ec93d1ea35e018963e7`이다. 원본 Auth 작업 트리는

@@ -25,6 +25,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTH_REF = "e9d5b5b35dace0b9c7066ec93d1ea35e018963e7"
+CONTENT_REF = "d26a3d3a244bdebb79375290b9d032f232da5563"
 JAVA = "eclipse-temurin:21-jdk-alpine"
 containers = []
 results = []
@@ -260,6 +261,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--auth-source", type=Path, default=ROOT.parent / "loresentry-authentication")
     parser.add_argument("--auth-ref", default=AUTH_REF)
+    parser.add_argument("--content-source", type=Path, help="Also test real Content using an isolated source snapshot")
+    parser.add_argument("--content-ref", default=CONTENT_REF)
     parser.add_argument("--gradle-cache", type=Path, default=Path("/tmp/loresentry-auth-gradle"))
     args = parser.parse_args()
     scratch = Path(tempfile.mkdtemp(prefix="bff-auth-integration-"))
@@ -268,6 +271,7 @@ def main():
     proxy = None
     print("Isolated logs/report: " + str(scratch), flush=True)
     auth_commit = command("git", "-C", str(args.auth_source), "rev-parse", args.auth_ref + "^{commit}")
+    content_commit = None
     try:
         auth = scratch / "auth"
         auth.mkdir()
@@ -277,8 +281,17 @@ def main():
         fixture_dir = auth / "src/main/java/com/loresentry/authentication/fixture"
         fixture_dir.mkdir()
         shutil.copy(Path(__file__).with_name("GoogleFixture.java"), fixture_dir)
+        sources = [auth, ROOT]
+        if args.content_source:
+            content_commit = command("git", "-C", str(args.content_source), "rev-parse", args.content_ref + "^{commit}")
+            content = scratch / "content"
+            content.mkdir()
+            archive = subprocess.run(["git", "-C", str(args.content_source), "archive", content_commit],
+                                     check=True, capture_output=True).stdout
+            subprocess.run(["tar", "-x", "-C", str(content)], input=archive, check=True)
+            sources.append(content)
         args.gradle_cache.mkdir(parents=True, exist_ok=True)
-        for source in (auth, ROOT):
+        for source in sources:
             print("Building isolated " + source.name, flush=True)
             build = subprocess.run(["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
                              "-e", "GRADLE_USER_HOME=/gradle", "-v", str(source) + ":/workspace",
@@ -319,6 +332,22 @@ def main():
         docker(prefix + "-auth", "--network", "host", "--env-file", str(auth_env),
                "-v", str(public) + ":/fixture/public.pem:ro", "-v", str(auth_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
         wait_http(auth_port)
+        content_port = None
+        if content_commit:
+            command("docker", "exec", pg, "createdb", "-U", "integration", "content")
+            content_port = free_port()
+            content_env = scratch / "content.env"
+            content_env.write_text("\n".join([
+                "SERVER_ADDRESS=127.0.0.1", f"SERVER_PORT={content_port}", "DB_HOST=127.0.0.1",
+                f"DB_PORT={published_port(pg, 5432)}", "DB_NAME=content", "DB_USERNAME=integration",
+                "DB_PASSWORD=isolated-test", "AWS_EC2_METADATA_DISABLED=true", "AWS_ACCESS_KEY_ID=fixture-only",
+                "AWS_SECRET_ACCESS_KEY=fixture-only", "MEDIA_BUCKET=fixture-only",
+                "MEDIA_PUBLIC_BASE_URL=https://media.example.test"]) + "\n")
+            content_env.chmod(0o600)
+            content_jar = next(path for path in (content / "build/libs").glob("*.jar") if "-plain" not in path.name)
+            docker(prefix + "-content", "--network", "host", "--env-file", str(content_env),
+                   "-v", str(content_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
+            wait_http(content_port)
         counts = collections.Counter()
 
         class Forward(http.server.BaseHTTPRequestHandler):
@@ -343,7 +372,8 @@ def main():
                 fields = {name: value for name, value in self.headers.items()
                           if name.lower() not in ("host", "transfer-encoding", "connection", "content-length")}
                 fields["Content-Length"] = str(len(data))
-                conn = http.client.HTTPConnection("127.0.0.1", auth_port, timeout=12)
+                destination = auth_port if self.path.startswith("/auth/") or content_port is None else content_port
+                conn = http.client.HTTPConnection("127.0.0.1", destination, timeout=12)
                 try:
                     conn.request(self.command, self.path, data, fields)
                     response = conn.getresponse()
@@ -358,7 +388,7 @@ def main():
                 finally:
                     conn.close()
 
-            do_GET = do_POST = do_PATCH = do_request
+            do_GET = do_POST = do_PATCH = do_PUT = do_DELETE = do_request
 
         proxy = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Forward)
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
@@ -379,12 +409,17 @@ def main():
                    "-v", str(public) + ":/fixture/public.pem:ro", "-v", str(bff_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
             wait_http(port)
             ports.append(port)
+        if content_commit:
+            from content_checks import verify_content
+            verify_content(ports, request, login, check, error, passed, claims)
         verify(ports, redis_port, counts, private, kid, valkey)
         report = {"auth_commit": auth_commit, "gateway_base_commit": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
                   "gateway_jar_sha256": hashlib.sha256(bff_jar.read_bytes()).hexdigest(),
+                  "content_commit": content_commit,
                   "scenarios": results, "postgres": "18.4", "valkey": "9.0.6", "bff_instances": 2,
                   "external_google": "isolated HTTP/JWK fixture; real Auth OIDC client",
-                  "not_verified": ["real Google consent", "browser cookies", "Content", "production infrastructure"]}
+                  "not_verified": ["real Google consent", "browser cookies", "production infrastructure"]
+                                  + ([] if content_commit else ["Content"])}
         (scratch / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print("All Auth/session integration scenarios passed.", flush=True)
     finally:
@@ -395,7 +430,7 @@ def main():
             logs = subprocess.run(["docker", "logs", name], text=True, capture_output=True)
             (scratch / (name + ".log")).write_text(logs.stdout + logs.stderr)
             subprocess.run(["docker", "rm", "-f", "-v", name], capture_output=True)
-        for name in ("private.pem", "auth.env", "bff.env"):
+        for name in ("private.pem", "auth.env", "bff.env", "content.env"):
             (scratch / name).unlink(missing_ok=True)
 
 
