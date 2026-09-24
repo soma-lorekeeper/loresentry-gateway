@@ -109,10 +109,13 @@ services and one client.
 | `GET` | `/ai-chat` | Same, against `ai-chat`. |
 | `GET` | `/auth` | Same, against `authentication`. |
 | `GET` | `/content` | Same, against `content`. |
+| `GET POST PATCH PUT DELETE` | `/projects`, `/projects/**` | Relayed to `content` verbatim. |
+| `GET POST PATCH PUT DELETE` | `/files`, `/files/**` | Relayed to `content` verbatim. |
+| `GET POST PATCH PUT DELETE` | `/episodes`, `/episodes/**` | Relayed to `content` verbatim. |
 
-The four upstream endpoints are **relay probes**, not finished API surface. They
-exist to prove each call chain end to end before the services have any domain
-logic, and each is the place the real endpoints for that service will go:
+The four single-segment upstream endpoints are **relay probes**, not finished API
+surface. They exist to prove each call chain end to end before the services have
+any domain logic:
 
 ```json
 {
@@ -125,17 +128,77 @@ logic, and each is the place the real endpoints for that service will go:
 The `thread` field is there to make the virtual thread visible while the platform
 is being built out; drop it once that stops being interesting.
 
-Deliberately *not* done here: a single catch-all `/**` route that forwards
-anything to a matching service. That would turn the gateway into a reverse proxy,
-duplicating what the ALB already does, and leave nowhere to put composition,
-identity forwarding, or response reshaping. Each route is declared explicitly.
+## Relaying to content
 
-When an upstream fails the gateway answers `502` with a body naming the upstream,
-rather than leaking a stack trace:
+The content endpoints are relayed **verbatim**: the public `/projects` is the
+`/projects` that `content` serves. Nothing is rewritten, so there is no mapping
+table to keep in sync and the path in the API docs is the path the browser calls.
+
+Declaration is **per namespace**, not per route. Content already owes the
+frontend more than twenty endpoints and **not one of them needs two services'
+responses combined**, so a method per route would mean copying every new content
+endpoint into this repository, and silently answering `404` whenever that was
+forgotten.
+
+That is still not a catch-all `/**`. Each mapping names which service owns which
+namespace, so `content`'s own `/health`, `/health/db` and `/` stay off the public
+surface, and there is one place to put identity. When a path does need
+composition, declaring that path with a more specific mapping wins over the
+namespace — Spring picks the more specific pattern.
+
+What the relay does with a request:
+
+- passes the method, path, query string and body straight through
+- **sets `X-User-Id` itself** from the resolved identity, and never forwards the
+  client's headers wholesale, so the client cannot smuggle one in
+- returns the upstream status and body **untouched**, including error bodies. The
+  upstream knows why it failed; re-wrapping would erase that and force the client
+  to unpack two layers
+- keeps `Location` and `Cache-Control`, and drops hop-by-hop headers the servlet
+  container recalculates
+
+URI encoding is off for upstream calls (`UpstreamClient.restClient`). The path
+and query arrive from the servlet already encoded, and encoding them again turns
+`%EC` into `%25EC`.
+
+## Identity — temporary and unauthenticated
+
+```
+X-User-Id: <authentication user id (canonical UUID)>
+```
+
+`IdentityResolver` decides who the caller is. The only implementation today is
+`ClientHeaderIdentityResolver`, which **believes the client**. So this gateway
+does not authenticate: anyone can put any UUID in that header and read or write
+that user's projects. It is a deliberate step to get the frontend onto the real
+API, and it is the reason JWT verification is the next piece of work here.
+
+Swapping in verification means replacing that one class. The relay only reads the
+resolved value, and it *sets* the upstream header rather than copying it, so a
+verified identity will overwrite anything the client sent.
+
+Rejections match what `authentication` and `content` do, so the three services
+answer the same way:
+
+| Header | Result |
+| --- | --- |
+| Absent | `401 USER_CONTEXT_REQUIRED` |
+| Not a canonical UUID | `400 INVALID_REQUEST` |
+| Present more than once | `400 INVALID_REQUEST` |
+
+## Errors
+
+The gateway's own failures use the same three fields as the services — `code`,
+`message` and `next_action` — because all three answer the same frontend. An
+unreachable upstream also names which one:
 
 ```json
-{ "error": "upstream_unavailable", "upstream": "graph-rag" }
+{ "code": "UPSTREAM_UNAVAILABLE", "message": "Upstream service is unavailable.",
+  "next_action": "RETRY_LATER", "upstream": "content" }
 ```
+
+An upstream that *answers* with an error is not this: that body passes through
+unchanged.
 
 ## Configuration
 
@@ -260,7 +323,11 @@ rollback is `git revert` of that commit.
 
 ## Not implemented yet
 
-- JWT verification and identity forwarding. `/graph` is unauthenticated today.
+- **JWT verification.** Identity is whatever the client claims (see above), so
+  every relayed content endpoint is effectively public. This is the next task.
+- Relaying `authentication`'s own `/auth/**` routes. Only the probe exists.
+- Composition. Nothing the frontend asks for needs it yet; the `/health/db`
+  aggregation is the shape to follow when something does.
 - Streaming passthrough for AI chat responses. Needs the read timeout raised and
   the ALB `idle_timeout.timeout_seconds` above its 60s default.
 - Retries and circuit breaking on upstream calls.

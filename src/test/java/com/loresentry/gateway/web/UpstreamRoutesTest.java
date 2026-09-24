@@ -13,6 +13,8 @@ import com.loresentry.gateway.client.ContentClient;
 import com.loresentry.gateway.client.GraphRagClient;
 import com.loresentry.gateway.client.UpstreamException;
 import com.loresentry.gateway.config.CorsProperties;
+import com.loresentry.gateway.identity.ClientHeaderIdentityResolver;
+import com.loresentry.gateway.identity.CurrentUserArgumentResolver;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +25,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest
-@Import(UpstreamRelay.class)
+@Import({ UpstreamRelay.class, ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class })
 @EnableConfigurationProperties(CorsProperties.class)
 class UpstreamRoutesTest {
 
@@ -93,7 +95,8 @@ class UpstreamRoutesTest {
 
         mockMvc.perform(get("/content"))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("upstream_unavailable"))
+                .andExpect(jsonPath("$.code").value("UPSTREAM_UNAVAILABLE"))
+                .andExpect(jsonPath("$.next_action").value("RETRY_LATER"))
                 .andExpect(jsonPath("$.upstream").value("content"));
     }
 }
