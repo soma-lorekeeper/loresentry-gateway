@@ -26,7 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @com.loresentry.gateway.LocalTestEnvironment
-@WebMvcTest
+@WebMvcTest({GraphController.class,AiChatController.class,AuthController.class,ContentController.class,DbHealthController.class,HealthController.class})
 @Import({ ProbeService.class, CurrentUserArgumentResolver.class })
 @EnableConfigurationProperties(BrowserProperties.class)
 class UpstreamRoutesTest {
