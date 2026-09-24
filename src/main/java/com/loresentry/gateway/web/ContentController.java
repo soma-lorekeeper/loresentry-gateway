@@ -1,26 +1,12 @@
 package com.loresentry.gateway.web;
-
 import java.util.Map;
-
-import com.loresentry.gateway.client.ContentClient;
-
+import com.loresentry.gateway.application.ProbeService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 @RestController
 public class ContentController {
-
-    private final ContentClient contentClient;
-
-    private final UpstreamRelay relay;
-
-    public ContentController(ContentClient contentClient, UpstreamRelay relay) {
-        this.contentClient = contentClient;
-        this.relay = relay;
-    }
-
+    private final ProbeService probes;
+    public ContentController(ProbeService probes) { this.probes = probes; }
     @GetMapping("/content")
-    public Map<String, Object> content() {
-        return relay.describe(contentClient);
-    }
+    public Map<String, Object> describe() { return probes.describe("content"); }
 }

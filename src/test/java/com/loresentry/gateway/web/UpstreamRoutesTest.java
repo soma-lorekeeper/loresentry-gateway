@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Map;
+import com.loresentry.gateway.application.ProbeService;
+import com.loresentry.gateway.application.ContentService;
 
 import com.loresentry.gateway.client.AiChatClient;
 import com.loresentry.gateway.client.AuthenticationClient;
@@ -25,7 +27,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest
-@Import({ UpstreamRelay.class, ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class })
+@Import({ ProbeService.class, ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class })
 @EnableConfigurationProperties(CorsProperties.class)
 class UpstreamRoutesTest {
 
@@ -43,6 +45,9 @@ class UpstreamRoutesTest {
 
     @MockitoBean
     private ContentClient contentClient;
+
+    @MockitoBean
+    private ContentService contentService;
 
     @Test
     void graphRoutesToGraphRag() throws Exception {
@@ -90,6 +95,7 @@ class UpstreamRoutesTest {
 
     @Test
     void upstreamFailureBecomesBadGateway() throws Exception {
+        given(contentClient.name()).willReturn("content");
         given(contentClient.describe())
                 .willThrow(new UpstreamException("content", "content call failed", new RuntimeException()));
 

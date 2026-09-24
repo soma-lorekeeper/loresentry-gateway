@@ -10,6 +10,11 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     @Bean
+    public RestClient contentApiRestClient(RestClient.Builder builder, UpstreamProperties properties) {
+        return builder.baseUrl(properties.content().baseUrl()).build();
+    }
+
+    @Bean
     public RestClient graphRagRestClient(RestClient.Builder builder, UpstreamProperties properties) {
         return UpstreamClient.restClient(builder, properties.graphRag().baseUrl());
     }
