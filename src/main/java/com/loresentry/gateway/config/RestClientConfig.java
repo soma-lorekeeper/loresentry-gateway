@@ -10,6 +10,11 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     @Bean
+    public RestClient authApiRestClient(RestClient.Builder builder, UpstreamProperties properties) {
+        return builder.baseUrl(properties.authentication().baseUrl()).build();
+    }
+
+    @Bean
     public RestClient contentApiRestClient(RestClient.Builder builder, UpstreamProperties properties) {
         return builder.baseUrl(properties.content().baseUrl()).build();
     }
