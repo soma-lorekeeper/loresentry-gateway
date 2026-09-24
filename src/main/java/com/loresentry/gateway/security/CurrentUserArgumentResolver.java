@@ -1,4 +1,4 @@
-package com.loresentry.gateway.identity;
+package com.loresentry.gateway.security;
 
 import java.util.UUID;
 
@@ -13,12 +13,6 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 @Component
 public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolver {
 
-    private final IdentityResolver identity;
-
-    public CurrentUserArgumentResolver(IdentityResolver identity) {
-        this.identity = identity;
-    }
-
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
         return parameter.hasParameterAnnotation(CurrentUser.class)
@@ -28,6 +22,8 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
     @Override
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
             NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
-        return identity.resolve(webRequest.getNativeRequest(HttpServletRequest.class));
+        Object user=webRequest.getAttribute(AccessTokenFilter.USER_ATTRIBUTE,NativeWebRequest.SCOPE_REQUEST);
+        if(!(user instanceof UUID)) throw new SecurityFailure(SecurityFailure.Reason.ACCESS_TOKEN_MISSING);
+        return user;
     }
 }

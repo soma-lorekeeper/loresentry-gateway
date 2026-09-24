@@ -5,7 +5,7 @@ import java.util.UUID;
 import java.util.Collections;
 import com.loresentry.gateway.application.ContentService;
 import com.loresentry.gateway.client.content.ContentApiClient.Conditions;
-import com.loresentry.gateway.identity.CurrentUser;
+import com.loresentry.gateway.security.CurrentUser;
 import com.loresentry.gateway.web.GatewayFailure;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;

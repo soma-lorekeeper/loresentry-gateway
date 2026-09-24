@@ -1,8 +1,6 @@
 loresentry:
   jwt:
-    public-key: classpath:test-public-key.pem
-    issuer: loresentry-auth-test
-    audience: loresentry-api-test
+    public-key: ${user.dir}/src/test/resources/test-public-key.pem
     key-id: test-key
   upstream:
     authentication:

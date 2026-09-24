@@ -2,7 +2,7 @@ package com.loresentry.gateway.config;
 
 import java.util.List;
 
-import com.loresentry.gateway.identity.CurrentUserArgumentResolver;
+import com.loresentry.gateway.security.CurrentUserArgumentResolver;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;

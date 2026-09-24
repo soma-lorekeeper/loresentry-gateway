@@ -21,4 +21,9 @@ public class UpstreamExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleGatewayFailure(GatewayFailure failure) {
         return ErrorResponses.response(failure.reason(), null);
     }
+    @ExceptionHandler(com.loresentry.gateway.security.SecurityFailure.class)
+    public void security(com.loresentry.gateway.security.SecurityFailure failure,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        com.loresentry.gateway.security.SecurityResponses.write(response,failure.reason());
+    }
 }

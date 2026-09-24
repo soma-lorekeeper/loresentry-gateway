@@ -15,8 +15,7 @@ import com.loresentry.gateway.client.ContentClient;
 import com.loresentry.gateway.client.GraphRagClient;
 import com.loresentry.gateway.client.UpstreamException;
 import com.loresentry.gateway.config.BrowserProperties;
-import com.loresentry.gateway.identity.ClientHeaderIdentityResolver;
-import com.loresentry.gateway.identity.CurrentUserArgumentResolver;
+import com.loresentry.gateway.security.CurrentUserArgumentResolver;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @com.loresentry.gateway.LocalTestEnvironment
 @WebMvcTest
-@Import({ ProbeService.class, ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class })
+@Import({ ProbeService.class, CurrentUserArgumentResolver.class })
 @EnableConfigurationProperties(BrowserProperties.class)
 class UpstreamRoutesTest {
 

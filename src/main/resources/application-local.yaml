@@ -6,8 +6,6 @@ loresentry:
     secure-cookies: false
   jwt:
     public-key: ${BFF_JWT_PUBLIC_KEY}
-    issuer: ${BFF_JWT_ISSUER}
-    audience: ${BFF_JWT_AUDIENCE}
     key-id: ${BFF_JWT_KEY_ID}
   upstream:
     authentication:
