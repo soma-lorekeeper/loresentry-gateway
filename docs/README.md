@@ -15,7 +15,9 @@ BFF의 서비스별 설계·구현 기준은 이 저장소의 `docs/`에서 관�
 | 5 | [내부 호출](../../docs/bff/INTERNAL_SERVICE_CALLS.md) | 내부 접근 제한·사용자 전달·타임아웃 |
 
 각 규칙은 해당 문서를 기준으로 하고, 다른 문서는 링크로 참조한다.
-프로젝트·파일 API, 응답 조합과 AI 스트리밍은 해당 기능을 구현할 때 별도로 설계한다.
+프로젝트·파일·에피소드의 [Content 외부 API 계약](CONTENT_API.md)과
+[기존 연동 조사](CONTENT_CONTRACT_AUDIT.md)를 함께 참고한다.
+여러 서비스 응답 조합과 AI 스트리밍은 해당 기능을 구현할 때 별도로 설계한다.
 
 Auth 서버 내부 설계는 [Auth 서버 문서](../../loresentry-authentication/docs/README.md), 프로젝트 공통 맥락은
 [루트 문서 안내](../../docs/README.md)를 참고한다.
