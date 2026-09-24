@@ -15,7 +15,7 @@ import tools.jackson.core.JacksonException;
 @Component
 public class AuthApiClient {
     private final RestClient client;
-    private enum Operation { PREPARE, CALLBACK }
+    private enum Operation { PREPARE, CALLBACK, REFRESH }
     private static final JsonMapper JSON=JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
@@ -30,6 +30,9 @@ public class AuthApiClient {
     }
     public AuthData.LoginTokens callback(AuthData.Callback input) {
         return call(HttpMethod.POST,"/auth/oauth/google/callback",null,input,AuthData.LoginTokens.class,200,Operation.CALLBACK);
+    }
+    public AuthData.Tokens refresh(String token) {
+        return call(HttpMethod.POST,"/auth/tokens/refresh",null,new AuthData.Refresh(token),AuthData.Tokens.class,200,Operation.REFRESH);
     }
     private <T> T call(HttpMethod method,String path,UUID user,Object body,Class<T> type,int expected,Operation operation) {
         try {
@@ -76,6 +79,8 @@ public class AuthApiClient {
     private static void validate(Object response) {
         if(response instanceof AuthData.Prepared p) {
             required(p.authorizationUrl());required(p.loginRequestId());java.util.Objects.requireNonNull(p.expiresAt());
+        } else if(response instanceof AuthData.Tokens t) {
+            required(t.accessToken());required(t.refreshToken());java.util.Objects.requireNonNull(t.accessExpiresAt());java.util.Objects.requireNonNull(t.refreshExpiresAt());
         } else if(response instanceof AuthData.LoginTokens t) {
             required(t.accessToken());required(t.refreshToken());java.util.Objects.requireNonNull(t.accessExpiresAt());java.util.Objects.requireNonNull(t.refreshExpiresAt());
         }
@@ -85,9 +90,12 @@ public class AuthApiClient {
         return switch(code) {
             case "INVALID_REQUEST" -> status==400&&"NONE".equals(action);
             case "INTERNAL_ERROR" -> status==500&&"NONE".equals(action);
-            case "LOGIN_UNAVAILABLE" -> status==503&&"RESTART_LOGIN".equals(action);
+            case "LOGIN_UNAVAILABLE" -> operation!=Operation.REFRESH&&status==503&&"RESTART_LOGIN".equals(action);
             case "OAUTH_REQUEST_INVALID","OAUTH_LOGIN_DENIED" -> operation==Operation.CALLBACK&&status==400&&"RESTART_LOGIN".equals(action);
             case "OAUTH_IDENTITY_INVALID" -> operation==Operation.CALLBACK&&status==401&&"RESTART_LOGIN".equals(action);
+            case "REFRESH_REJECTED" -> operation==Operation.REFRESH&&status==401&&"RELOGIN".equals(action);
+            case "REFRESH_UNAVAILABLE" -> operation==Operation.REFRESH&&status==503&&"RETRY_LATER".equals(action);
+            case "REFRESH_OUTCOME_UNKNOWN" -> operation==Operation.REFRESH&&status==503&&"RELOGIN".equals(action);
             default -> false;
         };
     }

@@ -18,6 +18,14 @@ public final class AuthData {
             @JsonProperty("refresh_expires_at") Instant refreshExpiresAt,@JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "LoginTokens[redacted]"; }
     }
+    public record Refresh(@JsonProperty("refresh_token") String refreshToken) {
+        @Override public String toString(){return "Refresh[redacted]";}
+    }
+    public record Tokens(@JsonProperty("access_token") String accessToken,
+            @JsonProperty("access_expires_at") Instant accessExpiresAt,@JsonProperty("refresh_token") String refreshToken,
+            @JsonProperty("refresh_expires_at") Instant refreshExpiresAt) {
+        @Override public String toString(){return "Tokens[redacted]";}
+    }
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,
                  @JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "AuthError[redacted]"; }
