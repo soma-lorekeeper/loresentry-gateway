@@ -15,7 +15,7 @@ import tools.jackson.core.JacksonException;
 @Component
 public class AuthApiClient {
     private final RestClient client;
-    private enum Operation { PREPARE, CALLBACK, REFRESH, REVOKE }
+    private enum Operation { PREPARE, CALLBACK, REFRESH, REVOKE, ACCOUNT }
     private static final JsonMapper JSON=JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
@@ -36,6 +36,16 @@ public class AuthApiClient {
     }
     public void revoke(String token) {
         call(HttpMethod.POST,"/auth/tokens/revoke",null,new AuthData.Refresh(token),Void.class,204,Operation.REVOKE);
+    }
+    public AuthData.Account account(UUID user) {
+        return ownAccount(user,call(HttpMethod.GET,"/auth/users/me",user,null,AuthData.Account.class,200,Operation.ACCOUNT));
+    }
+    public AuthData.Account updateAccount(UUID user,String displayName) {
+        return ownAccount(user,call(HttpMethod.PATCH,"/auth/users/me",user,new AuthData.DisplayName(displayName),AuthData.Account.class,200,Operation.ACCOUNT));
+    }
+    private AuthData.Account ownAccount(UUID user,AuthData.Account account) {
+        if(!user.equals(account.id())) throw AuthCallFailure.invalid(null);
+        return account;
     }
     private <T> T call(HttpMethod method,String path,UUID user,Object body,Class<T> type,int expected,Operation operation) {
         try {
@@ -80,7 +90,9 @@ public class AuthApiClient {
         } catch(IllegalArgumentException|NullPointerException malformed) {throw AuthCallFailure.invalid(consumed);}
     }
     private static void validate(Object response) {
-        if(response instanceof AuthData.Prepared p) {
+        if(response instanceof AuthData.Account account) {
+            java.util.Objects.requireNonNull(account.id());required(account.displayName());
+        } else if(response instanceof AuthData.Prepared p) {
             required(p.authorizationUrl());required(p.loginRequestId());java.util.Objects.requireNonNull(p.expiresAt());
         } else if(response instanceof AuthData.Tokens t) {
             required(t.accessToken());required(t.refreshToken());java.util.Objects.requireNonNull(t.accessExpiresAt());java.util.Objects.requireNonNull(t.refreshExpiresAt());
@@ -101,6 +113,10 @@ public class AuthApiClient {
             case "REFRESH_OUTCOME_UNKNOWN" -> operation==Operation.REFRESH&&status==503&&"RELOGIN".equals(action);
             case "INVALID_REFRESH_TOKEN" -> operation==Operation.REVOKE&&status==401&&"NONE".equals(action);
             case "REVOCATION_UNCONFIRMED" -> operation==Operation.REVOKE&&status==503&&"NONE".equals(action);
+            case "INVALID_DISPLAY_NAME" -> operation==Operation.ACCOUNT&&status==400&&"NONE".equals(action);
+            case "USER_CONTEXT_REQUIRED" -> operation==Operation.ACCOUNT&&status==401&&"RELOGIN".equals(action);
+            case "USER_NOT_FOUND" -> operation==Operation.ACCOUNT&&status==404&&"RELOGIN".equals(action);
+            case "ACCOUNT_UNAVAILABLE" -> operation==Operation.ACCOUNT&&status==503&&"RETRY_LATER".equals(action);
             default -> false;
         };
     }

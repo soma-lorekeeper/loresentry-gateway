@@ -26,6 +26,8 @@ public final class AuthData {
             @JsonProperty("refresh_expires_at") Instant refreshExpiresAt) {
         @Override public String toString(){return "Tokens[redacted]";}
     }
+    public record Account(java.util.UUID id,@JsonProperty("display_name") String displayName,String email) {}
+    public record DisplayName(@JsonProperty("display_name") String displayName) {}
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,
                  @JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "AuthError[redacted]"; }
