@@ -75,7 +75,11 @@ public class ContentApiClient {
             });
         } catch (ResourceAccessException failure) {
             throw ContentCallFailure.unavailable();
-        } catch (RestClientException | JacksonException | IllegalArgumentException | NullPointerException failure) {
+        } catch (JacksonException failure) {
+            for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause())
+                if (cause instanceof java.io.IOException) throw ContentCallFailure.unavailable();
+            throw ContentCallFailure.invalid();
+        } catch (RestClientException | IllegalArgumentException | NullPointerException failure) {
             throw ContentCallFailure.invalid();
         }
     }

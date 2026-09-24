@@ -37,3 +37,6 @@ out/
 .vscode/
 
 .DS_Store
+
+### Integration harness ###
+__pycache__/

@@ -14,6 +14,34 @@ import com.loresentry.gateway.client.content.ContentApiClient;
 import com.loresentry.gateway.client.content.ContentData;
 
 class InternalHttpTransportTest {
+    @ParameterizedTest @ValueSource(booleans={false,true})
+    void lostResponseBodyIsUnavailableAndNeverRetried(boolean timeout) throws Exception {
+        try(var socket=new ServerSocket(0);
+            var http=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200))) {
+            socket.setSoTimeout(700);
+            var count=new AtomicInteger();
+            var worker=Thread.ofVirtual().start(()-> {
+                try {
+                    while(true) try(var accepted=socket.accept()) {
+                        count.incrementAndGet();
+                        var reader=new java.io.BufferedReader(new java.io.InputStreamReader(accepted.getInputStream()));
+                        String line; while((line=reader.readLine())!=null&&!line.isEmpty()) { }
+                        accepted.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                                +"Content-Length: 100\r\nConnection: close\r\n\r\n{\"projects\":").getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                        accepted.getOutputStream().flush();
+                        if(timeout) java.util.concurrent.locks.LockSupport.parkNanos(Duration.ofMillis(450).toNanos());
+                    }
+                } catch(SocketTimeoutException done) { }
+                catch(java.io.IOException failure) { throw new RuntimeException(failure); }
+            });
+            var client=new ContentApiClient(RestClient.builder().baseUrl("http://127.0.0.1:"+socket.getLocalPort())
+                    .requestFactory(new HttpComponentsClientHttpRequestFactory(http)).build());
+            assertThatThrownBy(()->client.listProjects(UUID.randomUUID(),null)).hasMessage("CONTENT_UNAVAILABLE");
+            worker.join(2000);
+            assertThat(worker.isAlive()).isFalse();
+            assertThat(count).hasValue(1);
+        }
+    }
     @ParameterizedTest @org.junit.jupiter.params.provider.CsvSource({"false,false","true,false","false,true","true,true"})
     void disconnectOrTimeoutDoesNotRetryReadsOrWrites(boolean write, boolean timeout) throws Exception {
         try(var socket=new ServerSocket(0);
