@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +49,7 @@ class UpstreamForwardTest {
                 .andExpect(header(UpstreamClient.USER_ID_HEADER, user.toString()))
                 .andRespond(withSuccess("{\"projects\":[]}", MediaType.APPLICATION_JSON));
 
-        ResponseEntity<byte[]> response = client.forward(HttpMethod.GET, "/projects", null, null, null, user);
+        ResponseEntity<byte[]> response = client.forward(HttpMethod.GET, "/projects", null, null, null, user, Map.of());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(new String(response.getBody(), StandardCharsets.UTF_8)).isEqualTo("{\"projects\":[]}");
@@ -63,7 +64,24 @@ class UpstreamForwardTest {
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         client.forward(HttpMethod.POST, "/projects", "q=%EC%9C%A0%EB%A6%AC",
-                "{\"name\":\"x\"}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user);
+                "{\"name\":\"x\"}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user,
+                Map.of());
+
+        server.verify();
+    }
+
+    @Test
+    void sendsTheForwardedHeadersAndLetsIdentityWin() {
+        server.expect(requestTo(BASE + "/files/abc/content"))
+                .andExpect(header(HttpHeaders.IF_MATCH, "\"7\""))
+                // 클라이언트가 보낸 신원은 우리가 정한 값으로 덮인다.
+                .andExpect(header(UpstreamClient.USER_ID_HEADER, user.toString()))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        client.forward(HttpMethod.PUT, "/files/abc/content", null,
+                "{}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user,
+                Map.of(HttpHeaders.IF_MATCH, "\"7\"",
+                        UpstreamClient.USER_ID_HEADER, UUID.randomUUID().toString()));
 
         server.verify();
     }
@@ -77,7 +95,7 @@ class UpstreamForwardTest {
                         .body("{\"code\":\"PROJECT_NAME_TAKEN\"}"));
 
         ResponseEntity<byte[]> response = client.forward(HttpMethod.POST, "/projects", null,
-                "{}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user);
+                "{}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user, Map.of());
 
         assertThat(response.getStatusCode().value()).isEqualTo(409);
         assertThat(new String(response.getBody(), StandardCharsets.UTF_8))
@@ -94,7 +112,7 @@ class UpstreamForwardTest {
                         .body("{}"));
 
         ResponseEntity<byte[]> response = client.forward(HttpMethod.POST, "/projects", null,
-                "{}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user);
+                "{}".getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON, user, Map.of());
 
         assertThat(response.getHeaders().getFirst(HttpHeaders.LOCATION)).isEqualTo("/projects/abc");
         assertThat(response.getHeaders().getFirst(HttpHeaders.TRANSFER_ENCODING)).isNull();

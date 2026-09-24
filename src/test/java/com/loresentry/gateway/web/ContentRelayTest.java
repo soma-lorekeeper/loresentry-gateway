@@ -1,5 +1,6 @@
 package com.loresentry.gateway.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,6 +30,7 @@ import com.loresentry.gateway.identity.ClientHeaderIdentityResolver;
 import com.loresentry.gateway.identity.CurrentUserArgumentResolver;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -70,7 +73,7 @@ class ContentRelayTest {
 
     @Test
     void relaysTheProjectListVerbatim() throws Exception {
-        given(contentClient.forward(any(), any(), any(), any(), any(), any()))
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(ok("{\"projects\":[]}"));
 
         mockMvc.perform(get("/projects").header(ClientHeaderIdentityResolver.HEADER, USER))
@@ -78,12 +81,12 @@ class ContentRelayTest {
                 .andExpect(content().json("{\"projects\":[]}"));
 
         // 경로를 다시 쓰지 않는다. 공개 /projects 가 content 의 /projects 다.
-        verify(contentClient).forward(eq(HttpMethod.GET), eq("/projects"), eq(null), any(), any(), eq(USER));
+        verify(contentClient).forward(eq(HttpMethod.GET), eq("/projects"), eq(null), any(), any(), eq(USER), any());
     }
 
     @Test
     void relaysNestedPathsAndQueryStrings() throws Exception {
-        given(contentClient.forward(any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
 
         // 서블릿이 주는 쿼리는 이미 인코딩된 원문이다. 그대로 넘겨야 이중 인코딩이 나지 않는다.
         // URL 문자열 대신 URI 를 넘긴다 — MockMvc 의 URL 템플릿 처리가 % 를 다시 인코딩한다.
@@ -92,12 +95,12 @@ class ContentRelayTest {
                 .andExpect(status().isOk());
 
         verify(contentClient).forward(eq(HttpMethod.GET), eq("/projects/abc/search"),
-                eq("q=%EC%9C%A0%EB%A6%AC"), any(), any(), eq(USER));
+                eq("q=%EC%9C%A0%EB%A6%AC"), any(), any(), eq(USER), any());
     }
 
     @Test
     void relaysEveryMethodTheDomainUses() throws Exception {
-        given(contentClient.forward(any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
 
         mockMvc.perform(post("/projects").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"x\"}")
                         .header(ClientHeaderIdentityResolver.HEADER, USER))
@@ -108,22 +111,22 @@ class ContentRelayTest {
         mockMvc.perform(delete("/projects/abc").header(ClientHeaderIdentityResolver.HEADER, USER))
                 .andExpect(status().isOk());
 
-        verify(contentClient).forward(eq(HttpMethod.POST), eq("/projects"), any(), any(), any(), eq(USER));
-        verify(contentClient).forward(eq(HttpMethod.PATCH), eq("/projects/abc"), any(), any(), any(), eq(USER));
-        verify(contentClient).forward(eq(HttpMethod.DELETE), eq("/projects/abc"), any(), any(), any(), eq(USER));
+        verify(contentClient).forward(eq(HttpMethod.POST), eq("/projects"), any(), any(), any(), eq(USER), any());
+        verify(contentClient).forward(eq(HttpMethod.PATCH), eq("/projects/abc"), any(), any(), any(), eq(USER), any());
+        verify(contentClient).forward(eq(HttpMethod.DELETE), eq("/projects/abc"), any(), any(), any(), eq(USER), any());
     }
 
     @Test
     void ownsTheFileAndEpisodeNamespacesToo() throws Exception {
-        given(contentClient.forward(any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
 
         mockMvc.perform(get("/files/abc").header(ClientHeaderIdentityResolver.HEADER, USER))
                 .andExpect(status().isOk());
         mockMvc.perform(delete("/episodes/abc").header(ClientHeaderIdentityResolver.HEADER, USER))
                 .andExpect(status().isOk());
 
-        verify(contentClient).forward(eq(HttpMethod.GET), eq("/files/abc"), any(), any(), any(), eq(USER));
-        verify(contentClient).forward(eq(HttpMethod.DELETE), eq("/episodes/abc"), any(), any(), any(), eq(USER));
+        verify(contentClient).forward(eq(HttpMethod.GET), eq("/files/abc"), any(), any(), any(), eq(USER), any());
+        verify(contentClient).forward(eq(HttpMethod.DELETE), eq("/episodes/abc"), any(), any(), any(), eq(USER), any());
     }
 
     @Test
@@ -133,7 +136,7 @@ class ContentRelayTest {
         mockMvc.perform(get("/health")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ok"));
 
-        verify(contentClient, never()).forward(any(), any(), any(), any(), any(), any());
+        verify(contentClient, never()).forward(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -153,7 +156,41 @@ class ContentRelayTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
-        verify(contentClient, never()).forward(any(), any(), any(), any(), any(), any());
+        verify(contentClient, never()).forward(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void carriesTheHeadersThatAreDocumentApiContract() throws Exception {
+        // If-Match 를 빠뜨리면 content 가 조건을 받지 못해 모든 문서 저장이 거절된다.
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
+
+        mockMvc.perform(put("/files/abc/content").contentType(MediaType.APPLICATION_JSON).content("{}")
+                        .header(ClientHeaderIdentityResolver.HEADER, USER)
+                        .header(HttpHeaders.IF_MATCH, "\"7\"")
+                        .header("X-Save-Id", "a-save-id"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<java.util.Map<String, String>> headers = ArgumentCaptor.captor();
+        verify(contentClient).forward(eq(HttpMethod.PUT), eq("/files/abc/content"), any(), any(), any(),
+                eq(USER), headers.capture());
+        assertThat(headers.getValue())
+                .containsEntry(HttpHeaders.IF_MATCH, "\"7\"")
+                .containsEntry("X-Save-Id", "a-save-id");
+    }
+
+    @Test
+    void refusesToCarryHeadersTheGatewayOwns() throws Exception {
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any())).willReturn(ok("{}"));
+
+        mockMvc.perform(get("/projects")
+                        .header(ClientHeaderIdentityResolver.HEADER, USER)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer smuggled")
+                        .header(HttpHeaders.COOKIE, "session=smuggled"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<java.util.Map<String, String>> headers = ArgumentCaptor.captor();
+        verify(contentClient).forward(any(), any(), any(), any(), any(), eq(USER), headers.capture());
+        assertThat(headers.getValue()).isEmpty();
     }
 
     @Test
@@ -161,7 +198,7 @@ class ContentRelayTest {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set(HttpHeaders.LOCATION, "/projects/new");
-        given(contentClient.forward(any(), any(), any(), any(), any(), any()))
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(new ResponseEntity<>("{\"code\":\"PROJECT_NAME_TAKEN\"}".getBytes(StandardCharsets.UTF_8),
                         headers, org.springframework.http.HttpStatus.CONFLICT));
 
@@ -174,7 +211,7 @@ class ContentRelayTest {
 
     @Test
     void reportsAnUnreachableUpstreamAsItsOwnFailure() throws Exception {
-        given(contentClient.forward(any(), any(), any(), any(), any(), any()))
+        given(contentClient.forward(any(), any(), any(), any(), any(), any(), any()))
                 .willThrow(new UpstreamException("content", "content call failed", new RuntimeException()));
 
         mockMvc.perform(get("/projects").header(ClientHeaderIdentityResolver.HEADER, USER))

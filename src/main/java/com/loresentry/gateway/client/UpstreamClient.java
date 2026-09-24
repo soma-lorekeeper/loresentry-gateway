@@ -72,17 +72,27 @@ public abstract class UpstreamClient {
      * 업스트림 응답을 손대지 않고 통과시킨다. 상태 코드와 오류 본문을 그대로 넘기는 것이 요점이다 —
      * gateway가 다시 포장하면 클라이언트가 두 겹을 벗겨야 하고, 업스트림이 준 이유가 지워진다.
      *
-     * <p>클라이언트의 헤더를 통째로 전달하지 않는다. 신원은 {@code userId} 하나로 받아 여기서 직접
-     * 싣는다. 그래서 클라이언트가 보낸 {@code X-User-Id}는 어떤 경로로도 업스트림에 닿지 않는다.
+     * <p>클라이언트의 헤더를 통째로 전달하지 않는다. {@code forwardedHeaders}는 API 계약에 속한
+     * 헤더만 담은 허용 목록이고, 신원은 {@code userId} 하나로 받는다. 신원 헤더가 그 목록에 섞여
+     * 들어와도 여기서 버리므로, 클라이언트가 보낸 {@code X-User-Id}는 어떤 경로로도 업스트림에
+     * 닿지 않는다.
      */
     public ResponseEntity<byte[]> forward(HttpMethod method, String path, String query, byte[] body,
-            MediaType contentType, UUID userId) {
+            MediaType contentType, UUID userId, Map<String, String> forwardedHeaders) {
         try {
             // uri(String)은 {} 를 템플릿 변수로 확장한다. builder 형태는 확장하지 않으므로
             // 이미 인코딩된 서블릿 경로를 그대로 보낼 수 있다.
             RestClient.RequestBodySpec request = restClient.method(method)
-                    .uri(builder -> builder.replacePath(path).replaceQuery(query).build())
-                    .header(USER_ID_HEADER, userId.toString());
+                    .uri(builder -> builder.replacePath(path).replaceQuery(query).build());
+
+            // header() 는 덮어쓰지 않고 값을 추가한다. 그래서 신원 헤더는 순서로 이기려 하지 않고
+            // 아예 걸러낸다 — 두 값이 실리면 업스트림이 어느 것이 gateway 의 것인지 알 수 없다.
+            forwardedHeaders.forEach((name, value) -> {
+                if (!USER_ID_HEADER.equalsIgnoreCase(name)) {
+                    request.header(name, value);
+                }
+            });
+            request.header(USER_ID_HEADER, userId.toString());
 
             if (body != null && body.length > 0) {
                 request.contentType(contentType == null ? MediaType.APPLICATION_JSON : contentType)
