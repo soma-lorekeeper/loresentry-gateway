@@ -149,8 +149,14 @@ namespace — Spring picks the more specific pattern.
 What the relay does with a request:
 
 - passes the method, path, query string and body straight through
-- **sets `X-User-Id` itself** from the resolved identity, and never forwards the
-  client's headers wholesale, so the client cannot smuggle one in
+- forwards an **allowlist** of request headers that are part of the API contract:
+  `If-Match`, `If-None-Match` and `X-Save-Id`. `If-Match` is the conditional-save
+  token and `X-Save-Id` the idempotency key, so omitting them makes content
+  refuse every document save
+- **sets `X-User-Id` itself** from the resolved identity, and drops that header
+  from the forwarded set, so the client cannot smuggle one in. Nothing else is
+  forwarded — once authentication lands, `Authorization` and `Cookie` are the
+  gateway's to consume, not the domain services' to see
 - returns the upstream status and body **untouched**, including error bodies. The
   upstream knows why it failed; re-wrapping would erase that and force the client
   to unpack two layers

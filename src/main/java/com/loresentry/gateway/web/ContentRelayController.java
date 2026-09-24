@@ -1,5 +1,8 @@
 package com.loresentry.gateway.web;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.loresentry.gateway.client.ContentClient;
@@ -30,6 +33,17 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class ContentRelayController {
+
+    /**
+     * 업스트림에 넘길 요청 헤더. 허용 목록이다 — 통째로 넘기면 클라이언트가 {@code X-User-Id}를
+     * 끼워 넣을 수 있고, 인증이 붙은 뒤에는 gateway가 소비해야 할 {@code Authorization}·
+     * {@code Cookie}까지 도메인 서비스로 새어 나간다.
+     *
+     * <p>여기 있는 것은 전부 API 계약의 일부다. {@code If-Match}는 문서 저장의 조건부 갱신 토큰이고
+     * {@code X-Save-Id}는 저장 재시도를 알아보는 멱등 키다. 빠뜨리면 content가 조건을 받지 못해
+     * 모든 저장이 거절된다.
+     */
+    private static final List<String> FORWARDED_HEADERS = List.of("If-Match", "If-None-Match", "X-Save-Id");
 
     private final ContentClient content;
 
@@ -85,6 +99,18 @@ public class ContentRelayController {
                 request.getQueryString(),
                 body,
                 contentType,
-                userId);
+                userId,
+                forwardedHeadersOf(request));
+    }
+
+    private static Map<String, String> forwardedHeadersOf(HttpServletRequest request) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        for (String name : FORWARDED_HEADERS) {
+            String value = request.getHeader(name);
+            if (value != null) {
+                headers.put(name, value);
+            }
+        }
+        return headers;
     }
 }
