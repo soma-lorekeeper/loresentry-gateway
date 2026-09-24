@@ -16,3 +16,9 @@ loresentry:
       base-url: http://graph-rag-api
     ai-chat:
       base-url: http://ai-chat-api
+  session-redis:
+    host: ${BFF_SESSION_REDIS_HOST}
+    port: ${BFF_SESSION_REDIS_PORT:6379}
+    username: ${BFF_SESSION_REDIS_USERNAME}
+    password: ${BFF_SESSION_REDIS_PASSWORD}
+    tls: ${BFF_SESSION_REDIS_TLS}

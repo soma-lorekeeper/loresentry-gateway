@@ -11,3 +11,9 @@ loresentry:
       base-url: http://graph.test
     ai-chat:
       base-url: http://chat.test
+  session-redis:
+    host: 127.0.0.1
+    port: 6379
+    username: bff
+    password: test-only-unused-credential
+    tls: false

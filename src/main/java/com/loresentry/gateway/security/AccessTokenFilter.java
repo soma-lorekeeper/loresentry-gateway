@@ -15,7 +15,8 @@ public class AccessTokenFilter extends OncePerRequestFilter {
     public static final String USER_ATTRIBUTE=AccessTokenFilter.class.getName()+".user";
     private final AccessTokenVerifier verifier;
     private final CookieSettings cookies;
-    public AccessTokenFilter(AccessTokenVerifier verifier,CookieSettings cookies) { this.verifier=verifier;this.cookies=cookies; }
+    private final SessionVerifier sessions;
+    public AccessTokenFilter(AccessTokenVerifier verifier,CookieSettings cookies,SessionVerifier sessions) { this.verifier=verifier;this.cookies=cookies;this.sessions=sessions; }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
         String method=request.getMethod(),path=request.getRequestURI();
         return (("GET".equals(method)||"HEAD".equals(method))&&"/health".equals(path))
@@ -32,6 +33,7 @@ public class AccessTokenFilter extends OncePerRequestFilter {
                 token=cookie.getValue();
             }
             claims=verifier.verify(token);
+            sessions.verify(claims);
         } catch(SecurityFailure failure) { SecurityResponses.write(response,failure.reason());return; }
         var sanitized=new HttpServletRequestWrapper(request) {
             @Override public String getHeader(String name) { return "X-User-Id".equalsIgnoreCase(name)?null:super.getHeader(name); }

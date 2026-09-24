@@ -35,8 +35,8 @@ public class JwtConfiguration {
         return new AccessTokenVerifier(loadPublicKey(properties.publicKey()),properties.keyId(),clock);
     }
     @Bean
-    public FilterRegistrationBean<AccessTokenFilter> accessTokenFilter(AccessTokenVerifier accessTokens,CookieSettings cookies) {
-        var registration=new FilterRegistrationBean<>(new AccessTokenFilter(accessTokens,cookies));
+    public FilterRegistrationBean<AccessTokenFilter> accessTokenFilter(AccessTokenVerifier accessTokens,CookieSettings cookies,com.loresentry.gateway.security.SessionVerifier sessions) {
+        var registration=new FilterRegistrationBean<>(new AccessTokenFilter(accessTokens,cookies,sessions));
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE+20);
         return registration;
     }

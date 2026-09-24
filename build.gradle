@@ -22,11 +22,20 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
 	implementation 'org.springframework.security:spring-security-oauth2-jose'
+	implementation 'io.lettuce:lettuce-core'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-restclient-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform { excludeTags 'redis' }
+}
+
+// Requires isolated Redis and Valkey instances; see docs/verification/LOREKEEPER-562.md.
+tasks.register('sessionIntegrationTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'redis' }
+    shouldRunAfter test
 }
