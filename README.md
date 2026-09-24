@@ -8,6 +8,14 @@ route from outside the cluster.
 Cloudflare → ALB → gateway → authentication · content · ai-chat · graph-rag
 ```
 
+## Documentation
+
+The [documentation index](docs/README.md) covers the BFF architecture, browser
+security, public API and authentication flows. These documents include planned
+authentication behavior; the implementation status remains described below.
+Service boundaries and coordinated rollout contracts remain in the shared docs
+repository and are linked from the index.
+
 ## Responsibilities
 
 - Single public API surface for clients
