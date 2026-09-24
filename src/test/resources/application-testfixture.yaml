@@ -1,0 +1,15 @@
+loresentry:
+  jwt:
+    public-key: classpath:test-public-key.pem
+    issuer: loresentry-auth-test
+    audience: loresentry-api-test
+    key-id: test-key
+  upstream:
+    authentication:
+      base-url: http://auth.test
+    content:
+      base-url: http://content.test
+    graph-rag:
+      base-url: http://graph.test
+    ai-chat:
+      base-url: http://chat.test

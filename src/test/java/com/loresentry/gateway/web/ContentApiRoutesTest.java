@@ -12,7 +12,7 @@ import java.util.UUID;
 import com.loresentry.gateway.application.ContentService;
 import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.client.content.ContentApiClient.Conditions;
-import com.loresentry.gateway.config.CorsProperties;
+import com.loresentry.gateway.config.BrowserProperties;
 import com.loresentry.gateway.identity.ClientHeaderIdentityResolver;
 import com.loresentry.gateway.identity.CurrentUserArgumentResolver;
 import com.loresentry.gateway.web.content.ContentApiController;
@@ -25,9 +25,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@com.loresentry.gateway.LocalTestEnvironment
 @WebMvcTest(ContentApiController.class)
 @Import({ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class, com.loresentry.gateway.config.JsonConfiguration.class})
-@EnableConfigurationProperties(CorsProperties.class)
+@EnableConfigurationProperties(BrowserProperties.class)
 class ContentApiRoutesTest {
     static final UUID USER = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d60");
     static final UUID ID = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d61");

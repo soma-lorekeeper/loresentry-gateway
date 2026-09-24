@@ -1,0 +1,20 @@
+loresentry:
+  browser:
+    frontend-origin: http://localhost:3000
+    public-origin: http://localhost:8000
+    login-redirect: http://localhost:3000/login
+    secure-cookies: false
+  jwt:
+    public-key: ${BFF_JWT_PUBLIC_KEY}
+    issuer: ${BFF_JWT_ISSUER}
+    audience: ${BFF_JWT_AUDIENCE}
+    key-id: ${BFF_JWT_KEY_ID}
+  upstream:
+    authentication:
+      base-url: ${BFF_AUTH_BASE_URL}
+    content:
+      base-url: ${BFF_CONTENT_BASE_URL}
+    graph-rag:
+      base-url: ${BFF_GRAPH_BASE_URL}
+    ai-chat:
+      base-url: ${BFF_CHAT_BASE_URL}

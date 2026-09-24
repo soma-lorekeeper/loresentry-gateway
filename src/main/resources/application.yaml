@@ -13,33 +13,3 @@ server:
   port: 8000
   shutdown: graceful
 
-loresentry:
-  cors:
-    allowed-origin-patterns:
-      - https://loresentry.com
-      - https://*.loresentry.com
-      - http://localhost:[*]
-      - http://127.0.0.1:[*]
-    allowed-methods:
-      - GET
-      - POST
-      - PUT
-      - PATCH
-      - DELETE
-      - OPTIONS
-      - HEAD
-    allowed-headers:
-      - "*"
-    exposed-headers:
-      - Location
-    allow-credentials: true
-    max-age: 1h
-  upstream:
-    graph-rag:
-      base-url: http://graph-rag-api
-    ai-chat:
-      base-url: http://ai-chat-api
-    authentication:
-      base-url: http://authentication-api
-    content:
-      base-url: http://content-api

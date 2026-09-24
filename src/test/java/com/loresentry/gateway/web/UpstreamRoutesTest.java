@@ -14,7 +14,7 @@ import com.loresentry.gateway.client.AuthenticationClient;
 import com.loresentry.gateway.client.ContentClient;
 import com.loresentry.gateway.client.GraphRagClient;
 import com.loresentry.gateway.client.UpstreamException;
-import com.loresentry.gateway.config.CorsProperties;
+import com.loresentry.gateway.config.BrowserProperties;
 import com.loresentry.gateway.identity.ClientHeaderIdentityResolver;
 import com.loresentry.gateway.identity.CurrentUserArgumentResolver;
 
@@ -26,9 +26,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@com.loresentry.gateway.LocalTestEnvironment
 @WebMvcTest
 @Import({ ProbeService.class, ClientHeaderIdentityResolver.class, CurrentUserArgumentResolver.class })
-@EnableConfigurationProperties(CorsProperties.class)
+@EnableConfigurationProperties(BrowserProperties.class)
 class UpstreamRoutesTest {
 
     @Autowired

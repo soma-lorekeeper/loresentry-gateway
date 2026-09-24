@@ -28,6 +28,7 @@ import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.mock.http.client.MockClientHttpResponse;
 
+@com.loresentry.gateway.LocalTestEnvironment
 @SpringBootTest(properties = {
         "loresentry.upstream.graph-rag.base-url=http://wired-graph-rag",
         "loresentry.upstream.ai-chat.base-url=http://wired-ai-chat",
