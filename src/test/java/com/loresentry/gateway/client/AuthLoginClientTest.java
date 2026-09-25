@@ -34,12 +34,11 @@ class AuthLoginClientTest {
         server.expect(requestTo("http://auth.test/auth/oauth/google/callback")).andExpect(method(HttpMethod.POST))
             .andExpect(content().json("{\"login_request_id\":\"request-id\",\"state\":\"state\",\"code\":\"code\",\"error\":null}"))
             .andExpect(headerDoesNotExist("Cookie")).andRespond(withSuccess("""
-                {"access_token":"access.payload.signature","access_expires_at":"2026-09-24T00:15:00Z",
-                 "refresh_token":"refresh.payload.signature","refresh_expires_at":"2026-10-08T00:00:00Z","login_request_consumed":true}
+                {"session_id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","expires_at":"2026-10-08T00:00:00Z","login_request_consumed":true}
                 """,MediaType.APPLICATION_JSON));
         var result=service.callback("request-id","state","code",null);
         assertThat(result.result()).isEqualTo(LoginService.Result.SUCCESS);assertThat(result.consumed()).isTrue();
-        assertThat(result.tokens().accessToken()).isEqualTo("access.payload.signature");server.verify();
+        assertThat(result.session().id().value()).isEqualTo("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");server.verify();
     }
     @ParameterizedTest @CsvSource({"400,OAUTH_LOGIN_DENIED,RESTART_LOGIN,true,CANCELLED",
         "400,OAUTH_REQUEST_INVALID,RESTART_LOGIN,false,INVALID", "503,LOGIN_UNAVAILABLE,RESTART_LOGIN,null,UNAVAILABLE",
@@ -51,12 +50,12 @@ class AuthLoginClientTest {
         var response=service.callback("request","state",null,"access_denied");
         assertThat(response.result().name()).isEqualTo(result);
         assertThat(response.consumed()).isEqualTo("null".equals(consumed)?null:Boolean.valueOf(consumed));
-        assertThat(response.tokens()).isNull();assertThat(response.toString()).doesNotContain("private detail");server.verify();
+        assertThat(response.session()).isNull();assertThat(response.toString()).doesNotContain("private detail");server.verify();
     }
     @ParameterizedTest @ValueSource(strings={"{\"login_request_consumed\":true}",
-        "{\"login_request_consumed\":true,\"access_token\":42}",
-        "{\"login_request_consumed\":true,\"access_expires_at\":\"not a date\"}"})
-    void malformedTokenResultStillPreservesConfirmedConsumption(String body) {
+        "{\"login_request_consumed\":true,\"session_id\":42}",
+        "{\"login_request_consumed\":true,\"expires_at\":\"not a date\"}"})
+    void malformedSessionResultStillPreservesConfirmedConsumption(String body) {
         server.expect(requestTo("http://auth.test/auth/oauth/google/callback")).andRespond(withSuccess(body,MediaType.APPLICATION_JSON));
         var response=service.callback("request","state","code",null);
         assertThat(response.result()).isEqualTo(LoginService.Result.FAILED);assertThat(response.consumed()).isTrue();server.verify();

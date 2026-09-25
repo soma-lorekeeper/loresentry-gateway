@@ -14,7 +14,8 @@ public class LoginService {
     public record Preparation(String authorizationUrl,String requestId,Instant expiresAt,Result result) {
         @Override public String toString(){return "Preparation[result="+result+"]";}
     }
-    public record CallbackResult(TokenPair tokens,Result result,Boolean consumed) {}
+    public record Session(SessionId id,Instant expiresAt) {}
+    public record CallbackResult(Session session,Result result,Boolean consumed) {}
     public Preparation prepare() {
         try {
             var response=client.prepare();
@@ -25,8 +26,8 @@ public class LoginService {
         if(blank(requestId)||blank(state)||(blank(code)==blank(error))) return new CallbackResult(null,Result.INVALID,null);
         try {
             var response=client.callback(new AuthData.Callback(requestId,state,code,error));
-            var tokens=new TokenPair(response.accessToken(),response.accessExpiresAt(),response.refreshToken(),response.refreshExpiresAt());
-            return new CallbackResult(tokens,Result.SUCCESS,response.consumed());
+            var session=new Session(new SessionId(response.sessionId()),response.expiresAt());
+            return new CallbackResult(session,Result.SUCCESS,response.consumed());
         } catch(AuthCallFailure failure) {return new CallbackResult(null,result(failure),failure.consumed());}
     }
     private static boolean blank(String value){return value==null||value.isBlank();}
