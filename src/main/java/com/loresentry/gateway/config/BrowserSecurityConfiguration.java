@@ -26,4 +26,12 @@ public class BrowserSecurityConfiguration {
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE+1);
         return registration;
     }
+    @Bean
+    public FilterRegistrationBean<com.loresentry.gateway.security.SessionFilter> sessionFilter(
+            com.loresentry.gateway.security.OpaqueSessionVerifier verifier,CookieSettings names,
+            com.loresentry.gateway.web.auth.AuthCookies cookies) {
+        var registration=new FilterRegistrationBean<>(new com.loresentry.gateway.security.SessionFilter(verifier,names,cookies));
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE+20);
+        return registration;
+    }
 }
