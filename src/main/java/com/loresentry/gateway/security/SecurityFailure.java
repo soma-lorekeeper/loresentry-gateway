@@ -6,6 +6,7 @@ public class SecurityFailure extends RuntimeException {
         ACCESS_TOKEN_MISSING(401,"REFRESH","Access token is required."),
         ACCESS_TOKEN_EXPIRED(401,"REFRESH","Access token has expired."),
         ACCESS_TOKEN_INVALID(401,"RELOGIN","Access token is invalid."),
+        SESSION_REQUIRED(401,"RELOGIN","A login session is required."),
         SESSION_INVALID(401,"RELOGIN","The login session is no longer active."),
         SESSION_UNAVAILABLE(503,"RETRY_LATER","The login session could not be verified.");
         public final int status;
