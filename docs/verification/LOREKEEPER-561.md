@@ -1,5 +1,7 @@
 # Access Token과 사용자 신원 검증
 
+> 이전 구현의 실행 기록이다. 2026-09-26 단일 세션 ID 설계의 구현·검증 완료 근거로 사용하지 않는다. 당시 결과와 수치는 보존한다.
+
 2026-09-24, LOREKEEPER-561. 임시 X-User-Id 인증을 제거했다. 보호 요청은 쿠키 AT의
 RS256 서명과 등록 kid, iss·aud·token_type·sub·jti·sid·iat·exp를 확인한다.
 sid는 UUID v4이며 미래 iat와 만료에 30초 시계 오차를 적용한다. 만료 외 검증을

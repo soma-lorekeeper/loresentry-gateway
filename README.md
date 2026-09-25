@@ -1,5 +1,7 @@
 # loresentry-gateway
 
+> 2026-09-26: docs/는 단일 세션 ID와 마지막 활동 후 14일 만료·활동 시 연장 설계로 전환했다. 코드는 아직 이전 방식이며 아래 실행 안내·설정·검증 수치는 현재 코드 기준이다. [새 설계와 전환 범위](docs/README.md)를 먼저 확인한다.
+
 Lore Sentry의 브라우저 API 경계다. Java 21, Spring Boot 4.1.1의 Servlet MVC,
 Virtual Threads와 RestClient를 사용한다. 명시적인 외부 API를 통해 Auth·Content를
 호출하며, 도메인 데이터의 접근 권한과 규칙은 해당 서비스가 결정한다.
@@ -79,7 +81,7 @@ curl http://localhost:8000/health
 
 local/prod 프로필을 정확히 하나 선택해야 한다. 공개키 파일·kid·세션 Redis 계정은 필수이며
 누락되거나 잘못되면 기동을 거절한다. prod의 내부 서비스 주소는 Kubernetes Service DNS를
-사용한다. 세부 운영 주입 요구는 [운영 설정 표](docs/OPERATIONS.md#bff-설정과-secret)에 있다.
+사용한다. 세부 운영 주입 요구는 [운영 설정 표](docs/OPERATIONS.md#설정과-secret)에 있다.
 
 ## 검증
 

@@ -26,9 +26,9 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 
 ## 인증과 헤더
 
-최종 보호 API는 CSRF(변경 요청)·AT·활성 세션 검사 후 검증된 UUID만 사용한다.
+최종 보호 API는 CSRF(변경 요청)·단일 세션 검증과 활동 만료 연장 후 검증된 UUID만 사용한다.
 외부 X-User-Id, Cookie, Authorization은 도메인 서비스 전달 목록에서 제외하고 client가
-검증된 사용자 ID 하나로 X-User-Id를 구성한다. AT·활성 세션 검사는 현재 구현에 포함된다.
+검증된 사용자 ID 하나로 X-User-Id를 구성한다. 단일 ID의 세션 검증·연장은 2026-09-26 목표 설계이며 현재 코드에는 아직 반영하지 않았다.
 과거 구조 정렬만 완료된 중간 버전을 인증 완료로 취급하지 않는다.
 
 | 헤더 | 처리 |
@@ -41,7 +41,7 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 | Cache-Control | 보호 Content 응답에 no-store를 적용한다. 임의 내부 캐시 정책을 복사하지 않는다. |
 
 전용 요청 헤더가 중복되면 모호한 값을 선택하지 않고 400 INVALID_REQUEST로 거절한다.
-일반 인증 쿠키가 RT를 포함해도 도메인 호출에 전달하지 않는다.
+브라우저의 인증 쿠키와 세션 ID는 도메인 호출에 전달하지 않는다.
 
 브라우저 CORS의 허용 메서드는 GET·HEAD·POST·PATCH·PUT·DELETE·OPTIONS,
 요청 헤더는 Content-Type·X-LS-CSRF·If-Match·If-None-Match·X-Save-Id다.
@@ -77,7 +77,7 @@ DOCUMENT_CONFLICT에는 current와 base를 명시적 DTO로 변환해 포함한�
 base는 Snapshot 또는 null이다. 추가 GET으로 이를 재구성하지 않는다. 잘못된 충돌 데이터는
 일반 409로 축소하거나 성공으로 전달하지 않고 UPSTREAM_INVALID_RESPONSE로 처리한다.
 
-Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으므로 브라우저 재발급
+Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으므로 브라우저 재로그인
 오류로 바꾸지 않는다. 알 수 없는 status/code/next_action 조합도 외부로 그대로 전달하지 않는다.
 성공 응답의 필수 필드·상태·JSON 타입을 확인하고 잘못된 결과는 502로 처리한다.
 응답을 받지 못한 변경 요청은 미실행으로 단정하지 않는다. RETRY_LATER는 자동 재실행 지시가 아니다.
@@ -85,10 +85,10 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 ## 외부 의존성과 적용 순서
 
 - Content·프론트의 실제 26개 API와 저장 헤더는 구조 전환에서 유지한다.
-- 프론트의 credentials, CSRF, Google 로그인 결과, 재발급·탭 조율과 개발 신원 제거는
+- 프론트의 credentials, CSRF, Google 로그인 결과, 세션 오류·인증 전환 조율과 개발 신원 제거는
   별도 연동 작업이다. 프론트가 준비되지 않아도 임시 신원을 최종 인증으로 허용하지 않는다.
 - 프론트 오류 매핑에는 CONTENT_UNAVAILABLE, UPSTREAM_INVALID_RESPONSE 및 인증·세션 오류가
-  추가로 필요하다. 기존 네트워크 오류를 새 재발급 조건으로 사용하지 않는다.
+  추가로 필요하다. 기존 네트워크 오류를 무조건 재로그인 조건으로 사용하지 않는다.
 - 배포는 각 중간 커밋의 안전성과 프론트·Auth·인프라 준비 상태를 별도로 확인한다.
 
 ## 검증 기준

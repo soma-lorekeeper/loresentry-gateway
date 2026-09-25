@@ -1,5 +1,7 @@
 # 본인 계정 API 검증
 
+> 이전 구현의 실행 기록이다. 2026-09-26 단일 세션 ID 설계의 구현·검증 완료 근거로 사용하지 않는다. 당시 결과와 수치는 보존한다.
+
 2026-09-24, LOREKEEPER-570. GET/PATCH /auth/users/me는 인증 경계가 제공한 UUID만
 application에 전달한다. Auth 요청에는 이 UUID의 X-User-Id만 설정하며 브라우저 Cookie와
 Authorization을 전달하지 않는다. PATCH 외부 입력은 display_name만 허용한다.

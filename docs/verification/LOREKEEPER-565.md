@@ -1,5 +1,7 @@
 # Auth 로그인 client와 application 검증
 
+> 이전 구현의 실행 기록이다. 2026-09-26 단일 세션 ID 설계의 구현·검증 완료 근거로 사용하지 않는다. 당시 결과와 수치는 보존한다.
+
 2026-09-24, LOREKEEPER-565. prepare/callback은 Auth의 같은 경로에 POST로 호출한다.
 로그인 정보는 JSON 본문으로만 전달하며 브라우저 Cookie·Authorization·사용자 헤더를 전달하지 않는다.
 client 내부 DTO와 application 결과를 분리했고 사용자별 임시 상태를 BFF에 저장하지 않는다.
