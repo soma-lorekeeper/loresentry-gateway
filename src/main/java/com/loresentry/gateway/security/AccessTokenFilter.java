@@ -12,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 public class AccessTokenFilter extends OncePerRequestFilter {
-    public static final String USER_ATTRIBUTE=AccessTokenFilter.class.getName()+".user";
+    public static final String USER_ATTRIBUTE=SessionFilter.USER_ATTRIBUTE;
     private final AccessTokenVerifier verifier;
     private final CookieSettings cookies;
     private final SessionVerifier sessions;
