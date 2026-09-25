@@ -1,41 +1,33 @@
-# 실제 Auth·BFF 단일 세션 통합 검증
+# Auth·BFF 세션 통합 실행
 
-`run.py`는 PostgreSQL 18.4, Valkey 9.0.6, 실제 Auth와 BFF 두 프로세스를 격리 실행한다.
-브라우저의 쿠키 정책, 실제 Google 동의 화면, Content 및 운영 인프라 검증은 포함하지 않는다.
+`run.py`는 격리 PostgreSQL 18.4, Valkey 9.0.6, 실제 Auth와 BFF 두 프로세스를
+빌드·기동하고 로그인, 계정 조회, 새 로그인에 의한 교체와 로그아웃을 검사한다.
+외부 Google 응답만 테스트 HTTP/JWK 서버로 대체한다. Auth의 OIDC 서명·nonce·PKCE,
+계정 DB와 세션 처리는 실제 코드를 사용한다. 실제 브라우저·운영 검증은 별도다.
 
-`--content-source`를 지정하면 실제 Content의 기존 26개 API 회귀도 실행한다. 기본 Content
-커밋은 `d26a3d3a244bdebb79375290b9d032f232da5563`이며 `--content-ref`로 지정할 수 있다.
-Auth와 동일하게 Git 복사본만 빌드하고, 격리 PostgreSQL의 별도 `content` DB를 사용한다.
-이미지 API·S3 호출과 브라우저 검증은 포함하지 않는다.
-
-Linux 호스트에 Docker, Python 3, OpenSSL과 Auth Git 저장소가 있어야 한다. Java 21과
-Gradle은 컨테이너에서 실행한다. 최초 실행에는 이미지·빌드 의존성 다운로드가 필요하다.
+Linux 호스트의 Docker, Python 3와 Auth Git 저장소가 필요하다. Java 21과 Gradle은
+컨테이너에서 실행한다. 기본 Auth 기준은 LOREKEEPER-589 커밋
+`9c0613f25ed52b87a7dc6ccc4fa223d312237250`이며 원본 작업 트리는 변경하지 않는다.
 
 ```bash
-python3 integration/session/run.py
-# 다른 Auth 저장소/커밋을 검증할 때 명시한다.
+python3 integration/session/run.py --auth-source ../loresentry-authentication
+# 다른 확정 커밋을 검증할 때 지정한다.
 python3 integration/session/run.py --auth-source ../loresentry-authentication --auth-ref <commit>
-# 현재 노출한 Content API의 실제 DB 회귀까지 포함한다.
+# 실제 Content의 26개 API 회귀를 추가한다.
 python3 integration/session/run.py --content-source ../loresentry-content
 ```
 
-기본 Auth 커밋은 `e9d5b5b35dace0b9c7066ec93d1ea35e018963e7`이다. 원본 Auth 작업 트리는
-읽기만 하며, `git archive` 복사본에 `GoogleFixture.java`를 추가해 빌드한다. 외부 Google의
-토큰·JWK 응답을 로컬 HTTP 서버로 대체하고, 실제 Auth의 OIDC 서명·nonce 검증과 PKCE
-교환, 계정 DB, JWT 발급 및 Redis 세션 처리를 실행한다. fixture는 BFF 소스 세트와 배포
-산출물에 들어가지 않는다. Auth fixture 산출물 역시 운영에 배포하지 않는다.
+Auth는 git archive 복사본에 GoogleFixture를 추가한다. BFF는 현재 작업 트리를
+빌드하므로 변경사항을 포함한다. 보고서의 Git 기준 커밋과 JAR 해시를 함께 확인한다.
+Content 기본 커밋은 `d26a3d3a244bdebb79375290b9d032f232da5563`이며
+`--content-ref`로 바꿀 수 있다. Content는 별도 격리 DB를 사용한다.
 
-테스트 전용 키·비밀번호를 사용한다. DB·Valkey 포트와 Java 서버는 Linux 호스트의
-loopback에만 노출한다. Valkey의 기본 관리자 계정은 장애 주입 전용이며, BFF에는 별도의
-`auth:session:*` GET 계정을 주입한다. 이 설정을 운영 설정으로 복사하지 않는다.
+서비스 JWT 키는 생성하거나 주입하지 않는다. Google 검증용 키만 fixture가 생성한다.
+DB·Valkey·Java 포트는 loopback에 노출한다. BFF 계정은 세션 키의 GET과 Lua 검증·TTL
+연장 명령만 허용한다. 기본 Redis 관리자는 테스트 준비와 장애 주입용이다.
+운영 ACL은 [운영 문서](../../docs/OPERATIONS.md)에 따라 별도로 구성한다.
 
-검증 항목은 실제 로그인·계정 조회와 수정·RT 회전, 이전 미만료 AT 유지, 새 로그인 후
-이전 AT/RT 거절, 이전 세션 로그아웃의 새 세션 보호, 현재 로그아웃, sid 없는 서명된 AT
-거절, 구 키 fallback 부재다. 세션 손상·ACL 거절·지연·중단 시 두 BFF가 503을 반환하고
-쿠키를 유지하며 내부 Auth를 호출하지 않는지 요청 계수로 확인한다. 이미 인증을 통과한
-요청 취소나 열린 스트림 종료는 보장하지 않는다.
-
-성공 시 출력된 `/tmp/bff-auth-integration-*` 경로에 토큰을 포함하지 않는 `report.json`을
-남긴다. 빌드·컨테이너 로그도 같은 소유자 전용 디렉터리에 남는다. 종료 시 이 실행이
-만든 컨테이너·익명 볼륨과 JWT 개인키·환경 파일을 정리한다. 다른 컨테이너나 DB에는
-접근하지 않는다. 일반 `./gradlew build`와 별도로 실행하는 검증이다.
+실행이 만든 컨테이너와 익명 볼륨, 환경 파일은 finally에서 정리한다.
+`/tmp/bff-auth-integration-*`에는 소유자만 접근 가능한 로그와 비밀값 없는
+report.json을 남긴다. 실제 Google 동의 화면, 브라우저 쿠키 정책, 운영 접근 제한과
+이미지/S3 기능을 검증하는 도구는 아니다.

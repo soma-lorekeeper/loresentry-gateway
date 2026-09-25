@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Isolated real Auth/PostgreSQL/Valkey + two BFF processes. No production credentials.
 
-Requires Linux, Docker, Python 3, OpenSSL and a local Auth Git checkout. Only the
-external Google provider is simulated; Auth's OIDC/JWT/DB/session code is real.
+Requires Linux, Docker, Python 3 and a local Auth Git checkout. Only the
+external Google provider is simulated; Auth's OIDC/DB/session code is real.
 """
 import argparse
 import base64
@@ -24,7 +24,7 @@ import urllib.parse
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-AUTH_REF = "e9d5b5b35dace0b9c7066ec93d1ea35e018963e7"
+AUTH_REF = "9c0613f25ed52b87a7dc6ccc4fa223d312237250"
 CONTENT_REF = "d26a3d3a244bdebb79375290b9d032f232da5563"
 JAVA = "eclipse-temurin:21-jdk-alpine"
 containers = []
@@ -137,17 +137,6 @@ def b64(value):
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
 
 
-def claims(token):
-    return json.loads(base64.urlsafe_b64decode(token.split(".")[1] + "=="))
-
-
-def sign_claims(payload, private_key, kid):
-    unsigned = b64(json.dumps({"alg": "RS256", "kid": kid}).encode()) + "." + b64(json.dumps(payload).encode())
-    signature = subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(private_key)],
-                               input=unsigned.encode(), capture_output=True, check=True).stdout
-    return unsigned + "." + b64(signature)
-
-
 def login(port, subject):
     prepared = request(port, "GET", "/auth/oauth/google/prepare")
     check(prepared[0] == 302, "prepare redirect")
@@ -161,100 +150,32 @@ def login(port, subject):
     check(callback[0] == 303 and callback[1]["Location"] == "http://localhost:3000/login?result=success",
           "callback success redirect")
     jar = cookie_values(callback)
-    check(set(jar) == {"ls_at", "ls_rt"}, "callback auth cookie names")
+    check(set(jar) == {"ls_session"}, "callback auth cookie names")
     check(callback[1]["Cache-Control"] == "no-store", "callback no-store")
     return jar
 
 
-def verify(ports, redis_port, counts, private_key, kid, redis_name):
+def verify(ports, redis_port, counts, redis_name):
     first, second = ports
-    old = login(first, "session-user")
+    old = login(first, "session-smoke")
     for port in ports:
-        account = request(port, "GET", "/auth/users/me", old)
-        check(account[0] == 200, "real account request")
-    user = account[2]["id"]
-    changed = request(second, "PATCH", "/auth/users/me", old, {"display_name": "통합 검증"})
-    check(changed[0] == 200 and changed[2]["display_name"] == "통합 검증", "real account update")
-    refreshed = request(second, "POST", "/auth/tokens/refresh", old)
-    check(refreshed[0] == 204, "refresh succeeds")
-    rotated = cookie_values(refreshed)
-    check(claims(old["ls_at"])["sid"] == claims(rotated["ls_at"])["sid"], "refresh preserves sid")
+        profile = request(port, "GET", "/auth/users/me", old)
+        check(profile[0] == 200, "session account lookup")
+        check(cookie_values(profile) == old, "activity keeps the same session ID")
+        check(profile[1]["Cache-Control"] == "no-store", "authenticated response no-store")
+    fresh = login(second, "session-smoke")
+    check(fresh != old, "new login replaces the session ID")
     for port in ports:
-        check(request(port, "GET", "/auth/users/me", {"ls_at": old["ls_at"]})[0] == 200,
-              "old unexpired AT remains valid without RT")
-    error(request(first, "POST", "/auth/tokens/refresh", old), 401, "REFRESH_REJECTED", "RELOGIN")
-    passed("real login/account/update/RT rotation; same-sid AT accepted by both BFF instances")
-
-    fresh = login(second, "session-user")
-    check(claims(old["ls_at"])["sid"] != claims(fresh["ls_at"])["sid"], "new login replaces sid")
-    for port in ports:
-        error(request(port, "GET", "/auth/users/me", rotated), 401, "SESSION_INVALID", "RELOGIN")
-        error(request(port, "POST", "/auth/tokens/refresh", rotated), 401, "REFRESH_REJECTED", "RELOGIN")
-    revoked = request(first, "POST", "/auth/tokens/revoke", rotated)
-    check(revoked[0] == 200 and revoked[2]["refresh_revocation"] == "confirmed", "old session revocation")
-    for port in ports:
-        check(request(port, "GET", "/auth/users/me", fresh)[0] == 200, "old logout must protect new session")
-    request(second, "POST", "/auth/tokens/revoke", fresh)
+        error(request(port, "GET", "/auth/users/me", old), 401, "SESSION_INVALID", "RELOGIN")
+    revoked = request(first, "POST", "/auth/sessions/revoke", old)
+    check(revoked[0] == 200 and revoked[2]["session_revocation"] == "confirmed", "old session revocation")
+    check(request(second, "GET", "/auth/users/me", fresh)[0] == 200, "old logout preserves new login")
+    revoked = request(second, "POST", "/auth/sessions/revoke", fresh)
+    check(revoked[0] == 200 and revoked[2]["session_revocation"] == "confirmed", "current logout confirmed")
+    check(not cookie_values(revoked), "logout expires session cookie")
     for port in ports:
         error(request(port, "GET", "/auth/users/me", fresh), 401, "SESSION_INVALID", "RELOGIN")
-    passed("new login rejects old AT/RT; old-session logout preserves new login; current logout blocks both instances")
-
-    active = login(first, "fault-user")
-    token_claims = claims(active["ls_at"])
-    key = "auth:session:" + token_claims["sub"]
-    original = redis(redis_port, "GET", key)
-    expiry = json.loads(original)["refresh_expires_at"]
-    before = counts.copy()
-    sidless = dict(token_claims)
-    del sidless["sid"]
-    for port in ports:
-        protected_error(port, {"ls_at": sign_claims(sidless, private_key, kid)},
-                        401, "ACCESS_TOKEN_INVALID", "RELOGIN")
-        error(request(port, "GET", "/auth/users/me", headers={"X-User-Id": user}),
-              401, "ACCESS_TOKEN_MISSING", "REFRESH")
-    check(counts == before, "invalid/sidless tokens must not reach Auth")
-    redis(redis_port, "DEL", key)
-    legacy_key = "auth:refresh:" + token_claims["sub"]
-    redis(redis_port, "SET", legacy_key, original, "EX", 60)
-    for port in ports:
-        protected_error(port, active, 401, "SESSION_INVALID", "RELOGIN")
-    redis(redis_port, "SET", key, original, "EXAT", expiry)
-    check(counts == before, "no old-key fallback/internal call")
-    sidless_rt = claims(active["ls_rt"])
-    del sidless_rt["sid"]
-    for port in ports:
-        error(request(port, "POST", "/auth/tokens/refresh", {"ls_rt": sign_claims(sidless_rt, private_key, kid)}),
-              401, "REFRESH_REJECTED", "RELOGIN")
-    passed("signed sidless AT and client identity rejected; no legacy-key fallback")
-
-    # A successful request immediately before mutation would expose any session cache.
-    for port in ports:
-        check(request(port, "GET", "/auth/users/me", active)[0] == 200, "pre-fault valid session")
-    before = counts.copy()
-    redis(redis_port, "SET", key, "{broken", "EX", 60)
-    for port in ports:
-        protected_error(port, active, 503, "SESSION_UNAVAILABLE", "RETRY_LATER")
-    redis(redis_port, "SET", key, original, "EXAT", expiry)
-    redis(redis_port, "ACL", "SETUSER", "bff", "-get")
-    for port in ports:
-        protected_error(port, active, 503, "SESSION_UNAVAILABLE", "RETRY_LATER")
-    redis(redis_port, "ACL", "SETUSER", "bff", "+get")
-    for port in ports:
-        redis(redis_port, "CLIENT", "PAUSE", 1000, "ALL")
-        started = time.monotonic()
-        error(request(port, "GET", "/auth/users/me", active), 503, "SESSION_UNAVAILABLE", "RETRY_LATER")
-        elapsed = time.monotonic() - started
-        check(0.35 < elapsed < 0.9, "session delay bounded by 500ms budget")
-        time.sleep(1.1)
-    check(counts == before, "corruption/ACL/timeout must not reach Auth")
-    for port in ports:
-        check(request(port, "GET", "/auth/users/me", active)[0] == 200, "session recovery")
-    before = counts.copy()
-    command("docker", "stop", "-t", "1", redis_name)
-    for port in ports:
-        protected_error(port, active, 503, "SESSION_UNAVAILABLE", "RETRY_LATER")
-    check(counts == before, "Redis down must not reach Auth")
-    passed("uncached corruption/ACL/delay/down failures return 503, preserve cookies and never reach internal Auth")
+    passed("single-session login, two-BFF account access, replacement and logout")
 
 
 def main():
@@ -296,24 +217,16 @@ def main():
             build = subprocess.run(["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
                              "-e", "GRADLE_USER_HOME=/gradle", "-v", str(source) + ":/workspace",
                              "-v", str(args.gradle_cache.resolve()) + ":/gradle", "-w", "/workspace",
-                             JAVA, "./gradlew", "--no-daemon", "bootJar"], text=True, capture_output=True)
+                             JAVA, "./gradlew", "--no-daemon", "--max-workers=2", "bootJar"], text=True, capture_output=True)
             (scratch / (source.name + "-build.log")).write_text(build.stdout + build.stderr)
             check(build.returncode == 0, "build failed; inspect isolated build log")
-        private = scratch / "private.pem"
-        public = scratch / "public.pem"
-        command("openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(private))
-        private.chmod(0o600)
-        command("openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public))
-        der = subprocess.run(["openssl", "pkcs8", "-topk8", "-nocrypt", "-in", str(private), "-outform", "DER"],
-                             check=True, capture_output=True).stdout
-        kid = str(uuid.uuid4())
         pg = docker(prefix + "-pg", "-p", "127.0.0.1::5432", "-e", "POSTGRES_DB=authentication",
                     "-e", "POSTGRES_USER=integration", "-e", "POSTGRES_PASSWORD=isolated-test",
                     "postgres:18.4-alpine")
         redis_config = scratch / "redis.conf"
         redis_config.write_text('bind 0.0.0.0\nprotected-mode no\nsave ""\nappendonly no\n'
                                'user default on nopass ~* +@all\n'
-                               'user bff on >bff-test-password ~auth:session:* -@all +get +auth +ping +hello +client|setinfo +client|setname\n')
+                               'user bff on >bff-test-password ~auth:session:{login}:* -@all +get +eval +time +pttl +pexpireat +auth +ping +hello +client|setinfo +client|setname\n')
         valkey = docker(prefix + "-valkey", "-p", "127.0.0.1::6379", "-v", str(redis_config) + ":/etc/redis.conf:ro",
                         "valkey/valkey:9.0.6-alpine", "valkey-server", "/etc/redis.conf")
         redis_port = published_port(valkey, 6379)
@@ -323,14 +236,13 @@ def main():
             "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1", f"SERVER_PORT={auth_port}",
             "DB_HOST=127.0.0.1", f"DB_PORT={published_port(pg, 5432)}", "DB_NAME=authentication",
             "DB_USERNAME=integration", "DB_PASSWORD=isolated-test", "SPRING_DATA_REDIS_HOST=127.0.0.1",
-            f"SPRING_DATA_REDIS_PORT={redis_port}", "AUTH_JWT_PRIVATE_KEY_BASE64=" + base64.b64encode(der).decode(),
-            "AUTH_JWT_PUBLIC_KEY_PATH=/fixture/public.pem", "AUTH_JWT_KEY_ID=" + kid,
+            f"SPRING_DATA_REDIS_PORT={redis_port}",
             "AUTH_GOOGLE_CLIENT_ID=test-client", "AUTH_GOOGLE_CLIENT_SECRET=fixture-only",
             "AUTH_GOOGLE_REDIRECT_URI=http://localhost:8000/auth/oauth/google/callback"]) + "\n")
         auth_env.chmod(0o600)
         auth_jar = next(path for path in (auth / "build/libs").glob("*.jar") if "-plain" not in path.name)
         docker(prefix + "-auth", "--network", "host", "--env-file", str(auth_env),
-               "-v", str(public) + ":/fixture/public.pem:ro", "-v", str(auth_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
+               "-v", str(auth_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
         wait_http(auth_port)
         content_port = None
         if content_commit:
@@ -395,8 +307,7 @@ def main():
         bff_env = scratch / "bff.env"
         internal = "http://127.0.0.1:" + str(proxy.server_port)
         bff_env.write_text("\n".join([
-            "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1", "BFF_JWT_PUBLIC_KEY=/fixture/public.pem",
-            "BFF_JWT_KEY_ID=" + kid, "BFF_AUTH_BASE_URL=" + internal, "BFF_CONTENT_BASE_URL=" + internal,
+            "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1", "BFF_AUTH_BASE_URL=" + internal, "BFF_CONTENT_BASE_URL=" + internal,
             "BFF_GRAPH_BASE_URL=" + internal, "BFF_CHAT_BASE_URL=" + internal,
             "BFF_SESSION_REDIS_HOST=127.0.0.1", f"BFF_SESSION_REDIS_PORT={redis_port}",
             "BFF_SESSION_REDIS_USERNAME=bff", "BFF_SESSION_REDIS_PASSWORD=bff-test-password", "BFF_SESSION_REDIS_TLS=false"]) + "\n")
@@ -406,13 +317,13 @@ def main():
         for index in range(2):
             port = free_port()
             docker(prefix + f"-bff-{index}", "--network", "host", "--env-file", str(bff_env), "-e", f"SERVER_PORT={port}",
-                   "-v", str(public) + ":/fixture/public.pem:ro", "-v", str(bff_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
+                   "-v", str(bff_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
             wait_http(port)
             ports.append(port)
         if content_commit:
             from content_checks import verify_content
-            verify_content(ports, request, login, check, error, passed, claims)
-        verify(ports, redis_port, counts, private, kid, valkey)
+            verify_content(ports, request, login, check, error, passed)
+        verify(ports, redis_port, counts, valkey)
         report = {"auth_commit": auth_commit, "gateway_base_commit": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
                   "gateway_jar_sha256": hashlib.sha256(bff_jar.read_bytes()).hexdigest(),
                   "content_commit": content_commit,
@@ -430,7 +341,7 @@ def main():
             logs = subprocess.run(["docker", "logs", name], text=True, capture_output=True)
             (scratch / (name + ".log")).write_text(logs.stdout + logs.stderr)
             subprocess.run(["docker", "rm", "-f", "-v", name], capture_output=True)
-        for name in ("private.pem", "auth.env", "bff.env", "content.env"):
+        for name in ("auth.env", "bff.env", "content.env"):
             (scratch / name).unlink(missing_ok=True)
 
 

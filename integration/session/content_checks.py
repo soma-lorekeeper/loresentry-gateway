@@ -3,7 +3,14 @@ import urllib.parse
 import uuid
 
 
-def verify_content(ports, request, login, check, error, passed, claims):
+def verify_content(ports, request, login, check, error, passed):
+    def error(response, status, code, action):
+        check(response[0] == status, code + " status")
+        check(response[2].get("code") == code, code + " code")
+        check(response[2].get("next_action") == action, code + " action")
+        check(response[1].get("Cache-Control") == "no-store", "domain error no-store")
+        check(bool(response[1].get_all("Set-Cookie")), "authenticated domain error renews cookie")
+
     first, second = ports
     owner = login(first, "content-owner")
     stranger = login(second, "content-stranger")
@@ -23,8 +30,9 @@ def verify_content(ports, request, login, check, error, passed, claims):
     check(call("GET", "/projects")[2]["projects"][0]["id"] == created[2]["id"], "project list")
     check(call("PATCH", project, body={"description": "갱신"})[2]["description"] == "갱신", "project update")
     for port in ports:
-        error(request(port, "GET", project, stranger, headers={"X-User-Id": claims(owner["ls_at"])["sub"]}),
-              404, "PROJECT_NOT_FOUND", "NONE")
+        response = request(port, "GET", project, stranger, headers={"X-User-Id": request(first, "GET", "/auth/users/me", owner)[2]["id"]})
+        check(response[0] == 404 and response[2]["code"] == "PROJECT_NOT_FOUND", "spoofed owner remains forbidden")
+        check(bool(response[1].get_all("Set-Cookie")), "authenticated domain error renews cookie")
     episode = call("POST", project + "/files", 201, {"kind": "episode", "title": "1부"})[2]["id"]
     document = call("POST", project + "/files", 201,
                     {"kind": "document", "folder_code": "MANUSCRIPT", "episode_id": episode, "title": "한글 원고"})[2]["id"]

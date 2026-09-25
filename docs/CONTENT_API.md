@@ -28,7 +28,7 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 
 최종 보호 API는 CSRF(변경 요청)·단일 세션 검증과 활동 만료 연장 후 검증된 UUID만 사용한다.
 외부 X-User-Id, Cookie, Authorization은 도메인 서비스 전달 목록에서 제외하고 client가
-검증된 사용자 ID 하나로 X-User-Id를 구성한다. 단일 ID의 세션 검증·연장은 2026-09-26 목표 설계이며 현재 코드에는 아직 반영하지 않았다.
+검증된 사용자 ID 하나로 X-User-Id를 구성한다. 단일 ID의 세션 검증·연장은 2026-09-26 코드에 반영했다. 실제 Content 통합 검증은 595에서 수행한다.
 과거 구조 정렬만 완료된 중간 버전을 인증 완료로 취급하지 않는다.
 
 | 헤더 | 처리 |
