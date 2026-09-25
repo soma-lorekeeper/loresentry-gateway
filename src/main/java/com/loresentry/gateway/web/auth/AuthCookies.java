@@ -26,6 +26,16 @@ public class AuthCookies {
         return List.of(cookie(settings.accessName(),tokens.accessToken(),access,"Strict"),
                 cookie(settings.refreshName(),tokens.refreshToken(),refresh,"Strict"));
     }
+    public ResponseCookie session(String value,Instant expiresAt) {
+        new com.loresentry.gateway.application.SessionId(value);
+        return cookie(settings.sessionName(),value,remaining(clock.instant(),expiresAt,1209600),"Strict");
+    }
+    public ResponseCookie clearSession() { return cookie(settings.sessionName(),"",0,"Strict"); }
+    public void setSession(HttpServletResponse response,String value,Instant expiresAt) {
+        var cookie=session(value,expiresAt);
+        response.addHeader("Set-Cookie",cookie.toString());
+        response.setHeader("Cache-Control","no-store");
+    }
     public ResponseCookie oauth(String requestId,Instant expiresAt) {
         if(requestId==null || !requestId.matches("[A-Za-z0-9_-]{1,256}")) throw invalid();
         return cookie(settings.oauthName(),requestId,remaining(clock.instant(),expiresAt,300),"Lax");
