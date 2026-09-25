@@ -13,10 +13,12 @@ public final class AuthData {
     public record Callback(@JsonProperty("login_request_id") String loginRequestId,String state,String code,String error) {
         @Override public String toString() { return "Callback[redacted]"; }
     }
-    public record LoginTokens(@JsonProperty("access_token") String accessToken,
-            @JsonProperty("access_expires_at") Instant accessExpiresAt,@JsonProperty("refresh_token") String refreshToken,
-            @JsonProperty("refresh_expires_at") Instant refreshExpiresAt,@JsonProperty("login_request_consumed") Boolean consumed) {
-        @Override public String toString() { return "LoginTokens[redacted]"; }
+    public record LoginSession(@JsonProperty("session_id") String sessionId,
+            @JsonProperty("expires_at") Instant expiresAt,@JsonProperty("login_request_consumed") Boolean consumed) {
+        @Override public String toString() { return "LoginSession[redacted]"; }
+    }
+    public record Session(@JsonProperty("session_id") String sessionId) {
+        @Override public String toString(){return "Session[redacted]";}
     }
     public record Refresh(@JsonProperty("refresh_token") String refreshToken) {
         @Override public String toString(){return "Refresh[redacted]";}
