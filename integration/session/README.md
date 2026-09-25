@@ -55,3 +55,20 @@ EVAL 응답 유실과 연결 종료 후 명령 횟수·내부 HTTP 호출·쿠�
 
 ACL은 실제 BFF 드라이버의 인증 성공·연장과 명령 제한을 함께 검사한다.
 애플리케이션 stdout/stderr의 원문 세션 ID와 fixture 비밀값도 확인한다.
+
+## 실제 프론트 브라우저 연결
+
+프론트 저장소에서 `pnpm check:cdn`으로 정적 결과를 만든 후 다음을 실행한다.
+
+```bash
+python3 integration/session/run.py \
+  --content-source <content-checkout> \
+  --browser-project <frontend-checkout> \
+  --browser-only
+```
+
+`--browser-only`는 서버 통합 시나리오를 건너뛰고 실제 서버를 기동해 브라우저 검증만
+수행한다. 생략하면 기존 서버 검증 뒤 브라우저를 검증한다. prod 프로필 BFF와 prod
+콜백 URI를 사용하는 별도 Auth도 격리 환경에서 기동한다. 프론트의
+`integration/browser/README.md`에 프록시·TLS 범위와 실제 Google 수동 절차가 있다.
+이 옵션의 자동 검증에서 Google은 테스트 공급자이며 실제 Google 통과를 의미하지 않는다.

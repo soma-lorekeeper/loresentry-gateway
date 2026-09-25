@@ -83,10 +83,10 @@ def request(port, method, path, cookies=None, body=None, headers=None):
         conn.close()
 
 
-def wait_http(port):
+def wait_http(port, origin="http://localhost:3000"):
     for _ in range(150):
         try:
-            if request(port, "GET", "/health")[0] == 200:
+            if request(port, "GET", "/health", headers={"Origin": origin})[0] == 200:
                 return
         except (OSError, http.client.HTTPException):
             pass
@@ -242,10 +242,14 @@ def main():
     parser.add_argument("--auth-ref", default=AUTH_REF)
     parser.add_argument("--content-source", type=Path, help="Also test real Content using an isolated source snapshot")
     parser.add_argument("--content-ref", default=CONTENT_REF)
+    parser.add_argument("--browser-only", action="store_true", help="Run only browser checks, retaining real servers")
+    parser.add_argument("--browser-project", type=Path, help="Built frontend checkout for real browser checks; requires Content")
     parser.add_argument("--redis-image", choices=["redis:7.4-alpine", "valkey/valkey:9.0.6-alpine"],
                         default="valkey/valkey:9.0.6-alpine")
     parser.add_argument("--gradle-cache", type=Path, default=Path("/tmp/loresentry-auth-gradle"))
     args = parser.parse_args()
+    check(not args.browser_only or args.browser_project, "browser-only requires browser-project")
+    check(not args.browser_project or args.content_source, "browser checks require real Content")
     scratch = Path(tempfile.mkdtemp(prefix="bff-auth-integration-"))
     scratch.chmod(0o700)
     prefix = "bff-it-" + uuid.uuid4().hex[:10]
@@ -384,20 +388,26 @@ def main():
                    "-v", str(bff_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
             wait_http(port)
             ports.append(port)
-        if content_commit:
-            from content_checks import verify_content
-            verify_content(ports, request, login, check, error, passed)
-        verify(ports, redis_port, counts, valkey)
-        from race_checks import verify_races
-        verify_races(sys.modules[__name__], ports, redis_port, redis_proxy)
-        from fault_checks import verify_faults
-        verify_faults(sys.modules[__name__], ports, redis_port, redis_proxy, auth_redis_proxy, counts, auth)
+        if not args.browser_only:
+            if content_commit:
+                from content_checks import verify_content
+                verify_content(ports, request, login, check, error, passed)
+            verify(ports, redis_port, counts, valkey)
+            from race_checks import verify_races
+            verify_races(sys.modules[__name__], ports, redis_port, redis_proxy)
+            from fault_checks import verify_faults
+            verify_faults(sys.modules[__name__], ports, redis_port, redis_proxy, auth_redis_proxy, counts, auth)
+        if args.browser_project:
+            from browser_checks import verify_browser
+            verify_browser(sys.modules[__name__], args.browser_project, scratch, ports, redis_port,
+                           auth_env, auth_jar, bff_env, bff_jar, content_port)
         report = {"auth_commit": auth_commit, "gateway_base_commit": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
                   "gateway_jar_sha256": hashlib.sha256(bff_jar.read_bytes()).hexdigest(),
                   "content_commit": content_commit,
                   "scenarios": results, "postgres": "18.4", "session_store_image": args.redis_image, "bff_instances": 2,
                   "external_google": "isolated HTTP/JWK fixture; real Auth OIDC client",
-                  "not_verified": ["real Google consent", "browser cookies", "production infrastructure"]
+                  "not_verified": ["real Google consent", "production infrastructure"]
+                                  + ([] if args.browser_project else ["browser cookies"])
                                   + ([] if content_commit else ["Content"])}
         (scratch / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print("All Auth/session integration scenarios passed.", flush=True)
