@@ -22,8 +22,8 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
     @Override
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
             NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
-        Object user=webRequest.getAttribute(AccessTokenFilter.USER_ATTRIBUTE,NativeWebRequest.SCOPE_REQUEST);
-        if(!(user instanceof UUID)) throw new SecurityFailure(SecurityFailure.Reason.ACCESS_TOKEN_MISSING);
+        Object user=webRequest.getAttribute(SessionFilter.USER_ATTRIBUTE,NativeWebRequest.SCOPE_REQUEST);
+        if(!(user instanceof UUID)) throw new SecurityFailure(SecurityFailure.Reason.SESSION_REQUIRED);
         return user;
     }
 }
