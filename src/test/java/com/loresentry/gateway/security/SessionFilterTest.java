@@ -42,7 +42,7 @@ class SessionFilterTest {
     @BeforeEach void setup() {
         var config=new BrowserCorsConfiguration();
         var cors=config.browserCors(new BrowserProperties("http://localhost:3000","http://localhost:8000","http://localhost:3000/login",false));
-        var names=new CookieSettings("ls_at","ls_rt","ls_oauth",false);
+        var names=new CookieSettings("ls_oauth",false);
         when(verifier.verify(ID)).thenReturn(new VerifiedSession(USER,NOW.plusSeconds(1209600)));
         when(verifier.verify(null)).thenThrow(new SecurityFailure(SecurityFailure.Reason.SESSION_REQUIRED));
         mvc=MockMvcBuilders.standaloneSetup(new Endpoints()).setCustomArgumentResolvers(new CurrentUserArgumentResolver())
@@ -74,6 +74,12 @@ class SessionFilterTest {
                     .andExpect(jsonPath("$.code").value(reason.name())).andExpect(header().doesNotExist("Set-Cookie"));
         }
         assertThat(calls).hasValue(0);
+    }
+    @Test void legacyCookiesAndBearerCredentialsCannotAuthenticate() throws Exception {
+        mvc.perform(get("/projects").cookie(new Cookie("ls_at","signed.old.token"),new Cookie("ls_rt","signed.old.token"))
+                .header("Authorization","Bearer signed.old.token")).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_REQUIRED")).andExpect(header().doesNotExist("Set-Cookie"));
+        verify(verifier).verify(null);verifyNoMoreInteractions(verifier);assertThat(calls).hasValue(0);
     }
     @Test void publicRoutesPreflightAndLogoutDoNotExtendSessions() throws Exception {
         for(var path:List.of("/health","/auth/oauth/google/prepare","/auth/oauth/google/callback"))

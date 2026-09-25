@@ -27,6 +27,7 @@ public class SessionController {
                 code==null?null:"Server session revocation could not be confirmed.",code==null?null:"NONE");
         var response=ResponseEntity.status(status).header("Cache-Control","no-store");
         response.header("Set-Cookie",cookies.clearSession().toString());
+        cookies.clearLegacy(request).forEach(cookie->response.header("Set-Cookie",cookie.toString()));
         return response.body(body);
     }
 }

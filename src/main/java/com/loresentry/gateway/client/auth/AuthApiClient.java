@@ -15,7 +15,7 @@ import tools.jackson.core.JacksonException;
 @Component
 public class AuthApiClient {
     private final RestClient client;
-    private enum Operation { PREPARE, CALLBACK, REFRESH, REVOKE, SESSION_REVOKE, ACCOUNT }
+    private enum Operation { PREPARE, CALLBACK, SESSION_REVOKE, ACCOUNT }
     private static final JsonMapper JSON=JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
@@ -30,12 +30,6 @@ public class AuthApiClient {
     }
     public AuthData.LoginSession callback(AuthData.Callback input) {
         return call(HttpMethod.POST,"/auth/oauth/google/callback",null,input,AuthData.LoginSession.class,200,Operation.CALLBACK);
-    }
-    public AuthData.Tokens refresh(String token) {
-        return call(HttpMethod.POST,"/auth/tokens/refresh",null,new AuthData.Refresh(token),AuthData.Tokens.class,200,Operation.REFRESH);
-    }
-    public void revoke(String token) {
-        call(HttpMethod.POST,"/auth/tokens/revoke",null,new AuthData.Refresh(token),Void.class,204,Operation.REVOKE);
     }
     public void revokeSession(String id) {
         call(HttpMethod.POST,"/auth/sessions/revoke",null,new AuthData.Session(id),Void.class,204,Operation.SESSION_REVOKE);
@@ -97,8 +91,6 @@ public class AuthApiClient {
             java.util.Objects.requireNonNull(account.id());required(account.displayName());
         } else if(response instanceof AuthData.Prepared p) {
             required(p.authorizationUrl());required(p.loginRequestId());java.util.Objects.requireNonNull(p.expiresAt());
-        } else if(response instanceof AuthData.Tokens t) {
-            required(t.accessToken());required(t.refreshToken());java.util.Objects.requireNonNull(t.accessExpiresAt());java.util.Objects.requireNonNull(t.refreshExpiresAt());
         } else if(response instanceof AuthData.LoginSession t) {
             new com.loresentry.gateway.application.SessionId(t.sessionId());java.util.Objects.requireNonNull(t.expiresAt());
         }
@@ -111,12 +103,8 @@ public class AuthApiClient {
             case "LOGIN_UNAVAILABLE" -> (operation==Operation.PREPARE||operation==Operation.CALLBACK)&&status==503&&"RESTART_LOGIN".equals(action);
             case "OAUTH_REQUEST_INVALID","OAUTH_LOGIN_DENIED" -> operation==Operation.CALLBACK&&status==400&&"RESTART_LOGIN".equals(action);
             case "OAUTH_IDENTITY_INVALID" -> operation==Operation.CALLBACK&&status==401&&"RESTART_LOGIN".equals(action);
-            case "REFRESH_REJECTED" -> operation==Operation.REFRESH&&status==401&&"RELOGIN".equals(action);
-            case "REFRESH_UNAVAILABLE" -> operation==Operation.REFRESH&&status==503&&"RETRY_LATER".equals(action);
-            case "REFRESH_OUTCOME_UNKNOWN" -> operation==Operation.REFRESH&&status==503&&"RELOGIN".equals(action);
-            case "INVALID_REFRESH_TOKEN" -> operation==Operation.REVOKE&&status==401&&"NONE".equals(action);
             case "INVALID_SESSION_ID" -> operation==Operation.SESSION_REVOKE&&status==400&&"NONE".equals(action);
-            case "REVOCATION_UNCONFIRMED" -> (operation==Operation.REVOKE||operation==Operation.SESSION_REVOKE)&&status==503&&"NONE".equals(action);
+            case "REVOCATION_UNCONFIRMED" -> operation==Operation.SESSION_REVOKE&&status==503&&"NONE".equals(action);
             case "INVALID_DISPLAY_NAME" -> operation==Operation.ACCOUNT&&status==400&&"NONE".equals(action);
             case "USER_CONTEXT_REQUIRED" -> operation==Operation.ACCOUNT&&status==401&&"RELOGIN".equals(action);
             case "USER_NOT_FOUND" -> operation==Operation.ACCOUNT&&status==404&&"RELOGIN".equals(action);

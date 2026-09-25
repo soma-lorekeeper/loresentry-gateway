@@ -20,14 +20,6 @@ public final class AuthData {
     public record Session(@JsonProperty("session_id") String sessionId) {
         @Override public String toString(){return "Session[redacted]";}
     }
-    public record Refresh(@JsonProperty("refresh_token") String refreshToken) {
-        @Override public String toString(){return "Refresh[redacted]";}
-    }
-    public record Tokens(@JsonProperty("access_token") String accessToken,
-            @JsonProperty("access_expires_at") Instant accessExpiresAt,@JsonProperty("refresh_token") String refreshToken,
-            @JsonProperty("refresh_expires_at") Instant refreshExpiresAt) {
-        @Override public String toString(){return "Tokens[redacted]";}
-    }
     public record Account(java.util.UUID id,@JsonProperty("display_name") String displayName,String email) {}
     public record DisplayName(@JsonProperty("display_name") String displayName) {}
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,

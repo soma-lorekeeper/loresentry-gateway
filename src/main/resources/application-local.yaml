@@ -4,9 +4,6 @@ loresentry:
     public-origin: http://localhost:8000
     login-redirect: http://localhost:3000/login
     secure-cookies: false
-  jwt:
-    public-key: ${BFF_JWT_PUBLIC_KEY}
-    key-id: ${BFF_JWT_KEY_ID}
   upstream:
     authentication:
       base-url: ${BFF_AUTH_BASE_URL}

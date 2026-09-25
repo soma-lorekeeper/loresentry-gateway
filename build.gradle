@@ -21,7 +21,6 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
-	implementation 'org.springframework.security:spring-security-oauth2-jose'
 	implementation 'io.lettuce:lettuce-core'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-restclient-test'

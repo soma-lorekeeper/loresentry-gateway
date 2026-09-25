@@ -4,8 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import io.lettuce.core.*;
 import io.lettuce.core.protocol.ProtocolVersion;
-import com.loresentry.gateway.client.session.SessionReader;
-import com.loresentry.gateway.security.SessionVerifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,7 +14,7 @@ public class SessionRedisConfiguration {
         if(properties.host()==null||properties.host().isBlank()||properties.port()<1||properties.port()>65535
                 ||properties.username()==null||properties.username().isBlank()||"default".equals(properties.username())
                 ||properties.password()==null||properties.password().isBlank())
-            throw new IllegalStateException("A dedicated BFF session reader credential and writer endpoint are required");
+            throw new IllegalStateException("A dedicated BFF session credential and writer endpoint are required");
         return RedisURI.Builder.redis(properties.host(),properties.port()).withSsl(properties.tls())
                 .withAuthentication(properties.username(),properties.password().toCharArray())
                 .withTimeout(Duration.ofMillis(500)).build();
@@ -36,8 +34,4 @@ public class SessionRedisConfiguration {
     @Bean public com.loresentry.gateway.security.OpaqueSessionVerifier opaqueSessions(com.loresentry.gateway.client.session.OpaqueSessionReader reader) {
         return new com.loresentry.gateway.security.OpaqueSessionVerifier(reader);
     }
-    @Bean public SessionReader sessionReader(RedisClient sessionRedisClient,RedisURI sessionWriter) {
-        return new SessionReader(sessionRedisClient,sessionWriter);
-    }
-    @Bean public SessionVerifier sessions(SessionReader reader,Clock clock) { return new SessionVerifier(reader,clock); }
 }

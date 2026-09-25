@@ -28,7 +28,7 @@ class SessionRevokeTest {
     MockRestServiceServer server;MockMvc mvc;
     @BeforeEach void setup() {
         var builder=RestClient.builder().baseUrl("http://auth.test");var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);server=mocks.getServer();
-        var names=new CookieSettings("__Host-ls_at","__Host-ls_session","__Host-ls_oauth",true);
+        var names=new CookieSettings("__Host-ls_oauth",true);
         var cc=new BrowserCorsConfiguration();var cors=cc.browserCors(new BrowserProperties("https://loresentry.com","https://api.loresentry.com","https://loresentry.com/login",true));
         mvc=MockMvcBuilders.standaloneSetup(new SessionController(new SessionService(new AuthApiClient(builder.build())),new AuthCookies(names,Clock.systemUTC()),names))
             .setControllerAdvice(new AuthExceptionHandler()).addFilters(new SensitiveResponseFilter(),new CsrfFilter(cors),cc.browserCorsFilter(cors).getFilter()).build();
@@ -47,7 +47,7 @@ class SessionRevokeTest {
         server.expect(requestTo("http://auth.test/auth/sessions/revoke")).andExpect(method(HttpMethod.POST))
             .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.content().json("{\"session_id\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}"))
             .andRespond(withNoContent());
-        var response=mvc.perform(revoke().cookie(new Cookie("__Host-ls_session","A".repeat(43)),new Cookie("__Host-ls_at","invalid")))
+        var response=mvc.perform(revoke().cookie(new Cookie("__Host-ls_session","A".repeat(43))))
             .andExpect(status().isOk()).andExpect(jsonPath("$.session_revocation").value("confirmed")).andReturn().getResponse();
         cleared(response);server.verify();
     }
@@ -71,6 +71,12 @@ class SessionRevokeTest {
                 .andExpect(jsonPath("$.code").value("INVALID_SESSION_ID")).andReturn().getResponse();
             cleared(response);
         }
+        server.verify();
+    }
+    @Test void logoutClearsPresentLegacyCookiesWithTheSameScope() throws Exception {
+        var response=mvc.perform(revoke().cookie(new Cookie("__Host-ls_at","old"),new Cookie("__Host-ls_rt","old")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.session_revocation").value("not_requested")).andReturn().getResponse();
+        assertThat(response.getHeaders("Set-Cookie")).hasSize(3).allMatch(cookie->cookie.contains("Max-Age=0")&&cookie.contains("Path=/")&&cookie.contains("Secure")&&!cookie.contains("Domain="));
         server.verify();
     }
     @Test void timeoutIsUnconfirmedButCsrfFailureDoesNotDeleteCookies() throws Exception {
