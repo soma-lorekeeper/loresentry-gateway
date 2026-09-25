@@ -9,8 +9,9 @@ def frame(stream):
     line = stream.readline()
     if not line:
         raise EOFError()
-    if line[:1] == b"*":
-        frames = [frame(stream) for _ in range(int(line[1:]))]
+    if line[:1] in (b"*", b"%", b"~", b">"):
+        count = int(line[1:]) * (2 if line[:1] == b"%" else 1)
+        frames = [frame(stream) for _ in range(count)]
         return line + b"".join(raw for raw, _ in frames), [value for _, value in frames]
     if line[:1] == b"$":
         size = int(line[1:])
@@ -43,9 +44,11 @@ class RedisProxy:
                                 hook = owner.hook if owner.hook and owner.hook[0] == command else None
                                 if hook:
                                     owner.hook = None
+                            if hook and hook[2] == "before":
+                                hook[1]()
                             upstream.sendall(raw)
                             response, _ = frame(stream)
-                            if hook:
+                            if hook and hook[2] == "after":
                                 hook[1]()
                             self.wfile.write(response)
                             self.wfile.flush()
@@ -60,10 +63,16 @@ class RedisProxy:
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def after(self, command, action):
+        self.arm(command, action, "after")
+
+    def before(self, command, action):
+        self.arm(command, action, "before")
+
+    def arm(self, command, action, phase):
         with self.lock:
             if self.hook:
                 raise AssertionError("unconsumed Redis barrier")
-            self.hook = (command, action)
+            self.hook = (command, action, phase)
 
     def close(self):
         self.server.shutdown()
