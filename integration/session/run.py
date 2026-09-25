@@ -31,6 +31,7 @@ CONTENT_REF = "d26a3d3a244bdebb79375290b9d032f232da5563"
 JAVA = "eclipse-temurin:21-jdk-alpine"
 containers = []
 results = []
+secret_values = set()
 
 
 def command(*args, **kwargs):
@@ -101,6 +102,7 @@ def cookie_values(response):
 
 
 def error(response, status, code, action):
+    check(not any(value in json.dumps(response[2]) for value in secret_values), "error body contains no session secret")
     check(response[0] == status, code + " status")
     check(response[2].get("code") == code, code + " code")
     check(response[2].get("next_action") == action, code + " action")
@@ -156,6 +158,7 @@ def login(port, subject):
     jar = cookie_values(callback)
     check(set(jar) == {"ls_session"}, "callback auth cookie names")
     check(callback[1]["Cache-Control"] == "no-store", "callback no-store")
+    secret_values.add(jar["ls_session"])
     return jar
 
 
@@ -248,6 +251,7 @@ def main():
     prefix = "bff-it-" + uuid.uuid4().hex[:10]
     proxy = None
     redis_proxy = None
+    auth_redis_proxy = None
     print("Isolated logs/report: " + str(scratch), flush=True)
     auth_commit = command("git", "-C", str(args.auth_source), "rev-parse", args.auth_ref + "^{commit}")
     content_commit = None
@@ -289,13 +293,14 @@ def main():
                         args.redis_image, "redis-server" if args.redis_image.startswith("redis:") else "valkey-server", "/etc/redis.conf")
         redis_port = published_port(valkey, 6379)
         redis_proxy = RedisProxy(redis_port)
+        auth_redis_proxy = RedisProxy(redis_port)
         auth_port = free_port()
         auth_env = scratch / "auth.env"
         auth_env.write_text("\n".join([
             "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1", f"SERVER_PORT={auth_port}",
             "DB_HOST=127.0.0.1", f"DB_PORT={published_port(pg, 5432)}", "DB_NAME=authentication",
             "DB_USERNAME=integration", "DB_PASSWORD=isolated-test", "SPRING_DATA_REDIS_HOST=127.0.0.1",
-            f"SPRING_DATA_REDIS_PORT={redis_port}",
+            f"SPRING_DATA_REDIS_PORT={auth_redis_proxy.port}",
             "AUTH_GOOGLE_CLIENT_ID=test-client", "AUTH_GOOGLE_CLIENT_SECRET=fixture-only",
             "AUTH_GOOGLE_REDIRECT_URI=http://localhost:8000/auth/oauth/google/callback"]) + "\n")
         auth_env.chmod(0o600)
@@ -385,6 +390,8 @@ def main():
         verify(ports, redis_port, counts, valkey)
         from race_checks import verify_races
         verify_races(sys.modules[__name__], ports, redis_port, redis_proxy)
+        from fault_checks import verify_faults
+        verify_faults(sys.modules[__name__], ports, redis_port, redis_proxy, auth_redis_proxy, counts, auth)
         report = {"auth_commit": auth_commit, "gateway_base_commit": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
                   "gateway_jar_sha256": hashlib.sha256(bff_jar.read_bytes()).hexdigest(),
                   "content_commit": content_commit,
@@ -395,6 +402,8 @@ def main():
         (scratch / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print("All Auth/session integration scenarios passed.", flush=True)
     finally:
+        if auth_redis_proxy:
+            auth_redis_proxy.close()
         if redis_proxy:
             redis_proxy.close()
         if proxy:
