@@ -25,7 +25,7 @@ class OAuthControllerTest {
     @BeforeEach void setup(){setup(false);}
     void setup(boolean prod) {
         login=mock(LoginService.class);String prefix=prod?"__Host-":"";
-        var names=new CookieSettings(prefix+"ls_at",prefix+"ls_rt",prefix+"ls_oauth",prod);
+        var names=new CookieSettings(prefix+"ls_oauth",prod);
         var browser=new BrowserProperties(prod?"https://loresentry.com":"http://localhost:3000",prod?"https://api.loresentry.com":"http://localhost:8000",prod?"https://loresentry.com/login":"http://localhost:3000/login",prod);
         mvc=MockMvcBuilders.standaloneSetup(new OAuthController(login,new AuthCookies(names,Clock.fixed(NOW,ZoneOffset.UTC)),names,browser))
             .addFilters(new SensitiveResponseFilter()).build();

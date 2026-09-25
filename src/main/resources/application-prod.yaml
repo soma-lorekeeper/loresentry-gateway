@@ -4,9 +4,6 @@ loresentry:
     public-origin: https://api.loresentry.com
     login-redirect: https://loresentry.com/login
     secure-cookies: true
-  jwt:
-    public-key: ${BFF_JWT_PUBLIC_KEY}
-    key-id: ${BFF_JWT_KEY_ID}
   upstream:
     authentication:
       base-url: http://authentication-api

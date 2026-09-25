@@ -25,11 +25,11 @@ class CsrfFilterTest {
         mvc=MockMvcBuilders.standaloneSetup(new Endpoints()).addFilters(new CsrfFilter(cors),
             corsConfig.browserCorsFilter(cors).getFilter(),(request,response,chain)-> {
                 if(((jakarta.servlet.http.HttpServletRequest)request).getRequestURI().startsWith("/auth/oauth/google/")) chain.doFilter(request,response);
-                else { downstream.incrementAndGet();SecurityResponses.write((jakarta.servlet.http.HttpServletResponse)response,SecurityFailure.Reason.ACCESS_TOKEN_MISSING); }
+                else { downstream.incrementAndGet();SecurityResponses.write((jakarta.servlet.http.HttpServletResponse)response,SecurityFailure.Reason.SESSION_REQUIRED); }
             }).build();
     }
-    @ParameterizedTest @ValueSource(strings={"/projects","/auth/tokens/refresh","/auth/tokens/revoke","/auth/unknown"})
-    void missingCsrfPrecedesMissingAccessToken(String path) throws Exception {
+    @ParameterizedTest @ValueSource(strings={"/projects","/projects","/auth/sessions/revoke","/auth/unknown"})
+    void missingCsrfPrecedesMissingSession(String path) throws Exception {
         var result=mvc.perform(post(path).header("Origin","http://localhost:3000"))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("CSRF_REJECTED"))
             .andExpect(jsonPath("$.next_action").value("NONE")).andExpect(header().doesNotExist("Set-Cookie"))
@@ -62,11 +62,11 @@ class CsrfFilterTest {
     void validCsrfReachesAuthentication(String method) throws Exception {
         mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method),"/projects")
             .header("Origin","http://localhost:3000").header("x-ls-csrf","1"))
-            .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("ACCESS_TOKEN_MISSING"));
+            .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("SESSION_REQUIRED"));
         assertThat(downstream).hasValue(1);
     }
     @Test void preflightStopsBeforeAuthenticationAndOAuthNavigationNeedsNoOrigin() throws Exception {
-        mvc.perform(options("/auth/tokens/refresh").header("Origin","http://localhost:3000")
+        mvc.perform(options("/projects").header("Origin","http://localhost:3000")
             .header("Access-Control-Request-Method","POST").header("Access-Control-Request-Headers","X-LS-CSRF"))
             .andExpect(status().isOk());
         mvc.perform(get("/auth/oauth/google/prepare")).andExpect(status().isOk());

@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import com.loresentry.gateway.application.TokenPair;
 import com.loresentry.gateway.config.CookieSettings;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,16 +15,6 @@ public class AuthCookies {
     private final CookieSettings settings;
     private final Clock clock;
     public AuthCookies(CookieSettings settings,Clock clock) { this.settings=settings;this.clock=clock; }
-    public List<ResponseCookie> authentication(TokenPair tokens) {
-        if(tokens==null) throw invalid();
-        token(tokens.accessToken());token(tokens.refreshToken());
-        if(tokens.accessToken().equals(tokens.refreshToken())) throw invalid();
-        Instant now=clock.instant();
-        long access=remaining(now,tokens.accessExpiresAt(),900);
-        long refresh=remaining(now,tokens.refreshExpiresAt(),1209600);
-        return List.of(cookie(settings.accessName(),tokens.accessToken(),access,"Strict"),
-                cookie(settings.refreshName(),tokens.refreshToken(),refresh,"Strict"));
-    }
     public ResponseCookie session(String value,Instant expiresAt) {
         new com.loresentry.gateway.application.SessionId(value);
         return cookie(settings.sessionName(),value,remaining(clock.instant(),expiresAt,1209600),"Strict");
@@ -40,16 +29,16 @@ public class AuthCookies {
         if(requestId==null || !requestId.matches("[A-Za-z0-9_-]{1,256}")) throw invalid();
         return cookie(settings.oauthName(),requestId,remaining(clock.instant(),expiresAt,300),"Lax");
     }
-    public List<ResponseCookie> clearAuthentication() {
-        return List.of(cookie(settings.accessName(),"",0,"Strict"),cookie(settings.refreshName(),"",0,"Strict"));
-    }
     public ResponseCookie clearOAuth() { return cookie(settings.oauthName(),"",0,"Lax"); }
-    public void setAuthentication(HttpServletResponse response,TokenPair tokens) {
-        // Construct both before adding either header, so invalid pairs preserve existing cookies.
-        append(response,authentication(tokens));
-    }
-    public static void append(HttpServletResponse response,List<ResponseCookie> cookies) {
-        cookies.forEach(cookie->response.addHeader("Set-Cookie",cookie.toString()));
+    // One-time migration cleanup on successful login or CSRF-approved logout only.
+    // Match only legacy names for this environment, never the new session cookie.
+    public List<ResponseCookie> clearLegacy(HttpServletRequest request) {
+        String prefix=settings.secure()?"__Host-":"";
+        var legacy=java.util.Set.of(prefix+"ls_at",prefix+"ls_rt");
+        var present=new java.util.HashSet<String>();
+        if(request.getCookies()!=null) for(var candidate:request.getCookies())
+            if(legacy.contains(candidate.getName())) present.add(candidate.getName());
+        return present.stream().sorted().map(name->cookie(name,"",0,"Strict")).toList();
     }
     public static String single(HttpServletRequest request,String name) {
         String found=null;
@@ -68,9 +57,6 @@ public class AuthCookies {
         long seconds=Duration.between(now,expiry).getSeconds();
         if(seconds<=0) throw invalid();
         return Math.min(seconds,maximum);
-    }
-    private static void token(String value) {
-        if(value==null || value.length()>16384 || !value.matches("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+")) throw invalid();
     }
     private static IllegalArgumentException invalid() { return new IllegalArgumentException("Invalid authentication cookie result"); }
 }

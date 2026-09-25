@@ -44,7 +44,7 @@ public class OAuthController {
         var output=new ArrayList<ResponseCookie>();
         var result=callback.result();
         if(result==LoginService.Result.SUCCESS) {
-            try {output.add(cookies.session(callback.session().id().value(),callback.session().expiresAt()));}
+            try {output.add(cookies.session(callback.session().id().value(),callback.session().expiresAt()));output.addAll(cookies.clearLegacy(request));}
             catch(IllegalArgumentException invalid) {result=LoginService.Result.FAILED;}
         }
         if(Boolean.TRUE.equals(callback.consumed())) output.add(cookies.clearOAuth());
