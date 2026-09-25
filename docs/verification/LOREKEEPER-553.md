@@ -1,5 +1,7 @@
 # LOREKEEPER-553 검증
 
+> 이전 구현의 실행 기록이다. 2026-09-26 단일 세션 ID 설계의 구현·검증 완료 근거로 사용하지 않는다. 당시 결과와 수치는 보존한다.
+
 2026-09-24. Content API 26개를 명시적 web 컨트롤러·application·client로 전환했다.
 외부와 내부 DTO는 별도 클래스이며 application에는 Servlet·ResponseEntity·SecurityContext
 참조가 없다. 연결 확인·DB health의 내부 호출도 ProbeService로 옮겼다.

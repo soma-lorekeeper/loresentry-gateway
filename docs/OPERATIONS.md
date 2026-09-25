@@ -1,101 +1,71 @@
 # BFF 운영 준비와 검증 인계
 
-**2026-09-24 기준 운영 배포 준비는 미완료다.** 격리된 실제 서비스·드라이버 검증은
-통과했으나, 최신 GitOps에는 신규 BFF/Auth 설정과 BFF Redis ACL·NetworkPolicy가 없다.
-이 문서는 준비 조건과 증거를 인계하는 산출물이며 운영 적용 완료 판정이 아니다.
+2026-09-26 단일 세션 ID 방식의 목표 운영 계약이다. 코드·GitOps·ACL·클러스터에
+반영하지 않았으며 운영 준비 완료를 뜻하지 않는다. 이전 조사 결과는
+[2026-09-24 운영 기록](verification/OPERATIONS-2026-09-24.md)에 보존한다.
 
-## 확인한 근거
+## 설정과 Secret
 
-GitOps 원격 main `8d2acd0ef594cee9fe1c99f7aeb26a54c6d03404`를 fetch 후 읽었다.
-원본 작업 트리와 클러스터는 변경하지 않았다.
+| 설정 | 요구 |
+|---|---|
+| `SPRING_PROFILES_ACTIVE` | local 또는 prod 중 하나 |
+| `BFF_SESSION_REDIS_HOST`, `BFF_SESSION_REDIS_PORT` | Auth와 같은 쓰기 담당 endpoint |
+| `BFF_SESSION_REDIS_USERNAME`, `BFF_SESSION_REDIS_PASSWORD` | 별도 BFF 계정·Secret |
+| `BFF_SESSION_REDIS_TLS` | endpoint에 맞춰 명시하고 CA 신뢰 검증 |
+| 브라우저·서비스 주소 | local/prod Origin·고정 로그인 결과 주소·내부 서비스 주소 |
 
-| 대상 | 저장소에서 확인한 상태 | 배포 전 필요한 증거 |
-| --- | --- | --- |
-| `workload/base/gateway/deployment.yaml` | prod 프로필·JWT·세션 Redis 환경 변수와 공개키 마운트 없음 | 아래 설정 주입과 새 이미지 기동 성공 |
-| `workload/base/authentication/deployment.yaml` | DB 설정만 있고 신규 JWT·Google·Redis 설정 없음 | 동일 sid 계약의 Auth 이미지·설정 및 로그인 검증 |
-| `workload/base/auth-valkey/` | 단일 Recreate 노드, requirepass 사용; BFF 전용 ACL 없음 | 실제 쓰기 담당 endpoint와 별도 BFF 계정·키/명령 권한 검사 |
-| `workload/overlays/prod/kustomization.yaml` | 위 항목을 추가하는 patch 없음 | 적용할 운영 manifest와 Argo CD 동기화 결과 |
-| NetworkPolicy | 조회한 GitOps main에 선언 없음 | CNI 정책 집행 활성화, 허용 호출 성공과 우회 호출 거절 |
+기존 세션 연결 설정 이름을 이어 사용하는 설계이며 실제 바인딩·시작 검증은 구현해야 한다.
+비활동 제한 14일은 Auth와 BFF에 같은 값으로 적용한다. Auth에는 별도 DB·Redis·Google
+설정을 주입하고 Google secret을 BFF에 공유하지 않는다. 비밀값은 Git·로그·검증 출력에 넣지 않는다.
+운영 Service 포트는 80, 대상 컨테이너 포트는 8000이며 환경에 맞는 실제 연결로 확인한다.
 
-이 실행 환경에는 kubectl·AWS CLI가 없고 운영 담당자의 실제 클러스터 검증 결과도
-제공되지 않았다. 따라서 클러스터의 별도 수동 설정 유무, Secret 내용, 네트워크 차단,
-실제 배포 이미지의 준비 상태를 추정하지 않았다. GitOps 상태만으로 운영 준비를 인정할
-근거는 없으며, 지금 main push로 자동 배포하면 선언된 설정만으로 신규 BFF가 기동하지 못한다.
+## Redis ACL과 연결
 
-## BFF 설정과 Secret
+BFF는 조회뿐 아니라 활동 만료를 연장한다. 새 키 패턴은
+`auth:session:{login}:by-id:*`, `auth:session:{login}:by-user:*`다.
 
-| 설정 | 운영 요구 |
-| --- | --- |
-| `SPRING_PROFILES_ACTIVE` | `prod`; local/prod 중 하나만 활성화 |
-| `BFF_JWT_PUBLIC_KEY` | 읽기 가능한 SPKI RSA 공개키 PEM 파일의 컨테이너 경로; 2048비트 이상 |
-| `BFF_JWT_KEY_ID` | 해당 공개키로 검증할 Auth의 kid와 동일한 값 |
-| `BFF_SESSION_REDIS_HOST`, `BFF_SESSION_REDIS_PORT` | Auth와 같은 저장소의 쓰기 담당 endpoint, 일반 포트 6379 |
-| `BFF_SESSION_REDIS_USERNAME` | default가 아닌 BFF 전용 읽기 계정 |
-| `BFF_SESSION_REDIS_PASSWORD` | Secret에서 주입하는 해당 계정 비밀번호 |
-| `BFF_SESSION_REDIS_TLS` | 실제 endpoint의 TLS 설정에 맞춰 명시; CA 신뢰도 실제 연결로 확인 |
+| 계정 | 데이터 명령 |
+|---|---|
+| BFF | `GET`, `EVAL`, `TIME`, `PTTL`, `PEXPIREAT` |
+| Auth 세션 | 생성·교체·폐기 스크립트의 `EVAL`, `TIME`, `GET`, `PTTL`, `SET`, `DEL` |
+| Auth OAuth | 별도 `auth:oauth:*`의 `SET NX`, `GET`, `GETDEL` |
 
-운영 내부 HTTP 주소는 authentication-api·content-api·graph-rag-api·ai-chat-api의
-Service 포트 80이다. 각 Service의 대상 컨테이너 포트는 8000이다. BFF 공개 응답·쿠키
-계약은 `https://api.loresentry.com`, 프론트 Origin은 `https://loresentry.com`으로 고정한다.
-AT/RT 개인키와 Google client secret은 Auth에만 주입하고 BFF에 주지 않는다. 키·비밀번호
-원문을 Git, 명령 출력, 검증 보고서에 넣지 않는다.
+BFF의 SET·DEL·GETDEL·키 탐색·관리·OAuth 키 접근을 거절한다. `+@read`나 `+@write` 전체를
+허용하지 않는다. 연결 초기화의 AUTH·HELLO·PING·CLIENT SETINFO/SETNAME 등 실제 필요한
+명령을 드라이버로 확인해 추가한다. 필요하지 않은 EVALSHA·SCRIPT LOAD는 추가하지 않는다.
 
-## Redis ACL과 연결 검증
+ACL만으로 특정 Lua 본문이나 14일 상한을 강제할 수 없다. BFF는 허용 키의 TTL을 변경할
+권한을 갖는다. 이 신뢰 경계와 보안 검토는 [세션 계약](../../loresentry-authentication/docs/session/SESSION_DESIGN.md#오류와-권한)을 따른다.
+검증되지 않은 ACL 문자열을 운영 적용 완료값으로 취급하지 않는다.
 
-실제 Lettuce RESP2 연결과 Redis 7.4.11·Valkey 9.0.6에서 검증한 BFF 권한은 다음과 같다.
-운영 비밀번호는 보안 경로로 설정하며, 아래 줄은 비밀번호를 포함한 운영 명령이 아니다.
+사전 GET과 원자적 검증·연장의 전체 예산은 연결 포함 500ms다. 쓰기 담당 노드와 실제
+페일오버 라우팅을 확인하고 허용 캐시·복제본·자동 재시도를 사용하지 않는다.
+매 인증 요청의 TTL 쓰기 부하, 두 인덱스와 이전 로그인 인덱스의 메모리, Redis·BFF 시각
+차이, 쿠키 수명과 서버 TTL의 일치를 측정한다. 고정 hash tag로 한 슬롯에 모이는 한계도 확인한다.
 
-```text
-키: ~auth:session:*
-명령: -@all +get +auth +ping +hello +client|setinfo +client|setname
-```
+## 내부 접근 제한
 
-`+@read` 전체를 허용하지 않는다. SET·DEL·GETDEL·EXPIRE·EVAL·EVALSHA·KEYS와
-`auth:refresh:*`·OAuth 임시 키·다른 서비스 키는 거절해야 한다. Auth는 별도 계정으로
-자신의 OAuth/세션 저장·Lua 명령을 수행한다. BFF 권한을 Auth에 그대로 적용하지 않는다.
+ClusterIP·Ingress 부재만으로 내부 우회가 차단됐다고 판단하지 않는다.
+BFF가 사용자 신원을 전달하므로 Auth·Content에 직접 위조 헤더를 보내는 경로를 차단해야 한다.
 
-[Redis/Valkey 검증](verification/LOREKEEPER-562.md)에서 세션 GET 성공, 타 키·쓰기·스크립트
-거절, 요청당 정확히 한 번의 GET, TTL 불변과 지연 시 늦은 명령 부재를 확인했다.
-[실제 Auth 통합](verification/LOREKEEPER-573.md)에서도 해당 계정으로 새 로그인·RT 회전·
-로그아웃을 검증했다. 이 격리 환경의 ACL 성공은 운영 Secret·ACL 적용 증거를 대체하지 않는다.
-
-조회는 연결 초기화부터 GET 완료까지 500ms이고 재시도·허용 캐시·읽기 복제본을 사용하지
-않는다. 운영 endpoint의 역할은 DNS 이름만으로 판단하지 말고 인프라 담당자가 실제 쓰기
-담당 노드와 라우팅·페일오버 동작을 확인해야 한다. 저장소 재시작·eviction·상태 유실 시
-사용자는 재로그인해야 하며 과거 스냅샷 복원으로 폐기 세션이 부활하지 않도록 관리한다.
-
-## 내부 API 접근 제한
-
-ClusterIP와 Ingress 부재만으로 클러스터 내부의 우회 호출을 차단했다고 판단하지 않는다.
-Auth·Content는 X-User-Id를 신뢰하므로, BFF를 거치지 않는 요청을 실제로 차단해야 한다.
-
-| 경로 | 필요한 결과 |
-| --- | --- |
-| ALB → gateway-api:80 / Pod:8000 | 허용; 공개 Ingress는 BFF만 대상 |
-| BFF → authentication-api·content-api:80 / Pod:8000 | 허용; 계약에 맞는 내부 호출 |
-| 허용되지 않은 Pod·namespace → Auth·Content | 거절; X-User-Id 위조만으로 접근 불가 |
-| BFF·Auth → 세션 쓰기 담당 노드:6379 또는 설정한 TLS 포트 | 각각 별도 ACL로 허용 |
+| 경로 | 결과 |
+|---|---|
+| ALB → BFF | 허용 |
+| BFF → Auth·Content 등 명시적 내부 API | 허용 |
+| 비허용 Pod·namespace → Auth·Content | 거절 |
+| Auth·BFF → 세션 저장소 | 각각 별도 ACL로 허용 |
 | 그 밖의 워크로드 → 세션 저장소 | 거절 |
-| DNS·Auth의 Google 호출·서비스별 기존 DB 등 | 실제 필요한 egress를 인프라 정책에서 유지 |
+| DNS·Google·각 서비스 DB | 필요한 경로만 유지 |
 
-인프라 담당자는 정책 manifest·CNI 집행 설정, 허용/거절 요청의 출발 Pod·namespace·대상
-포트·시각과 결과를 제출해야 한다. 민감 값은 기록하지 않는다. 격리 통합 도구는 서비스를
-Linux loopback에 바인딩하며 운영 NetworkPolicy나 클러스터 우회 차단을 검증하지 않는다.
+정책 manifest·CNI 집행과 실제 허용·거절 호출을 확인한다. loopback 통합 테스트는 운영
+NetworkPolicy·TLS·자격 증명의 증거가 아니다.
 
 ## 관측과 배포 판정
 
-| 관측 항목 | 확인할 내용 |
-| --- | --- |
-| 세션 조회 지연 | 연결을 포함한 p50/p95/p99와 500ms 시간 초과 비율 |
-| 세션 실패 | SESSION_INVALID·SESSION_UNAVAILABLE 발생률, ACL/연결/레코드 이상 진단 |
-| Auth 상태 변경 | 로그인 실패, 재발급 경쟁 거절, REFRESH_OUTCOME_UNKNOWN·REVOCATION_UNCONFIRMED |
-| 보안 경계 | CSRF/CORS 거절과 보호 요청의 내부 서비스 미도달 |
-| 민감값 보호 | Cookie·Authorization·AT/RT·OAuth code/state·Redis 값·비밀번호 로깅 금지 |
+세션 검증·연장 지연 p50/p95/p99, 500ms 초과, 세션 무효·장애, 로그인 생성 실패,
+폐기 미확인, Redis 쓰기량과 메모리를 관측한다. Cookie·Authorization·세션 ID·OAuth
+code/state·Redis 원문·비밀번호를 로그에 남기지 않는다. 사용자 UUID·세션 해시를 메트릭 라벨로 쓰지 않는다.
 
-사용자 UUID·sid·jti·토큰을 메트릭 라벨로 사용하지 않는다. BFF는 예외 원문과 내부 응답
-원문을 브라우저에 노출하지 않고 토큰 DTO의 문자열 출력을 가린다. 현재 전용 지연/오류
-메트릭·대시보드를 배포한 것은 아니며, 위 항목의 운영 수집·알람은 인프라 인계 대상이다.
-
-main push는 자동 이미지 배포를 실행한다. GitOps 설정·ACL·접근 제한의 실제 준비와
-Auth/BFF 공동 전환 계획을 확인한 뒤 시행한다. 프론트 검증 제외 승인은 운영 설정이
-준비됐다는 뜻이 아니며, 프론트 인증 기능은 여전히 별도 구현이 필요하다.
+기존 일반·통합 테스트 결과는 새 ACL·연장 연산의 검증을 대신하지 않는다.
+코드·프론트·브라우저와 실제 운영 설정을 검증한 후 [공동 전환](ROLLOUT.md)을 수행한다.
+main push가 자동 배포를 실행하므로 문서 변경 완료를 배포 승인이나 준비 완료로 해석하지 않는다.

@@ -1,41 +1,58 @@
 # 프론트 인증 연동 인계
 
-BFF의 로그인 결과 URL은 상태 안내다. `/login?result=success`만 보고 로그인 완료로
-처리하지 않고 `GET /auth/users/me`를 `credentials: "include"`로 호출해 확인한다.
-사용자가 쿼리를 바꿀 수 있으며, 직후 다른 로그인으로 현재 세션이 바뀔 수도 있다.
+2026-09-26 단일 세션 ID 방식의 목표 계약이다. 프론트 코드는 이번 작업에서 수정하지 않았다.
+브라우저는 HttpOnly 쿠키만 사용하고 ID를 JavaScript·localStorage·응답 JSON에서 읽지 않는다.
 
-## 브라우저 요청
+## 요청과 로그인
 
-- local은 `http://localhost:3000`에서 `http://localhost:8000`을 호출한다. prod는
-  `https://loresentry.com`에서 `https://api.loresentry.com`을 호출한다.
-- API 호출에 `credentials: "include"`를 적용한다. `X-User-Id`와 localStorage의
-  개발 사용자 ID는 인증 수단으로 사용하지 않는다.
-- POST·PUT·PATCH·DELETE에는 `X-LS-CSRF: 1`을 추가한다. 폼 제출·본문·쿼리 값으로
-  대신할 수 없다. 재발급과 로그아웃도 같은 조건이다.
-- 로그인 시작은 BFF의 `GET /auth/oauth/google/prepare`로 페이지 이동한다.
-  결과는 고정 `/login?result=success|cancelled|invalid|unavailable|failed`로 돌아온다.
-  BFF는 원래 화면 주소를 보관하지 않으며 임의 returnUrl로 이동하지 않는다.
-- 토큰은 HttpOnly 쿠키로만 전달된다. 응답 본문이나 URL에서 AT·RT를 읽지 않는다.
+- local은 localhost:3000에서 localhost:8000, prod는 loresentry.com에서 api.loresentry.com을 호출한다.
+- API 요청에는 `credentials: "include"`를 적용하고 사용자 ID 헤더를 인증 수단으로 보내지 않는다.
+- POST·PUT·PATCH·DELETE에는 `X-LS-CSRF: 1`을 추가한다. 로그아웃도 동일하다.
+- 로그인은 `GET /auth/oauth/google/prepare`로 페이지 이동한다.
+- 고정 `/login?result=...` 복귀 뒤 `GET /auth/users/me`로 실제 로그인을 확인한다.
+  result는 화면 안내 값이며 인증 근거가 아니다.
 
-## 오류와 후속 처리
+## 활동과 만료
 
-`ACCESS_TOKEN_MISSING`·`ACCESS_TOKEN_EXPIRED`의 REFRESH만 명시적 재발급 대상으로 삼는다.
-`SESSION_INVALID`는 재로그인, `SESSION_UNAVAILABLE`는 일시 장애로 처리하며 재발급을
-반복하지 않는다. 늦게 온 실패가 더 최근의 성공 상태를 덮지 않도록 요청·탭 간 순서를 조율한다.
-내부 서비스 오류나 로그아웃의 401을 재발급 조건으로 사용하지 않는다.
+보호 요청의 인증 성공마다 서버 TTL과 같은 ID의 쿠키 만료가 14일로 연장된다.
+화면만 열어 두거나 입력만 하는 것은 활동으로 계산되지 않는다. 로그인 유지를 위한
+heartbeat를 추가하지 않는다. 실제 보호 API 폴링은 활동으로 계산된다.
+인증에 성공한 뒤 도메인 오류가 발생한 요청도 세션은 연장될 수 있다.
 
-동시에 거절된 요청들은 하나의 재발급 결과를 기다리고, 브라우저 프로필의 여러 탭도
-갱신을 조율한다. 성공 후 원래 요청은 한 번만 재시도하고 재발급 API 자체를 자동 재시도하지
-않는다. 네트워크 오류나 모든 401을 재발급 대상으로 일반화하지 않는다. 늦은 실패로
-사용자 상태를 초기화하거나 성공 이후의 화면 상태를 덮지 않도록 요청 세대를 관리한다.
+브라우저의 쿠키 차단·삭제·보관 제한이나 응답 유실이 서버 TTL과 다른 로그아웃 시점을
+만들 수 있다. 서버가 ID를 유효하게 검증한 결과를 최종 기준으로 삼는다.
 
-Content 저장은 If-Match와 X-Save-Id를 유지하고 409의 current/base로 충돌을 처리한다.
-버전 복원에도 If-Match를 보내며, Location은 CORS 노출 헤더로 읽을 수 있다.
-한글 검색어는 URLSearchParams 등으로 한 번 인코딩한다. 상세 필드는
-[Content API](CONTENT_API.md)를 따른다.
+## 오류 처리
 
-쿠키·오류·메서드의 상세 계약은 [외부 API](EXTERNAL_API.md)와
-[재발급 흐름](auth/REFRESH_FLOW.md)을 따른다. 이 문서는 프론트 구현 인계이며
-현재 프론트 코드의 credentials·CSRF·로그인 결과 화면·탭 조율 구현 완료를 뜻하지 않는다.
-이번 작업의 실제 브라우저 검증은 사용자 요청으로 제외했으며
-[검증 대기 시나리오](verification/LOREKEEPER-574.md)는 프론트 구현 후 다시 수행한다.
+`SESSION_REQUIRED`·`SESSION_INVALID`는 보호 작업을 중단하고 재로그인으로 안내한다.
+`SESSION_UNAVAILABLE`는 일시 장애로 처리하며 사용자 상태를 즉시 로그아웃으로 바꾸지 않는다.
+401·503·네트워크 오류의 원래 요청을 일괄 자동 재전송하지 않는다. 특히 저장·수정은 결과
+유실 가능성이 있으므로 각 도메인의 중복 방지 계약을 따른다.
+
+## 인증 전환과 늦은 응답
+
+같은 세션의 동시 API 요청을 단일 요청으로 직렬화할 필요는 없다. 다만 모든 인증 성공
+응답이 쿠키를 갱신하므로 로그인·로그아웃 경계에서는 진행 중인 요청과 응답을 조율해야 한다.
+
+- 같은 브라우저 프로필의 탭에 인증 전환 시작을 공유하고 새 보호 요청·자동 폴링을 멈춘다.
+- 진행 요청의 응답 헤더 처리를 마친 뒤 로그아웃 또는 새 로그인 이동을 시작한다.
+  fetch 취소만으로 서버 처리나 쿠키 적용이 취소됐다고 가정하지 않는다.
+- 로그아웃 응답 처리가 끝나기 전에 새 로그인을 시작하지 않는다.
+- 로그인 완료 후 본인 계정을 다시 조회하고 최신 인증 전환의 결과만 화면에 반영한다.
+  여러 탭의 전환 조율은 공유 잠금·알림 등 실제 브라우저에서 동작하는 방식으로 구현한다.
+
+늦은 일반 응답이 이전 ID를 다시 설정하거나 늦은 로그아웃이 새 쿠키를 지울 수 있다.
+브라우저 Set-Cookie에는 조건부 비교·교체가 없어 JS의 응답 무시만으로 이를 막을 수 없다.
+조율을 벗어난 새 탭·중단 상황에서는 재로그인이 필요할 수 있으며, 새 ID를 자동 복구한다고
+보장하지 않는다. 서버에서는 이전 ID가 새 활성 세션을 인증·연장·폐기할 수 없어야 한다.
+동일 ID 응답 순서가 뒤바뀌면 쿠키 만료가 조금 앞당겨질 수 있지만 서버 만료를 늘리지는 않는다.
+
+## 로그아웃과 Content
+
+`POST /auth/sessions/revoke`를 본문 없이 호출한다. session_revocation의 confirmed·
+not_requested·rejected·unconfirmed를 구분하고 폐기 미확인을 완전한 성공으로 표시하지 않는다.
+필드·상태는 [외부 API](EXTERNAL_API.md#로그아웃-응답)를 따른다.
+
+Content의 If-Match·X-Save-Id·409 충돌 처리·Location·검색 인코딩은
+[기존 도메인 계약](CONTENT_API.md)을 유지한다. 새 인증 연동의 쿠키 왕복·14일 경계·
+활동 연장·탭 전환·늦은 응답·장애는 실제 브라우저로 검증해야 한다.

@@ -76,8 +76,8 @@ BFF `7ead2eb`의 코드를 비교했다. BFF 문서 이동 커밋 `483e2e5`는 �
 
 | 항목 | 조사 결과 | 전환 방향 |
 |---|---|---|
-| 신원 | 프론트 identity.ts가 localStorage에 개발 UUID를 만들고 http.ts가 X-User-Id로 전송한다. BFF는 형식만 검사한다. | JWT·활성 세션으로 대체하고 프론트의 개발 신원 제거를 별도 의존성으로 명시한다. |
-| 브라우저 인증 | 현재 fetch에는 credentials: include, X-LS-CSRF, 명시적 refresh와 탭 간 조율이 없다. | 보안 BFF의 실제 브라우저 연동 전에 프론트 준비가 필요하다. |
+| 신원 | 프론트 identity.ts가 localStorage에 개발 UUID를 만들고 http.ts가 X-User-Id로 전송한다. BFF는 형식만 검사한다. | 단일 세션 ID 검증으로 대체하고 프론트의 개발 신원 제거를 별도 의존성으로 명시한다. |
+| 브라우저 인증 | 현재 fetch에는 credentials: include, X-LS-CSRF, 새 인증 계약과 탭 간 전환 조율이 없다. | 보안 BFF의 실제 브라우저 연동 전에 프론트 준비가 필요하다. |
 | 헤더 | If-Match와 X-Save-Id는 실제 소비된다. If-None-Match는 BFF 허용 목록에만 있고 현재 Content·프론트에 소비 구현이 없다. | 실제 저장 헤더는 보존한다. If-None-Match 전달을 유지해도 304/ETag 지원이라고 주장하지 않는다. |
 | 응답 | 현재 BFF는 byte[] 원문을 전달한다. | 내부·외부 DTO와 명시적 오류 변환을 적용하되 소비 필드를 보존한다. |
 | 라우팅 | namespace 하위 임의 경로를 중계한다. | 위 26개 경로·메서드를 명시하고 미지원 API를 새 기능처럼 노출하지 않는다. |

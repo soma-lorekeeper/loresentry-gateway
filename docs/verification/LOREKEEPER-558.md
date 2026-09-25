@@ -1,5 +1,7 @@
 # CSRF 검증
 
+> 이전 구현의 실행 기록이다. 2026-09-26 단일 세션 ID 설계의 구현·검증 완료 근거로 사용하지 않는다. 당시 결과와 수치는 보존한다.
+
 2026-09-24, LOREKEEPER-558. POST·PUT·PATCH·DELETE에 정확한 Origin과 단일
 X-LS-CSRF: 1을 요구한다. /auth 전체 예외는 없으며 refresh·revoke도 검사한다.
 거절 응답은 403 CSRF_REJECTED/NONE, no-store이며 Set-Cookie를 발급하지 않는다.

@@ -1,5 +1,7 @@
 # Content 경계와 HTTP 전송 검증
 
+> 이전 구현의 실행 기록이다. 2026-09-26 단일 세션 ID 설계의 구현·검증 완료 근거로 사용하지 않는다. 당시 결과와 수치는 보존한다.
+
 LOREKEEPER-554는 외부 요청의 알려지지 않은 필드·타입 강제 변환을 거절하고,
 Content 성공 응답의 필수·중첩 필드와 오류 status/code/next_action을 확인한다.
 업무 오류 메시지는 고정 문구로 변환하며 DOCUMENT_CONFLICT의 current/base는

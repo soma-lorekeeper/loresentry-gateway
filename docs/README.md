@@ -1,31 +1,23 @@
 # BFF/Gateway 문서
 
-BFF의 서비스별 설계·구현 기준은 이 저장소의 `docs/`에서 관리한다.
-서비스 간 책임과 내부 호출·공동 전환 계약은 공통 문서 저장소를 링크로 참조한다.
+**2026-09-26 목표 계약은 단일 세션 ID 쿠키와 공유 저장소 기반 인증이다.** 마지막 인증
+활동 후 14일에 만료하고 보호 요청의 인증 성공마다 연장한다. 코드·설정·테스트·운영은
+아직 이 계약으로 변경하지 않았다. 이전 구현의 검증 완료를 새 설계의 완료로 해석하지 않는다.
 
-Google 로그인, 토큰 재발급·로그아웃, 본인 계정과 Content 26개 API를 구현했다.
-AT 검증 후 공유 활성 세션을 조회한다. 아래 순서로 읽고, 검증·운영 적용 범위는 별도
-기록을 확인한다. 프론트 의존 검증 제외와 운영 준비 미완료를 구분한다.
-
-| 순서 | 문서 | 확인할 내용 |
+| 순서 | 문서 | 내용 |
 |---|---|---|
-| 1 | [역할과 구조](ARCHITECTURE.md) | BFF의 책임과 코드 배치 |
-| 2 | [브라우저 보안](BROWSER_SECURITY.md) | 쿠키·CSRF·CORS와 local/prod 설정 |
-| 3 | [인증 연동](auth/README.md) | AT 검증과 로그인·재발급·로그아웃 흐름 |
-| 4 | [외부 API](EXTERNAL_API.md) | 브라우저가 호출할 경로와 성공·실패 응답 |
-| 5 | [내부 호출](../../docs/bff/INTERNAL_SERVICE_CALLS.md) | 내부 접근 제한·사용자 전달·타임아웃 |
-| 6 | [프론트 인계](FRONTEND_AUTH_CONTRACT.md) | 쿠키 요청·CSRF·오류·탭 간 조율 |
-| 7 | [운영 준비](OPERATIONS.md) | 필수 설정·ACL·접근 제한과 실제 미준비 항목 |
-| 8 | [공동 전환](ROLLOUT.md) | Auth/BFF 혼재 방지·재로그인·롤백 위험 |
+| 1 | [역할과 구조](ARCHITECTURE.md) | BFF 책임과 패키지 경계 |
+| 2 | [공유 세션 계약](../../loresentry-authentication/docs/session/SESSION_DESIGN.md) | 형식·저장소·검증과 TTL 연장 |
+| 3 | [브라우저 보안](BROWSER_SECURITY.md) | 단일 쿠키·CSRF·CORS |
+| 4 | [인증 연동](auth/README.md) | 로그인·보호 요청·로그아웃 |
+| 5 | [외부 API](EXTERNAL_API.md) | 경로·응답·오류 |
+| 6 | [프론트 인계](FRONTEND_AUTH_CONTRACT.md) | 쿠키 수명·오류와 인증 전환 조율 |
+| 7 | [운영 준비](OPERATIONS.md) | 연결·TTL 변경 ACL·접근 제한 |
+| 8 | [공동 전환](ROLLOUT.md) | 새 계약 구현·검증·배포·롤백 |
 
-각 규칙은 해당 문서를 기준으로 하고, 다른 문서는 링크로 참조한다.
-프로젝트·파일·에피소드의 [Content 외부 API 계약](CONTENT_API.md)과
-[기존 연동 조사](CONTENT_CONTRACT_AUDIT.md)를 함께 참고한다.
-여러 서비스 응답 조합과 AI 스트리밍은 해당 기능을 구현할 때 별도로 설계한다.
+[내부 서비스 호출](../../docs/bff/INTERNAL_SERVICE_CALLS.md)과 [Content API](CONTENT_API.md)를 함께 따른다.
+Content 도메인 API는 유지하며 인증 경계만 새 계약으로 전환한다.
 
-[일반·세션 테스트 안내](../README.md#검증), [실제 Auth 통합 결과](verification/LOREKEEPER-573.md),
-[Content 결과와 브라우저 제외 범위](verification/LOREKEEPER-574.md),
-[통합 검증 재현 도구](../integration/session/README.md)에서 실행 근거를 확인한다.
-
-Auth 서버 내부 설계는 [Auth 서버 문서](../../loresentry-authentication/docs/README.md), 프로젝트 공통 맥락은
-[루트 문서 안내](../../docs/README.md)를 참고한다.
+`verification/`의 이슈별 문서는 이전 구현의 실행 기록이다. 수치·결론을 소급해 고치지 않는다.
+[기존 통합 도구](../integration/session/README.md)도 새 계약으로 수정하고 다시 실행해야 한다.
+Auth의 내부 계약은 [Auth 문서](../../loresentry-authentication/docs/README.md)를 참고한다.
