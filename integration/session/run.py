@@ -15,6 +15,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
+from redis_proxy import RedisProxy
 import socket
 import subprocess
 import tempfile
@@ -245,6 +247,7 @@ def main():
     scratch.chmod(0o700)
     prefix = "bff-it-" + uuid.uuid4().hex[:10]
     proxy = None
+    redis_proxy = None
     print("Isolated logs/report: " + str(scratch), flush=True)
     auth_commit = command("git", "-C", str(args.auth_source), "rev-parse", args.auth_ref + "^{commit}")
     content_commit = None
@@ -285,6 +288,7 @@ def main():
         valkey = docker(prefix + "-valkey", "-p", "127.0.0.1::6379", "-v", str(redis_config) + ":/etc/redis.conf:ro",
                         args.redis_image, "redis-server" if args.redis_image.startswith("redis:") else "valkey-server", "/etc/redis.conf")
         redis_port = published_port(valkey, 6379)
+        redis_proxy = RedisProxy(redis_port)
         auth_port = free_port()
         auth_env = scratch / "auth.env"
         auth_env.write_text("\n".join([
@@ -364,7 +368,7 @@ def main():
         bff_env.write_text("\n".join([
             "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1", "BFF_AUTH_BASE_URL=" + internal, "BFF_CONTENT_BASE_URL=" + internal,
             "BFF_GRAPH_BASE_URL=" + internal, "BFF_CHAT_BASE_URL=" + internal,
-            "BFF_SESSION_REDIS_HOST=127.0.0.1", f"BFF_SESSION_REDIS_PORT={redis_port}",
+            "BFF_SESSION_REDIS_HOST=127.0.0.1", f"BFF_SESSION_REDIS_PORT={redis_proxy.port}",
             "BFF_SESSION_REDIS_USERNAME=bff", "BFF_SESSION_REDIS_PASSWORD=bff-test-password", "BFF_SESSION_REDIS_TLS=false"]) + "\n")
         bff_env.chmod(0o600)
         bff_jar = next(path for path in (ROOT / "build/libs").glob("*.jar") if "-plain" not in path.name)
@@ -379,6 +383,8 @@ def main():
             from content_checks import verify_content
             verify_content(ports, request, login, check, error, passed)
         verify(ports, redis_port, counts, valkey)
+        from race_checks import verify_races
+        verify_races(sys.modules[__name__], ports, redis_port, redis_proxy)
         report = {"auth_commit": auth_commit, "gateway_base_commit": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
                   "gateway_jar_sha256": hashlib.sha256(bff_jar.read_bytes()).hexdigest(),
                   "content_commit": content_commit,
@@ -389,6 +395,8 @@ def main():
         (scratch / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print("All Auth/session integration scenarios passed.", flush=True)
     finally:
+        if redis_proxy:
+            redis_proxy.close()
         if proxy:
             proxy.shutdown()
             proxy.server_close()
