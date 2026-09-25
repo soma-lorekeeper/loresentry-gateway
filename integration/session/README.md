@@ -1,19 +1,21 @@
 # Auth·BFF 세션 통합 실행
 
-`run.py`는 격리 PostgreSQL 18.4, Valkey 9.0.6, 실제 Auth와 BFF 두 프로세스를
+`run.py`는 격리 PostgreSQL 18.4, Redis 7.4 또는 Valkey 9.0.6, 실제 Auth와 BFF 두 프로세스를
 빌드·기동하고 로그인, 계정 조회, 새 로그인에 의한 교체와 로그아웃을 검사한다.
 외부 Google 응답만 테스트 HTTP/JWK 서버로 대체한다. Auth의 OIDC 서명·nonce·PKCE,
-계정 DB와 세션 처리는 실제 코드를 사용한다. 실제 브라우저·운영 검증은 별도다.
+계정 DB와 세션 처리는 실제 코드를 사용한다. 세션 ID의 정규 형식과 해시 인덱스,
+양쪽 절대 만료 일치, 14일 활동 연장과 쿠키 Max-Age도 비교한다. 실제 브라우저·운영 검증은 별도다.
 
 Linux 호스트의 Docker, Python 3와 Auth Git 저장소가 필요하다. Java 21과 Gradle은
-컨테이너에서 실행한다. 기본 Auth 기준은 LOREKEEPER-589 커밋
-`9c0613f25ed52b87a7dc6ccc4fa223d312237250`이며 원본 작업 트리는 변경하지 않는다.
+컨테이너에서 실행한다. 기본 Auth 기준은 LOREKEEPER-590 커밋
+`980a27e4935cdc6f7bc1e15940368842dd15295f`이며 원본 작업 트리는 변경하지 않는다.
 
 ```bash
 python3 integration/session/run.py --auth-source ../loresentry-authentication
 # 다른 확정 커밋을 검증할 때 지정한다.
 python3 integration/session/run.py --auth-source ../loresentry-authentication --auth-ref <commit>
 # 실제 Content의 26개 API 회귀를 추가한다.
+# 저장소는 --redis-image redis:7.4-alpine 또는 valkey/valkey:9.0.6-alpine으로 선택한다.
 python3 integration/session/run.py --content-source ../loresentry-content
 ```
 

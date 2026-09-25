@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated real Auth/PostgreSQL/Valkey + two BFF processes. No production credentials.
+"""Isolated real Auth/PostgreSQL/Redis or Valkey + two BFF processes. No production credentials.
 
 Requires Linux, Docker, Python 3 and a local Auth Git checkout. Only the
 external Google provider is simulated; Auth's OIDC/DB/session code is real.
@@ -24,7 +24,7 @@ import urllib.parse
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-AUTH_REF = "9c0613f25ed52b87a7dc6ccc4fa223d312237250"
+AUTH_REF = "980a27e4935cdc6f7bc1e15940368842dd15295f"
 CONTENT_REF = "d26a3d3a244bdebb79375290b9d032f232da5563"
 JAVA = "eclipse-temurin:21-jdk-alpine"
 containers = []
@@ -123,6 +123,8 @@ def redis(port, *args):
             data = stream.read(size)
             stream.read(2)
             return data.decode()
+        if kind == b"*":
+            return [read(stream) for _ in range(int(line))]
         if kind == b":":
             return int(line)
         return line.decode()
@@ -155,26 +157,77 @@ def login(port, subject):
     return jar
 
 
+def session_keys(redis_port, cookies):
+    raw = cookies["ls_session"]
+    check(len(raw) == 43 and b64(base64.urlsafe_b64decode(raw + "=")) == raw,
+          "canonical 256-bit session ID")
+    digest = hashlib.sha256(raw.encode("ascii")).hexdigest()
+    by_id = "auth:session:{login}:by-id:" + digest
+    record = json.loads(redis(redis_port, "GET", by_id))
+    check(record["schema_version"] == 2, "session schema")
+    by_user = "auth:session:{login}:by-user:" + record["user_id"]
+    index = json.loads(redis(redis_port, "GET", by_user))
+    check(index == {"schema_version": 2, "session_hash": digest}, "hash-only current index")
+    check(raw not in json.dumps([record, index]), "raw ID absent from records")
+    return by_id, by_user, record["user_id"]
+
+
+def expiry(redis_port, keys):
+    values = [redis(redis_port, "PEXPIRETIME", key) for key in keys[:2]]
+    check(values[0] == values[1] and values[0] > 0, "identical absolute expiry")
+    return values[0]
+
+
+def check_renewal(response, cookies, redis_port, keys):
+    check(cookie_values(response) == cookies, "activity keeps same session ID")
+    jar = http.cookies.SimpleCookie()
+    for value in response[1].get_all("Set-Cookie", []):
+        jar.load(value)
+    seconds, micros = redis(redis_port, "TIME")
+    remaining = expiry(redis_port, keys) - int(seconds) * 1000 - int(micros) // 1000
+    age = int(jar["ls_session"]["max-age"])
+    check(1209595_000 < remaining <= 1209600_000, "activity resets fourteen-day idle expiry")
+    check(0 < age <= 1209600 and abs(age * 1000 - remaining) < 1500,
+          "cookie lifetime matches server remaining expiry")
+    check(jar["ls_session"]["httponly"] and jar["ls_session"]["samesite"] == "Strict"
+          and jar["ls_session"]["path"] == "/" and not jar["ls_session"]["domain"],
+          "session cookie security attributes")
+    check(response[1]["Cache-Control"] == "no-store", "activity no-store")
+
+
 def verify(ports, redis_port, counts, redis_name):
     first, second = ports
     old = login(first, "session-smoke")
+    keys = session_keys(redis_port, old)
     for port in ports:
+        previous = expiry(redis_port, keys)
         profile = request(port, "GET", "/auth/users/me", old)
         check(profile[0] == 200, "session account lookup")
         check(cookie_values(profile) == old, "activity keeps the same session ID")
-        check(profile[1]["Cache-Control"] == "no-store", "authenticated response no-store")
+        check(profile[2]["id"] == keys[2], "profile matches stored user")
+        check_renewal(profile, old, redis_port, keys)
+        check(expiry(redis_port, keys) >= previous, "expiry never moves backwards")
+    changed = request(first, "PATCH", "/auth/users/me", old, {"display_name": "세션 통합"})
+    check(changed[0] == 200, "account update")
+    check_renewal(changed, old, redis_port, keys)
     fresh = login(second, "session-smoke")
+    check(redis(redis_port, "PTTL", keys[0]) > 0, "old ID has TTL after replacement")
     check(fresh != old, "new login replaces the session ID")
     for port in ports:
         error(request(port, "GET", "/auth/users/me", old), 401, "SESSION_INVALID", "RELOGIN")
     revoked = request(first, "POST", "/auth/sessions/revoke", old)
     check(revoked[0] == 200 and revoked[2]["session_revocation"] == "confirmed", "old session revocation")
     check(request(second, "GET", "/auth/users/me", fresh)[0] == 200, "old logout preserves new login")
+    session_keys_before_logout = session_keys(redis_port, fresh)
     revoked = request(second, "POST", "/auth/sessions/revoke", fresh)
     check(revoked[0] == 200 and revoked[2]["session_revocation"] == "confirmed", "current logout confirmed")
     check(not cookie_values(revoked), "logout expires session cookie")
     for port in ports:
         error(request(port, "GET", "/auth/users/me", fresh), 401, "SESSION_INVALID", "RELOGIN")
+    check(redis(redis_port, "EXISTS", *session_keys_before_logout[:2]) == 0,
+          "logout deletes current records")
+    check(not any("tokens" in path or "jwks" in path for _, path in counts),
+          "no legacy authentication upstream routes")
     passed("single-session login, two-BFF account access, replacement and logout")
 
 
@@ -184,6 +237,8 @@ def main():
     parser.add_argument("--auth-ref", default=AUTH_REF)
     parser.add_argument("--content-source", type=Path, help="Also test real Content using an isolated source snapshot")
     parser.add_argument("--content-ref", default=CONTENT_REF)
+    parser.add_argument("--redis-image", choices=["redis:7.4-alpine", "valkey/valkey:9.0.6-alpine"],
+                        default="valkey/valkey:9.0.6-alpine")
     parser.add_argument("--gradle-cache", type=Path, default=Path("/tmp/loresentry-auth-gradle"))
     args = parser.parse_args()
     scratch = Path(tempfile.mkdtemp(prefix="bff-auth-integration-"))
@@ -228,7 +283,7 @@ def main():
                                'user default on nopass ~* +@all\n'
                                'user bff on >bff-test-password ~auth:session:{login}:* -@all +get +eval +time +pttl +pexpireat +auth +ping +hello +client|setinfo +client|setname\n')
         valkey = docker(prefix + "-valkey", "-p", "127.0.0.1::6379", "-v", str(redis_config) + ":/etc/redis.conf:ro",
-                        "valkey/valkey:9.0.6-alpine", "valkey-server", "/etc/redis.conf")
+                        args.redis_image, "redis-server" if args.redis_image.startswith("redis:") else "valkey-server", "/etc/redis.conf")
         redis_port = published_port(valkey, 6379)
         auth_port = free_port()
         auth_env = scratch / "auth.env"
@@ -327,7 +382,7 @@ def main():
         report = {"auth_commit": auth_commit, "gateway_base_commit": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
                   "gateway_jar_sha256": hashlib.sha256(bff_jar.read_bytes()).hexdigest(),
                   "content_commit": content_commit,
-                  "scenarios": results, "postgres": "18.4", "valkey": "9.0.6", "bff_instances": 2,
+                  "scenarios": results, "postgres": "18.4", "session_store_image": args.redis_image, "bff_instances": 2,
                   "external_google": "isolated HTTP/JWK fixture; real Auth OIDC client",
                   "not_verified": ["real Google consent", "browser cookies", "production infrastructure"]
                                   + ([] if content_commit else ["Content"])}
