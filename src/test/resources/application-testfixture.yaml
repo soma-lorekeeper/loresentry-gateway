@@ -1,7 +1,4 @@
 loresentry:
-  jwt:
-    public-key: ${user.dir}/src/test/resources/test-public-key.pem
-    key-id: test-key
   upstream:
     authentication:
       base-url: http://auth.test

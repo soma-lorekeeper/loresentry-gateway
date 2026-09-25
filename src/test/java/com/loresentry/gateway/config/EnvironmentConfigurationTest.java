@@ -19,8 +19,7 @@ class EnvironmentConfigurationTest {
                 "loresentry.upstream.authentication.base-url=http://auth.test",
                 "loresentry.upstream.content.base-url=http://content.test",
                 "loresentry.upstream.graph-rag.base-url=http://graph.test",
-                "loresentry.upstream.ai-chat.base-url=http://chat.test",
-                "loresentry.jwt.public-key=classpath:test-public-key.pem");
+                "loresentry.upstream.ai-chat.base-url=http://chat.test");
     }
     @Test void rejectsNoProfile() { runner().run(c->assertThat(c).hasFailed()); }
     @Test void rejectsBothProfiles() { runner("local","prod").run(c->assertThat(c).hasFailed()); }
@@ -32,9 +31,6 @@ class EnvironmentConfigurationTest {
             "loresentry.browser.secure-cookies=true").run(c->assertThat(c).hasNotFailed());
     }
     @Test void rejectsMixedEnvironment() { runner("prod").run(c->assertThat(c).hasFailed()); }
-    @Test void rejectsMissingKeyConfiguration() {
-        runner("local").withPropertyValues("loresentry.jwt.public-key=").run(c->assertThat(c).hasFailed());
-    }
     @Test void rejectsUnconfiguredServiceAddress() {
         runner("local").withPropertyValues("loresentry.upstream.content.base-url=").run(c->assertThat(c).hasFailed());
     }

@@ -5,7 +5,7 @@ import com.loresentry.gateway.application.AuthOperationFailure;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@RestControllerAdvice(assignableTypes={TokenController.class,AccountController.class})
+@RestControllerAdvice(assignableTypes={SessionController.class,AccountController.class})
 public class AuthExceptionHandler {
     public record Error(String code,String message,@JsonProperty("next_action") String nextAction) {}
     @ExceptionHandler(AuthOperationFailure.class)

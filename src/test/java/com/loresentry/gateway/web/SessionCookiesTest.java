@@ -14,7 +14,7 @@ class SessionCookiesTest {
     static final Instant NOW=Instant.parse("2026-09-26T00:00:00.500Z");
     static final String ID="A".repeat(43);
     AuthCookies cookies(boolean secure,Clock clock) {
-        return new AuthCookies(new CookieSettings("legacy-at","legacy-rt","oauth",secure),clock);
+        return new AuthCookies(new CookieSettings("oauth",secure),clock);
     }
     @ParameterizedTest @ValueSource(booleans={false,true})
     void singleCookieAndDeletionHaveIdenticalScope(boolean secure) {

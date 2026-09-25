@@ -10,8 +10,7 @@ import org.springframework.core.env.Environment;
 @Configuration(proxyBeanMethods = false)
 public class EnvironmentConfiguration {
     @Bean
-    Object verifiedEnvironment(Environment environment, BrowserProperties browser, UpstreamProperties upstream,
-            @Value("${loresentry.jwt.public-key}") String publicKey) {
+    Object verifiedEnvironment(Environment environment, BrowserProperties browser, UpstreamProperties upstream) {
         var profiles = Arrays.asList(environment.getActiveProfiles());
         boolean local = profiles.contains("local"), prod = profiles.contains("prod");
         if (local == prod) throw new IllegalStateException("Activate exactly one of local or prod");
@@ -26,8 +25,6 @@ public class EnvironmentConfiguration {
                     || uri.getUserInfo()!=null || uri.getQuery()!=null || uri.getFragment()!=null)
                 throw new IllegalStateException("Invalid internal service address");
         }
-        if(publicKey==null || publicKey.isBlank() || publicKey.contains("${"))
-            throw new IllegalStateException("An environment-specific public key is required");
         return new Object();
     }
 }
