@@ -30,6 +30,12 @@ public class SessionRedisConfiguration {
                 .socketOptions(SocketOptions.builder().connectTimeout(Duration.ofMillis(500)).build()).build());
         return client;
     }
+    @Bean public com.loresentry.gateway.client.session.OpaqueSessionReader opaqueSessionReader(RedisClient sessionRedisClient,RedisURI sessionWriter) {
+        return new com.loresentry.gateway.client.session.OpaqueSessionReader(sessionRedisClient,sessionWriter);
+    }
+    @Bean public com.loresentry.gateway.security.OpaqueSessionVerifier opaqueSessions(com.loresentry.gateway.client.session.OpaqueSessionReader reader) {
+        return new com.loresentry.gateway.security.OpaqueSessionVerifier(reader);
+    }
     @Bean public SessionReader sessionReader(RedisClient sessionRedisClient,RedisURI sessionWriter) {
         return new SessionReader(sessionRedisClient,sessionWriter);
     }
