@@ -35,6 +35,13 @@ final class ContentValidation {
             case Snippet v -> required(v.before(),v.match(),v.after());
             case Hit v -> { required(v.fileId(),v.title(),v.folderCode(),v.updatedAt());if (v.snippet()!=null) validate(v.snippet()); }
             case Hits v -> items(v.hits());
+            case Memo v -> required(v.id(),v.projectId(),v.scope(),v.body(),v.createdAt(),v.updatedAt());
+            case Memos v -> items(v.memos());
+            case Favorites v -> { Objects.requireNonNull(v.fileIds()); v.fileIds().forEach(Objects::requireNonNull); }
+            // layout 은 null 일 수 있다. 처음 여는 프로젝트는 복원할 것이 없다.
+            case WorkspaceState v -> { }
+            case ImageTicket v -> required(v.imageId(),v.key(),v.uploadUrl(),v.method(),v.headers(),v.expiresAt());
+            case Image v -> required(v.imageId(),v.projectId(),v.key(),v.contentType(),v.sizeBytes(),v.status(),v.createdAt());
             default -> throw new IllegalArgumentException("Unsupported Content response");
         }
         return value;

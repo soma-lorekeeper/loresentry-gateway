@@ -33,10 +33,12 @@ public class ContentApiClient {
         if (code == null) return 0;
         return switch (code) {
             case "INVALID_REQUEST", "INVALID_PROJECT_NAME", "INVALID_PROJECT_DESCRIPTION", "INVALID_FILE_TITLE",
-                    "INVALID_FILE_LOCATION", "INVALID_RELATION_TARGET" -> 400;
-            case "PROJECT_NOT_FOUND", "FILE_NOT_FOUND", "VERSION_NOT_FOUND", "NOT_FOUND" -> 404;
+                    "INVALID_FILE_LOCATION", "INVALID_RELATION_TARGET", "INVALID_MEMO",
+                    "INVALID_UPLOAD_REQUEST" -> 400;
+            case "PROJECT_NOT_FOUND", "FILE_NOT_FOUND", "VERSION_NOT_FOUND", "NOT_FOUND",
+                    "MEMO_NOT_FOUND", "IMAGE_NOT_FOUND" -> 404;
             case "PROJECT_NAME_TAKEN", "PROJECT_NOT_TRASHED", "FILE_TITLE_TAKEN", "FILE_NOT_TRASHED",
-                    "DOCUMENT_LOCKED", "DOCUMENT_CONFLICT" -> 409;
+                    "DOCUMENT_LOCKED", "DOCUMENT_CONFLICT", "OBJECT_NOT_UPLOADED" -> 409;
             case "INTERNAL_ERROR" -> 500;
             default -> 0;
         };
@@ -162,5 +164,42 @@ public class ContentApiClient {
     }
     public ContentData.Hits search(UUID userId, UUID projectId, String query, Conditions conditions) {
         return call("GET", "/projects/{projectId}/search?q={query}", Map.of("projectId", projectId, "query", query == null ? "" : query), userId, null, ContentData.Hits.class, 200, conditions);
+    }
+    public ContentData.Memos listMemos(UUID userId, UUID projectId, String scope, UUID documentId, Conditions conditions) {
+        if (documentId == null) return call("GET", "/projects/{projectId}/memos?scope={scope}", Map.of("projectId", projectId, "scope", scope == null ? "" : scope), userId, null, ContentData.Memos.class, 200, conditions);
+        return call("GET", "/projects/{projectId}/memos?scope={scope}&document_id={documentId}", Map.of("projectId", projectId, "scope", scope == null ? "" : scope, "documentId", documentId), userId, null, ContentData.Memos.class, 200, conditions);
+    }
+    public ContentData.Memo createMemo(UUID userId, UUID projectId, ContentData.MemoCreate body, Conditions conditions) {
+        return call("POST", "/projects/{projectId}/memos", Map.of("projectId", projectId), userId, body, ContentData.Memo.class, 201, conditions);
+    }
+    public ContentData.Memo updateMemo(UUID userId, UUID memoId, ContentData.MemoUpdate body, Conditions conditions) {
+        return call("PATCH", "/memos/{memoId}", Map.of("memoId", memoId), userId, body, ContentData.Memo.class, 200, conditions);
+    }
+    public Void deleteMemo(UUID userId, UUID memoId, Conditions conditions) {
+        return call("DELETE", "/memos/{memoId}", Map.of("memoId", memoId), userId, null, Void.class, 204, conditions);
+    }
+    public ContentData.Favorites listFavorites(UUID userId, UUID projectId, Conditions conditions) {
+        return call("GET", "/projects/{projectId}/favorites", Map.of("projectId", projectId), userId, null, ContentData.Favorites.class, 200, conditions);
+    }
+    public ContentData.Favorites addFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) {
+        return call("PUT", "/projects/{projectId}/favorites/{fileId}", Map.of("projectId", projectId, "fileId", fileId), userId, null, ContentData.Favorites.class, 200, conditions);
+    }
+    public ContentData.Favorites removeFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) {
+        return call("DELETE", "/projects/{projectId}/favorites/{fileId}", Map.of("projectId", projectId, "fileId", fileId), userId, null, ContentData.Favorites.class, 200, conditions);
+    }
+    public ContentData.WorkspaceState loadWorkspaceState(UUID userId, UUID projectId, Conditions conditions) {
+        return call("GET", "/projects/{projectId}/workspace-state", Map.of("projectId", projectId), userId, null, ContentData.WorkspaceState.class, 200, conditions);
+    }
+    public Void saveWorkspaceState(UUID userId, UUID projectId, ContentData.WorkspaceState body, Conditions conditions) {
+        return call("PUT", "/projects/{projectId}/workspace-state", Map.of("projectId", projectId), userId, body, Void.class, 204, conditions);
+    }
+    public ContentData.ImageTicket createImageTicket(UUID userId, UUID projectId, ContentData.ImageTicketRequest body, Conditions conditions) {
+        return call("POST", "/projects/{projectId}/images", Map.of("projectId", projectId), userId, body, ContentData.ImageTicket.class, 201, conditions);
+    }
+    public ContentData.Image completeImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) {
+        return call("POST", "/projects/{projectId}/images/{imageId}/complete", Map.of("projectId", projectId, "imageId", imageId), userId, null, ContentData.Image.class, 200, conditions);
+    }
+    public ContentData.Image getImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) {
+        return call("GET", "/projects/{projectId}/images/{imageId}", Map.of("projectId", projectId, "imageId", imageId), userId, null, ContentData.Image.class, 200, conditions);
     }
 }

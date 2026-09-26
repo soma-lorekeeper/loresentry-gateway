@@ -130,4 +130,41 @@ public final class ContentDtos {
         public static NamedVersion from(ContentData.NamedVersion value) { return value == null ? null : new NamedVersion(value.label()); }
         public ContentData.NamedVersion internal() { return new ContentData.NamedVersion(label); }
     }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Memo(UUID id, @JsonProperty("project_id") UUID projectId, String scope, @JsonProperty("document_id") UUID documentId, String title, String body, @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {
+        public static Memo from(ContentData.Memo value) { return value == null ? null : new Memo(value.id(), value.projectId(), value.scope(), value.documentId(), value.title(), value.body(), value.createdAt(), value.updatedAt()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Memos(List<Memo> memos) {
+        public static Memos from(ContentData.Memos value) { return value == null ? null : new Memos(value.memos().stream().map(Memo::from).toList()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record MemoCreate(String scope, @JsonProperty("document_id") UUID documentId, String title, String body) {
+        public ContentData.MemoCreate internal() { return new ContentData.MemoCreate(scope, documentId, title, body); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record MemoUpdate(String title, String body) {
+        public ContentData.MemoUpdate internal() { return new ContentData.MemoUpdate(title, body); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Favorites(@JsonProperty("file_ids") List<UUID> fileIds) {
+        public static Favorites from(ContentData.Favorites value) { return value == null ? null : new Favorites(value.fileIds()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record WorkspaceState(tools.jackson.databind.JsonNode layout) {
+        public static WorkspaceState from(ContentData.WorkspaceState value) { return value == null ? null : new WorkspaceState(value.layout()); }
+        public ContentData.WorkspaceState internal() { return new ContentData.WorkspaceState(layout); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ImageTicketRequest(@JsonProperty("file_name") String fileName, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes) {
+        public ContentData.ImageTicketRequest internal() { return new ContentData.ImageTicketRequest(fileName, contentType, sizeBytes); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ImageTicket(@JsonProperty("image_id") UUID imageId, String key, @JsonProperty("upload_url") String uploadUrl, String method, java.util.Map<String, String> headers, @JsonProperty("expires_at") java.time.Instant expiresAt, @JsonProperty("public_url") String publicUrl) {
+        public static ImageTicket from(ContentData.ImageTicket value) { return value == null ? null : new ImageTicket(value.imageId(), value.key(), value.uploadUrl(), value.method(), value.headers(), value.expiresAt(), value.publicUrl()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Image(@JsonProperty("image_id") UUID imageId, @JsonProperty("project_id") UUID projectId, @JsonProperty("file_name") String fileName, String key, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes, String status, @JsonProperty("public_url") String publicUrl, @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("committed_at") OffsetDateTime committedAt) {
+        public static Image from(ContentData.Image value) { return value == null ? null : new Image(value.imageId(), value.projectId(), value.fileName(), value.key(), value.contentType(), value.sizeBytes(), value.status(), value.publicUrl(), value.createdAt(), value.committedAt()); }
+    }
 }
