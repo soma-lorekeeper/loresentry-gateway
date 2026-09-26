@@ -151,4 +151,64 @@ public class ContentApiController {
         var result = service.search(userId, projectId, query, new Conditions(null, null, single(request, "If-None-Match")));
         return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Hits.from(result));
     }
+    @GetMapping("/projects/{projectId}/memos")
+    public ResponseEntity<ContentDtos.Memos> listMemos(@CurrentUser UUID userId, @PathVariable UUID projectId, @RequestParam(name = "scope", required = false) String scope, @RequestParam(name = "document_id", required = false) UUID documentId, HttpServletRequest request) {
+        var result = service.listMemos(userId, projectId, scope, documentId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Memos.from(result));
+    }
+    @PostMapping("/projects/{projectId}/memos")
+    public ResponseEntity<ContentDtos.Memo> createMemo(@CurrentUser UUID userId, @PathVariable UUID projectId, @RequestBody ContentDtos.MemoCreate body, HttpServletRequest request) {
+        var result = service.createMemo(userId, projectId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.created(URI.create("/memos/" + result.id())).cacheControl(CacheControl.noStore()).body(ContentDtos.Memo.from(result));
+    }
+    @PatchMapping("/memos/{memoId}")
+    public ResponseEntity<ContentDtos.Memo> updateMemo(@CurrentUser UUID userId, @PathVariable UUID memoId, @RequestBody ContentDtos.MemoUpdate body, HttpServletRequest request) {
+        var result = service.updateMemo(userId, memoId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Memo.from(result));
+    }
+    @DeleteMapping("/memos/{memoId}")
+    public ResponseEntity<Void> deleteMemo(@CurrentUser UUID userId, @PathVariable UUID memoId, HttpServletRequest request) {
+        service.deleteMemo(userId, memoId, new Conditions(null, null, null));
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+    @GetMapping("/projects/{projectId}/favorites")
+    public ResponseEntity<ContentDtos.Favorites> listFavorites(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
+        var result = service.listFavorites(userId, projectId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Favorites.from(result));
+    }
+    @PutMapping("/projects/{projectId}/favorites/{fileId}")
+    public ResponseEntity<ContentDtos.Favorites> addFavorite(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID fileId, HttpServletRequest request) {
+        var result = service.addFavorite(userId, projectId, fileId, new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Favorites.from(result));
+    }
+    @DeleteMapping("/projects/{projectId}/favorites/{fileId}")
+    public ResponseEntity<ContentDtos.Favorites> removeFavorite(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID fileId, HttpServletRequest request) {
+        var result = service.removeFavorite(userId, projectId, fileId, new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Favorites.from(result));
+    }
+    @GetMapping("/projects/{projectId}/workspace-state")
+    public ResponseEntity<ContentDtos.WorkspaceState> loadWorkspaceState(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
+        var result = service.loadWorkspaceState(userId, projectId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.WorkspaceState.from(result));
+    }
+    @PutMapping("/projects/{projectId}/workspace-state")
+    public ResponseEntity<Void> saveWorkspaceState(@CurrentUser UUID userId, @PathVariable UUID projectId, @RequestBody ContentDtos.WorkspaceState body, HttpServletRequest request) {
+        service.saveWorkspaceState(userId, projectId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+    @PostMapping("/projects/{projectId}/images")
+    public ResponseEntity<ContentDtos.ImageTicket> createImageTicket(@CurrentUser UUID userId, @PathVariable UUID projectId, @RequestBody ContentDtos.ImageTicketRequest body, HttpServletRequest request) {
+        var result = service.createImageTicket(userId, projectId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.created(URI.create("/projects/" + projectId + "/images/" + result.imageId())).cacheControl(CacheControl.noStore()).body(ContentDtos.ImageTicket.from(result));
+    }
+    @PostMapping("/projects/{projectId}/images/{imageId}/complete")
+    public ResponseEntity<ContentDtos.Image> completeImage(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID imageId, HttpServletRequest request) {
+        var result = service.completeImage(userId, projectId, imageId, new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Image.from(result));
+    }
+    @GetMapping("/projects/{projectId}/images/{imageId}")
+    public ResponseEntity<ContentDtos.Image> getImage(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID imageId, HttpServletRequest request) {
+        var result = service.getImage(userId, projectId, imageId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Image.from(result));
+    }
 }

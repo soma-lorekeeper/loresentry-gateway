@@ -37,4 +37,16 @@ public class ContentService {
     public ContentData.Content restoreVersion(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { return client.restoreVersion(userId, fileId, versionId, conditions); }
     public Void deleteVersion(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { return client.deleteVersion(userId, fileId, versionId, conditions); }
     public ContentData.Hits search(UUID userId, UUID projectId, String query, Conditions conditions) { return client.search(userId, projectId, query, conditions); }
+    public ContentData.Memos listMemos(UUID userId, UUID projectId, String scope, UUID documentId, Conditions conditions) { return client.listMemos(userId, projectId, scope, documentId, conditions); }
+    public ContentData.Memo createMemo(UUID userId, UUID projectId, ContentData.MemoCreate body, Conditions conditions) { return client.createMemo(userId, projectId, body, conditions); }
+    public ContentData.Memo updateMemo(UUID userId, UUID memoId, ContentData.MemoUpdate body, Conditions conditions) { return client.updateMemo(userId, memoId, body, conditions); }
+    public Void deleteMemo(UUID userId, UUID memoId, Conditions conditions) { return client.deleteMemo(userId, memoId, conditions); }
+    public ContentData.Favorites listFavorites(UUID userId, UUID projectId, Conditions conditions) { return client.listFavorites(userId, projectId, conditions); }
+    public ContentData.Favorites addFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) { return client.addFavorite(userId, projectId, fileId, conditions); }
+    public ContentData.Favorites removeFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) { return client.removeFavorite(userId, projectId, fileId, conditions); }
+    public ContentData.WorkspaceState loadWorkspaceState(UUID userId, UUID projectId, Conditions conditions) { return client.loadWorkspaceState(userId, projectId, conditions); }
+    public Void saveWorkspaceState(UUID userId, UUID projectId, ContentData.WorkspaceState body, Conditions conditions) { return client.saveWorkspaceState(userId, projectId, body, conditions); }
+    public ContentData.ImageTicket createImageTicket(UUID userId, UUID projectId, ContentData.ImageTicketRequest body, Conditions conditions) { return client.createImageTicket(userId, projectId, body, conditions); }
+    public ContentData.Image completeImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) { return client.completeImage(userId, projectId, imageId, conditions); }
+    public ContentData.Image getImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) { return client.getImage(userId, projectId, imageId, conditions); }
 }

@@ -57,4 +57,23 @@ public final class ContentData {
     public record Lock(Boolean locked) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record NamedVersion(String label) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Memo(UUID id, @JsonProperty("project_id") UUID projectId, String scope, @JsonProperty("document_id") UUID documentId, String title, String body, @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Memos(List<Memo> memos) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record MemoCreate(String scope, @JsonProperty("document_id") UUID documentId, String title, String body) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record MemoUpdate(String title, String body) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Favorites(@JsonProperty("file_ids") List<UUID> fileIds) {}
+    /** 화면이 만든 레이아웃 JSON. BFF 도 Content 처럼 이 구조를 해석하지 않는다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record WorkspaceState(tools.jackson.databind.JsonNode layout) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ImageTicketRequest(@JsonProperty("file_name") String fileName, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ImageTicket(@JsonProperty("image_id") UUID imageId, String key, @JsonProperty("upload_url") String uploadUrl, String method, java.util.Map<String, String> headers, @JsonProperty("expires_at") java.time.Instant expiresAt, @JsonProperty("public_url") String publicUrl) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Image(@JsonProperty("image_id") UUID imageId, @JsonProperty("project_id") UUID projectId, @JsonProperty("file_name") String fileName, String key, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes, String status, @JsonProperty("public_url") String publicUrl, @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("committed_at") OffsetDateTime committedAt) {}
 }

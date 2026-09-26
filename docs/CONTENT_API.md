@@ -1,7 +1,32 @@
 # BFF Content 외부 API 계약
 
 LOREKEEPER-551. [조사 결과](CONTENT_CONTRACT_AUDIT.md)의 26개 경로·메서드와 JSON
-필드를 외부 계약으로 유지한다. 해당 경로를 구현했고 실제 Content 연동 결과는
+필드를 외부 계약으로 유지한다.
+
+**2026-09-26 추가.** Content 가 그 뒤 메모·즐겨찾기·작업공간 상태·이미지 업로드를 구현했다.
+아래 13개를 같은 방식으로 명시 선언해 계약에 넣었다(총 39개). 조사표의 26개 계약은 그대로다.
+
+| 메서드·경로 | 요청 | 성공 |
+|---|---|---|
+| GET /projects/{id}/memos | scope 쿼리, file 이면 document_id | 200 `{memos: Memo[]}` |
+| POST /projects/{id}/memos | scope, document_id?, title?, body | 201 Memo, Location `/memos/{id}` |
+| PATCH /memos/{mid} | title?, body? | 200 Memo |
+| DELETE /memos/{mid} | — | 204 |
+| GET /projects/{id}/favorites | — | 200 `{file_ids: UUID[]}` |
+| PUT · DELETE /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
+| GET /projects/{id}/workspace-state | — | 200 `{layout}`; 처음이면 `layout: null` |
+| PUT /projects/{id}/workspace-state | layout | 204 |
+| POST /projects/{id}/images | file_name?, content_type, size_bytes | 201 ImageTicket, Location |
+| POST /projects/{id}/images/{iid}/complete | — | 200 Image |
+| GET /projects/{id}/images/{iid} | — | 200 Image |
+
+- Memo: id, project_id, scope(`project`·`file`), document_id, title, body, created_at, updated_at.
+- ImageTicket: image_id, key, upload_url, method, headers, expires_at, public_url.
+- Image: image_id, project_id, file_name, key, content_type, size_bytes, status(`PENDING`·`COMMITTED`),
+  public_url(`COMMITTED` 에서만), created_at, committed_at.
+- **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
+- 추가 오류 코드: 400 `INVALID_MEMO`·`INVALID_UPLOAD_REQUEST`, 404 `MEMO_NOT_FOUND`·`IMAGE_NOT_FOUND`,
+  409 `OBJECT_NOT_UPLOADED`. 해당 경로를 구현했고 실제 Content 연동 결과는
 [LOREKEEPER-574](verification/LOREKEEPER-574.md)에 기록했다.
 Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는다.
 
