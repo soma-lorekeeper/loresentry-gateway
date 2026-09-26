@@ -6,4 +6,5 @@ local HTTP와 prod 프로필 HTTPS 쿠키 왕복을 검증했다. 제품 서버 
 
 상세 결과와 남은 실제 Google·Windows 검증은 프론트 저장소의
 [LOREKEEPER-600 기록](../../../loresentry-frontend/docs/verification/LOREKEEPER-600.md)에 있다.
-Google 테스트 공급자를 사용한 자동 검증 성공만으로 이 Atomic을 완료하지 않는다.
+사용자 요청에 따라 실제 Google·Windows 검증을 완료 선행 조건에서 제외하고 이 Atomic을
+완료 처리했다. 미실행 검증은 통과로 간주하지 않는다.
