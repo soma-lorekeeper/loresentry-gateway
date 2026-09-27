@@ -1,7 +1,5 @@
 # BFF 브라우저 보안
 
-2026-09-26 단일 세션 보안 계약을 코드에 반영했다. 실제 브라우저·운영 검증은 후속 작업이다.
-
 ## 브라우저 경계
 
 로그인 인증값은 HttpOnly 세션 쿠키 하나다. OAuth 진행 중에만 별도 임시 쿠키를 사용한다.
@@ -82,7 +80,7 @@ HTTP 쿠키 예외는 명시적인 local 프로필의 localhost·루프백 공�
 OAuth 임시 쿠키도 [기존 환경별 계약](auth/LOGIN_FLOW.md#oauth-임시-쿠키)을 유지한다.
 
 개발 Auth의 DB·Redis·자격 증명도 운영과 분리하고, 개발 주소가 없으면 운영으로 대체하지 않는다.
-Google 콜백은 [Auth 설정과 Google 등록값](../../loresentry-authentication/docs/implementation/IMPLEMENTATION_NOTES.md#oauth-요청-설정)을 일치시킨다.
+Google 콜백은 [Auth 설정과 Google 등록값](../../loresentry-authentication/docs/API_CALLS.md#google-요청-설정)을 일치시킨다.
 비밀 값은 설정 파일에 기록하지 않고 환경변수·Secret 등 실행 환경에서 주입한다.
 
 ## CSRF 검증 계약
@@ -97,7 +95,7 @@ Google 콜백은 [Auth 설정과 Google 등록값](../../loresentry-authenticati
 | Origin 오류 | 누락, `null`, 복수 값, 형식 오류와 비허용 출처를 거절한다. Referer로 대체하지 않는다. |
 | 전용 헤더 | `X-LS-CSRF: 1`을 요구한다. 헤더 이름은 대소문자를 구분하지 않고, 값은 `1` 하나만 허용한다. |
 | 헤더 오류 | 누락, 중복 또는 다른 값을 거절한다. 쿼리·본문의 값으로 대체하지 않는다. |
-| 검증 실패 | [외부 오류 계약](EXTERNAL_API.md#보호-api-인증-실패)의 `403 CSRF_REJECTED`, `next_action=NONE`으로 응답한다. |
+| 검증 실패 | [외부 오류 계약](API.md#보호-api-인증-실패)의 `403 CSRF_REJECTED`, `next_action=NONE`으로 응답한다. |
 | 실패 시 동작 | 내부 서비스를 호출하거나 인증 쿠키를 설정·삭제하지 않는다. 프론트는 이 오류로 자동 재시도를 시작하지 않는다. |
 
 프론트는 변경 요청에 헤더를 추가한다. 값 `1`은 비밀이 아니며 갱신·삭제할 CSRF 상태도 없다.

@@ -1,19 +1,55 @@
-# BFF Content 외부 API 계약
+# BFF 제공 API — Content
 
-LOREKEEPER-551. [조사 결과](CONTENT_CONTRACT_AUDIT.md)의 26개 경로·메서드와 JSON
-필드를 외부 계약으로 유지한다.
+> **책임:** 브라우저가 BFF에 요청하는 Content API의 입력·응답·헤더·오류를 정한다.
+>
+> **제공자·호출자:** BFF가 제공하고 프론트엔드가 호출한다. Content 서버의 제공 명세가 아니다.
+>
+> **관련 기준:** 제공 API의 진입점은 [API.md](API.md), Content 서버 호출·DTO 변환은 [API_CALLS.md](API_CALLS.md#content-호출)를 본다.
 
-**2026-09-26 추가.** Content 가 그 뒤 메모·즐겨찾기·작업공간 상태·이미지 업로드를 구현했다.
-아래 13개를 같은 방식으로 명시 선언해 계약에 넣었다(총 39개). 조사표의 26개 계약은 그대로다.
+BFF가 제공하는 Content API의 경로·요청·응답과 오류 계약이다.
+Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는다.
+
+## API 목록
+
+모든 ID는 UUID이며 JSON 이름은 snake_case다. 요청의 `?`는 선택 항목이고,
+`—`는 요청 본문이 없음을 뜻한다. 응답 객체의 필드는 아래 응답 데이터에서 정의한다.
 
 | 메서드·경로 | 요청 | 성공 |
 |---|---|---|
+| GET /projects | — | 200 `{projects: Project[]}` |
+| GET /projects/trash | — | 200 `{projects: Project[]}` |
+| POST /projects | name, description | 201 Project, Location |
+| GET /projects/{id} | — | 200 Project |
+| PATCH /projects/{id} | name?, description? | 200 Project |
+| POST /projects/{id}/trash | — | 204 |
+| POST /projects/{id}/restore | — | 200 Project |
+| DELETE /projects/{id} | — | 204 |
+| GET /projects/{id}/files | — | 200 folders, episodes, documents |
+| GET /projects/{id}/files/trash | — | 200 `{files: TrashEntry[]}` |
+| POST /projects/{id}/files | kind, title, folder_code?, episode_id? | 201 Document 또는 Episode |
+| PATCH /files/{id} | title | 200 Document |
+| PATCH /files/{id}/position | folder_code, episode_id?, before_file_id? | 200 Document |
+| POST /files/{id}/trash | — | 204 |
+| POST /files/{id}/restore | — | 200 Document |
+| DELETE /files/{id} | — | 204 |
+| PATCH /episodes/{id} | title | 200 Episode |
+| DELETE /episodes/{id} | — | 204 |
+| GET /files/{id}/content | — | 200 Content |
+| PUT /files/{id}/content | Snapshot, If-Match, X-Save-Id? | 200 Content |
+| PUT /files/{id}/lock | locked | 200 Content |
+| GET /files/{id}/versions | — | 200 `{versions: Version[]}` |
+| POST /files/{id}/versions | label?, 본문 생략 가능 | 201 Version |
+| POST /files/{id}/versions/{vid}/restore | If-Match | 200 Content |
+| DELETE /files/{id}/versions/{vid} | — | 204 |
+| GET /projects/{id}/search | q 쿼리, 생략 가능 | 200 `{hits: Hit[]}` |
+
 | GET /projects/{id}/memos | scope 쿼리, file 이면 document_id | 200 `{memos: Memo[]}` |
 | POST /projects/{id}/memos | scope, document_id?, title?, body | 201 Memo, Location `/memos/{id}` |
 | PATCH /memos/{mid} | title?, body? | 200 Memo |
 | DELETE /memos/{mid} | — | 204 |
 | GET /projects/{id}/favorites | — | 200 `{file_ids: UUID[]}` |
-| PUT · DELETE /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
+| PUT /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
+| DELETE /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
 | GET /projects/{id}/workspace-state | — | 200 `{layout}`; 처음이면 `layout: null` |
 | PUT /projects/{id}/workspace-state | layout | 204 |
 | POST /projects/{id}/images | file_name?, content_type, size_bytes | 201 ImageTicket, Location |
@@ -25,14 +61,10 @@ LOREKEEPER-551. [조사 결과](CONTENT_CONTRACT_AUDIT.md)의 26개 경로·메�
 - Image: image_id, project_id, file_name, key, content_type, size_bytes, status(`PENDING`·`COMMITTED`),
   public_url(`COMMITTED` 에서만), created_at, committed_at.
 - **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
-- 추가 오류 코드: 400 `INVALID_MEMO`·`INVALID_UPLOAD_REQUEST`, 404 `MEMO_NOT_FOUND`·`IMAGE_NOT_FOUND`,
-  409 `OBJECT_NOT_UPLOADED`. 해당 경로를 구현했고 실제 Content 연동 결과는
-[LOREKEEPER-574](verification/LOREKEEPER-574.md)에 기록했다.
-Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는다.
 
 ## 명시적 API와 데이터 경계
 
-조사표의 각 경로·메서드를 컨트롤러에 선언한다. namespace 와일드카드 중계를 제거하고
+위 목록의 각 경로·메서드를 컨트롤러에 선언한다. namespace 와일드카드 중계를 제거하고
 지원하지 않는 경로는 404, 지원하지 않는 메서드는 405로 거절한다. HEAD는 명시한 GET의
 표준 HTTP 동작으로 제공하며 상태 변경을 수행하지 않는다.
 
@@ -53,14 +85,13 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 
 최종 보호 API는 CSRF(변경 요청)·단일 세션 검증과 활동 만료 연장 후 검증된 UUID만 사용한다.
 외부 X-User-Id, Cookie, Authorization은 도메인 서비스 전달 목록에서 제외하고 client가
-검증된 사용자 ID 하나로 X-User-Id를 구성한다. 단일 ID의 세션 검증·연장은 2026-09-26 코드에 반영했다. 실제 Content 통합 검증은 595에서 수행한다.
-과거 구조 정렬만 완료된 중간 버전을 인증 완료로 취급하지 않는다.
+검증된 사용자 ID 하나로 X-User-Id를 구성한다.
 
 | 헤더 | 처리 |
 |---|---|
 | Content-Type | JSON 본문 요청에서 application/json을 사용한다. |
-| If-Match | 문서 저장·버전 복원의 입력을 의미 변경 없이 전달한다. 필수 여부·revision 판단은 Content가 수행한다. |
-| X-Save-Id | 문서 저장의 선택적 멱등 키를 전달한다. BFF는 값을 새로 만들거나 실패 요청을 재전송하지 않는다. |
+| If-Match | 문서 저장·버전 복원에서 브라우저가 revision_no를 따옴표로 감싸 보낸 값을 변경 없이 전달한다. 필수 여부·revision 판단은 Content가 수행한다. |
+| X-Save-Id | 문서 저장의 선택적 UUID 멱등 키를 전달한다. BFF는 값을 새로 만들거나 실패 요청을 재전송하지 않는다. |
 | If-None-Match | GET에서 선택적으로 전달한다. 현재 Content는 이를 소비하지 않으며 BFF가 304·ETag 기능을 새로 제공하지 않는다. |
 | Location | 프로젝트 생성 시 검증된 응답 id로 상대 /projects/{id}를 구성한다. 내부 Location 원문을 복사하지 않는다. |
 | Cache-Control | 보호 Content 응답에 no-store를 적용한다. 임의 내부 캐시 정책을 복사하지 않는다. |
@@ -75,13 +106,26 @@ Origin·credentials·preflight·CSRF 순서는 [브라우저 보안](BROWSER_SEC
 
 ## 성공 응답
 
-조사표의 상태 코드·DTO·nullable 필드를 유지한다. 프로젝트 생성은 201과 상대 Location,
-파일·에피소드 생성 및 버전 생성은 201이다. 휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는
-204이며 본문이 없다. 그 밖의 표에 정의된 결과는 200이다.
+API 목록의 상태 코드·DTO·nullable 필드를 유지한다. null 필드를 임의로 생략하지 않는다.
+프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성 및 버전 생성은 201이다.
+휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는 204이며 본문이 없다.
+그 밖의 표에 정의된 결과는 200이다.
 
 프로젝트 last_file은 null 또는 최근 수정된 활성 문서의 id/title이며 외부 DTO로 변환한다.
 파일 생성은 요청 kind에 따라 문서와 에피소드 내부 DTO를 구분한다. 트리 응답은
 folders·episodes·documents의 정규화된 목록으로 유지한다.
+
+## 응답 데이터
+
+- Project: id, name, description, last_worked_at, trashed_at, created_at, last_file. last_file은 null 또는 최근 수정된 활성 문서의 `{id, title}`이다.
+- Document: id, title, folder_code, episode_id, rank, locked, char_count, revision_no, trashed_at, updated_at.
+- Episode: id, name, rank. 생성 요청의 title이 응답에서는 name이다.
+- 트리: folders는 code/name/position, episodes는 Episode 목록, documents는 Document 목록이다. 트리 조립은 프론트 책임이다.
+- TrashEntry: id, title, folder_code, episode_name, trashed_at.
+- Snapshot: title, body_md, properties(`{key,value}` 목록), relations(`{relation_key,target_document_id}` 목록).
+- Content: id, project_id, title, folder_code, episode_id, body_md, properties, relations, locked, char_count, revision_no, updated_at.
+- Version: id, file_id, kind, label, source_revision_no, created_at, snapshot.
+- Hit: file_id, title, folder_code, episode_name, snippet(`before,match,after` 또는 null), updated_at.
 
 ## 오류 변환
 
@@ -109,7 +153,7 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 외부 의존성과 적용 순서
 
-- Content·프론트의 실제 26개 API와 저장 헤더는 구조 전환에서 유지한다.
+- Content·프론트의 실제 38개 API와 저장 헤더는 구조 전환에서 유지한다.
 - 프론트의 credentials, CSRF, Google 로그인 결과, 세션 오류·인증 전환 조율과 개발 신원 제거는
   별도 연동 작업이다. 프론트가 준비되지 않아도 임시 신원을 최종 인증으로 허용하지 않는다.
 - 프론트 오류 매핑에는 CONTENT_UNAVAILABLE, UPSTREAM_INVALID_RESPONSE 및 인증·세션 오류가
@@ -118,6 +162,9 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 검증 기준
 
-26개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
+38개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
 문서 저장 헤더와 URI 인코딩을 검증한다. 임의 하위 경로와 HTTP 메서드·추가 요청 필드,
 내부 민감 필드 노출·잘못된 응답·통신 실패 및 하위 전송 계층의 자동 재시도 부재를 확인한다.
+
+메모·이미지 경로는 추가로 `400 INVALID_MEMO / INVALID_UPLOAD_REQUEST`,
+`404 MEMO_NOT_FOUND / IMAGE_NOT_FOUND`, `409 OBJECT_NOT_UPLOADED`를 반환할 수 있다.

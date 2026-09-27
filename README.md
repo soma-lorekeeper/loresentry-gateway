@@ -2,7 +2,10 @@
 
 Lore Sentry의 브라우저 API 경계다. Java 21, Spring Boot 4.1.1 Servlet MVC와
 RestClient를 사용한다. Auth·Content의 명시적 API를 호출하며 도메인 권한은
-각 서비스가 판단한다. 단일 세션 인증을 구현했고 브라우저·운영 전환 검증은 후속 작업이다.
+각 서비스가 판단한다. 브라우저 인증은 단일 세션 ID를 사용한다.
+
+제공 계약은 [API.md](docs/API.md), 서버 호출은 [API_CALLS.md](docs/API_CALLS.md),
+문서별 역할은 [문서 안내](docs/README.md)에서 확인한다.
 
 ## 인증과 API
 
@@ -19,7 +22,7 @@ RestClient를 사용한다. Auth·Content의 명시적 API를 호출하며 도�
 | `GET /auth/oauth/google/callback` | 단일 세션 쿠키 설정 후 고정 로그인 화면으로 복귀 |
 | `POST /auth/sessions/revoke` | CSRF 이후 폐기 요청과 쿠키 삭제 헤더, 폐기 결과 반환 |
 | `GET/PATCH /auth/users/me` | 확인된 사용자 계정 조회·이름 수정 |
-| Content 26개 경로 | [Content 계약](docs/CONTENT_API.md) |
+| Content 38개 경로 | [Content 계약](docs/CONTENT_API.md) |
 
 외부 X-User-Id·Cookie·Authorization은 도메인 호출에 전달하지 않는다.
 검증된 UUID 하나만 내부 사용자 헤더로 전달한다. 인증 실패는 401, 저장소 장애는
@@ -64,10 +67,23 @@ TEST_REDIS_PORT=<port> TEST_VALKEY_PORT=<port> ./gradlew sessionIntegrationTest
 python3 integration/session/run.py --auth-source ../loresentry-authentication
 ```
 
-LOREKEEPER-589 기준 일반 테스트 176개와 Redis/Valkey 테스트 12개를 통과했다.
-실제 서비스 실행은 [통합 러너](integration/session/README.md), 최신 결과는
-[검증 기록](docs/verification/LOREKEEPER-590.md)을 참고한다. 과거 기록은 소급 변경하지 않는다.
+실제 서비스 실행은 [통합 러너](integration/session/README.md)를 따른다.
+테스트 보고서는 `build/reports/tests/`에 생성되며 실행 결과는 해당 이슈에서 관리한다.
 
 main push의 CI/CD는 build, 이미지 게시, GitOps 태그 변경과 Argo CD 배포를 실행한다.
 Work·Deliverable 브랜치 게시로는 이 파이프라인이 실행되지 않는다.
 [운영 준비](docs/OPERATIONS.md)와 [공동 전환](docs/ROLLOUT.md)의 완료 확인이 필요하다.
+
+### Redis·Valkey 통합 테스트
+
+격리된 Redis 7.4와 Valkey 9.0.6 컨테이너에
+[`src/test/resources/session-redis.conf`](src/test/resources/session-redis.conf)를 설정 파일로
+마운트하고 해당 설정으로 서버를 시작한다. 호스트에는 루프백 포트로만 노출한다.
+이 설정은 비밀번호 없는 관리자 계정을 포함하므로 테스트 전용으로 사용한다.
+Gradle 프로세스가 두 서버의 루프백 포트에 접근할 수 있어야 한다.
+
+각 포트를 `TEST_REDIS_PORT`, `TEST_VALKEY_PORT` 환경변수로 지정한 뒤 실행한다.
+
+```bash
+./gradlew sessionIntegrationTest
+```

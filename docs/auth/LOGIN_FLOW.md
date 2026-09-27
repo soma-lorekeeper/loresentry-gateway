@@ -1,6 +1,6 @@
 # BFF 로그인 연동
 
-2026-09-26 목표 설계다. 외부 로그인 시작과 Google callback은 BFF가 받는다.
+외부 로그인 시작과 Google callback은 BFF가 받는다.
 
 1. **로그인 시작:** `GET /auth/oauth/google/prepare` 요청을 받으면 같은 경로의 Auth POST API에 로그인 준비를 요청한다.
    응답에 따라 브라우저 연결용 임시 쿠키를 설정하고 Google 로그인 URL로 리다이렉트한다.
@@ -8,10 +8,10 @@
    브라우저가 돌아오면 `code`·`state` 또는 로그인 오류와 임시 쿠키의 값을 Auth에 전달한다.
    BFF는 GET으로 받고 Auth의 같은 경로에는 POST로 전달한다.
 3. **로그인 완료:** Auth가 반환한 세션 ID를 [인증 쿠키](../BROWSER_SECURITY.md#세션-쿠키)로
-   설정하고, 성공·실패 모두 [고정 프론트 주소](../EXTERNAL_API.md#로그인-후-고정-주소로-복귀)로 복귀시킨다.
+   설정하고, 성공·실패 모두 [고정 프론트 주소](../API.md#로그인-후-고정-주소로-복귀)로 복귀시킨다.
 
 BFF는 서버에 사용자별 임시 상태를 저장하지 않는다. 검증은 [Auth 로그인 흐름](../../../loresentry-authentication/docs/login/LOGIN_FLOW.md),
-콜백 URL은 [Google 요청 설정](../../../loresentry-authentication/docs/login/OAUTH_STATE.md#google-요청-설정)을 따른다.
+콜백 URL은 [Google 요청 설정](../../../loresentry-authentication/docs/API_CALLS.md#google-요청-설정)을 따른다.
 
 ## OAuth 임시 쿠키
 

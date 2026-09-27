@@ -1,7 +1,17 @@
-# BFF 인증·본인 계정 외부 API
+# BFF 제공 API
 
-2026-09-26 단일 세션 ID API를 코드에 반영했다. 브라우저·운영 검증은 후속 작업이다.
-Content의 경로·도메인 응답은 [별도 계약](CONTENT_API.md)을 따른다.
+> **책임:** BFF가 브라우저에 제공하는 경로·입력·응답·인증과 오류 계약을 정한다.
+>
+> **제공자·호출자:** BFF가 제공하고 프론트엔드가 호출한다.
+>
+> **확인할 때:** 프론트가 요청할 API나 브라우저에 반환할 결과를 구현할 때.
+>
+> **관련 기준:** Auth·Content 호출은 [API_CALLS.md](API_CALLS.md), 쿠키·CSRF·CORS는 [브라우저 보안](BROWSER_SECURITY.md)을 본다.
+
+단일 세션 ID를 사용하는 현재 BFF API 계약이다.
+이 문서는 제공 API의 진입점이며 인증·본인 계정 API를 상세히 정의한다.
+Content의 38개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
+공개 헬스 체크와 실행 안내는 [프로젝트 README](../README.md#인증과-api)에서 확인한다.
 
 ## 공통 계약
 
@@ -15,16 +25,16 @@ Content의 경로·도메인 응답은 [별도 계약](CONTENT_API.md)을 따른
 
 ## API 목록
 
-| 외부 API | Auth 내부 API | BFF 성공 처리 |
+| 제공 API | 브라우저 입력 | 성공 결과 |
 |---|---|---|
-| `GET /auth/oauth/google/prepare` | `POST /auth/oauth/google/prepare` | 임시 쿠키 설정 후 Google로 `302` |
-| `GET /auth/oauth/google/callback` | `POST /auth/oauth/google/callback` | 세션 쿠키 설정 후 고정 프론트로 `303` |
-| `POST /auth/sessions/revoke` | `POST /auth/sessions/revoke` | CSRF 검사, ID 폐기 요청, 쿠키 삭제와 결과 본문 |
-| `GET /auth/users/me` | `GET /auth/users/me` | 세션 확인·연장 후 `200`, 계정 |
-| `PATCH /auth/users/me` | `PATCH /auth/users/me` | CSRF·세션 확인·연장 후 `200`, 수정된 계정 |
+| `GET /auth/oauth/google/prepare` | 없음 | 임시 쿠키 설정 후 Google로 `302` |
+| `GET /auth/oauth/google/callback` | Google callback 쿼리와 OAuth 임시 쿠키 | 세션 쿠키 설정 후 고정 프론트로 `303` |
+| `POST /auth/sessions/revoke` | CSRF 헤더와 세션 쿠키, 본문 없음 | 쿠키 삭제 헤더와 폐기 확인 결과 |
+| `GET /auth/users/me` | 세션 쿠키 | `200`, 계정 |
+| `PATCH /auth/users/me` | CSRF 헤더·세션 쿠키와 `display_name` 본문 | `200`, 수정된 계정 |
 
 계정 응답은 `id`, `display_name`, `email`, 수정 입력은 `display_name`만 허용한다.
-[Auth 내부 API](../../loresentry-authentication/docs/INTERNAL_API.md)를 따른다.
+내부 호출의 입력 구성과 응답 변환은 [Auth 호출](API_CALLS.md#auth-호출)을 따른다.
 세션 활동 연장을 위한 별도 브라우저 엔드포인트는 없다.
 
 ## 로그인 후 고정 주소로 복귀

@@ -31,7 +31,7 @@ tasks.named('test') {
 	useJUnitPlatform { excludeTags 'redis' }
 }
 
-// Requires isolated Redis and Valkey instances; see docs/verification/LOREKEEPER-562.md.
+// Requires isolated Redis and Valkey instances; see README.md (Redis·Valkey 통합 테스트).
 tasks.register('sessionIntegrationTest', Test) {
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath

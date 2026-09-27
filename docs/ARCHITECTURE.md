@@ -1,7 +1,5 @@
 # BFF 역할과 애플리케이션 구조
 
-2026-09-26 단일 세션 인증 경계를 코드에 반영했다. 브라우저·운영 검증은 후속 작업이다.
-
 **BFF는 하나의 Gradle 모듈에서 브라우저 HTTP 처리, 요청 조율, 내부 서비스 호출,
 보안을 분리한다.** 기존 Spring MVC·Virtual Threads·RestClient 구성을 유지한다.
 
@@ -61,23 +59,23 @@ Spring Security 인증 객체와 RestClient 응답 객체는 사용하지 않는
 외부·내부 API DTO는 분리한다. client는 내부 응답을 변환하고, application은 결과를 조합하며,
 web은 외부 응답을 만든다. 내부 응답을 범용 `Map`으로 노출하거나 Auth와 HTTP DTO 라이브러리를 공유하지 않는다.
 
-client의 헤더 구성은 [사용자 정보 전달 계약](../../docs/bff/INTERNAL_SERVICE_CALLS.md#사용자-정보-전달),
-보호 API와 인증 진입점 구분은 [인증 책임](../../docs/bff/auth/AUTH_RESPONSIBILITIES.md)을 따른다.
+호출 대상별 헤더·입력 구성은 [호출 API](API_CALLS.md)를 따른다.
+보호 API와 인증 진입점 구분은 [제공 API](API.md#공통-계약)를 따른다.
 
 ## 응답 조합과 오류 처리
 
 응답 조합은 application이 담당한다. 병렬 실행과 부분 실패 정책은 실제 조합 API가 정해질 때 설계한다.
 보호 요청에서는 [세션 활동 흐름](auth/SESSION_FLOW.md)에 따라 검증과 만료 연장을 수행한다.
 
-client는 [내부 호출 정책](../../docs/bff/INTERNAL_SERVICE_CALLS.md#초기-http-호출-정책)에 따라 오류를 분류한다.
+내부 HTTP 제한과 실패 분류는 [호출 규칙](API_CALLS.md#공통-호출-규칙)을 따른다.
 OAuth 소비·세션 폐기 결과가 불명확하면 성공이나 미실행으로 단정하지 않고,
-`login_request_consumed` 등 [Auth 내부 API](../../loresentry-authentication/docs/INTERNAL_API.md)의 처리 정보를 보존한다.
+`login_request_consumed` 등 [Auth 제공 API](../../loresentry-authentication/docs/API.md)의 처리 정보를 보존한다.
 
 application은 후속 처리를 정하고 web은 상태 코드·본문·쿠키·리다이렉트를 만든다.
 로그아웃의 Auth 폐기 실패처럼 쿠키 삭제가 필요한 결과를 공통 예외 응답으로 먼저 끝내지 않는다.
 
 컨트롤러 진입 전 보안 실패는 security가 응답한다. web과 security는 같은
-[외부 오류 계약](EXTERNAL_API.md)을 따르며, [CSRF 검사](BROWSER_SECURITY.md#csrf-검증-계약)는 세션 검사보다 먼저 수행한다.
+[외부 오류 계약](API.md)을 따르며, [CSRF 검사](BROWSER_SECURITY.md#csrf-검증-계약)는 세션 검사보다 먼저 수행한다.
 내부 본문·헤더·예외 메시지를 그대로 노출하지 않는다.
 
 ## 선택 이유

@@ -1,6 +1,6 @@
 # 프론트 인증 연동 인계
 
-2026-09-26 단일 세션 ID 방식의 목표 계약이다. 프론트 코드는 이번 작업에서 수정하지 않았다.
+단일 세션 ID 방식의 프론트 연동 계약이다.
 브라우저는 HttpOnly 쿠키만 사용하고 ID를 JavaScript·localStorage·응답 JSON에서 읽지 않는다.
 
 ## 요청과 로그인
@@ -51,7 +51,7 @@ heartbeat를 추가하지 않는다. 실제 보호 API 폴링은 활동으로 �
 
 `POST /auth/sessions/revoke`를 본문 없이 호출한다. session_revocation의 confirmed·
 not_requested·rejected·unconfirmed를 구분하고 폐기 미확인을 완전한 성공으로 표시하지 않는다.
-필드·상태는 [외부 API](EXTERNAL_API.md#로그아웃-응답)를 따른다.
+필드·상태는 [BFF 제공 API](API.md#로그아웃-응답)를 따른다.
 
 Content의 If-Match·X-Save-Id·409 충돌 처리·Location·검색 인코딩은
 [기존 도메인 계약](CONTENT_API.md)을 유지한다. 새 인증 연동의 쿠키 왕복·14일 경계·
