@@ -1,7 +1,11 @@
 # BFF 역할과 애플리케이션 구조
 
+> **책임:** BFF의 계층·의존 방향·데이터와 오류 전달 경계를 정한다.
+>
+> **확인할 때:** 로직의 위치를 정하거나 패키지 간 의존성을 변경할 때.
+
 **BFF는 하나의 Gradle 모듈에서 브라우저 HTTP 처리, 요청 조율, 내부 서비스 호출,
-보안을 분리한다.** 기존 Spring MVC·Virtual Threads·RestClient 구성을 유지한다.
+보안을 분리한다.** Spring MVC·Virtual Threads·RestClient를 사용한다.
 
 ## 역할과 책임 경계
 
@@ -91,12 +95,11 @@ application은 후속 처리를 정하고 web은 상태 코드·본문·쿠키·
 
 ## 구현과 검증
 
-web·application·client·security·config 경계와 Content DTO·경로는 유지하고 인증 경계를
-단일 ID 방식으로 전환한다. 현재 소스의 클래스 이름을 새 계약의 구현 완료로 해석하지 않는다.
+패키지 의존 방향과 DTO 경계를 확인하고 다음 인증 동작을 검증한다.
 
 - 보안 실패 요청의 내부 서비스 미도달과 쿠키 미변경을 검증한다.
 - client의 세션 검증·연장과 오류·실행 결과 불명 처리를 실제 저장소에서 검증한다.
 - application의 조율, web의 쿠키·리다이렉트·외부 DTO와 민감값 비노출을 확인한다.
 - 프론트의 활동 연장과 인증 전환, 운영 ACL·접근 제한을 확인한다.
 
-[운영 준비](OPERATIONS.md)와 [공동 전환](ROLLOUT.md)을 새 계약으로 수행한다.
+운영 환경 확인은 [운영 설정](OPERATIONS.md), 배포·롤백은 [배포·복구](ROLLOUT.md)를 따른다.

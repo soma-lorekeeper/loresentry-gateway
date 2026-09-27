@@ -1,11 +1,15 @@
 # 프론트 인증 연동 인계
 
+> **책임:** 프론트의 로그인 확인·오류 처리·탭 간 인증 전환 조율을 정한다.
+>
+> **확인할 때:** 프론트에서 인증 상태와 진행 중인 API 요청을 관리할 때.
+
 단일 세션 ID 방식의 프론트 연동 계약이다.
 브라우저는 HttpOnly 쿠키만 사용하고 ID를 JavaScript·localStorage·응답 JSON에서 읽지 않는다.
 
 ## 요청과 로그인
 
-- local은 localhost:3000에서 localhost:8000, prod는 loresentry.com에서 api.loresentry.com을 호출한다.
+- API 주소는 [환경별 브라우저 설정](BROWSER_SECURITY.md#환경별-설정)을 따른다.
 - API 요청에는 `credentials: "include"`를 적용하고 사용자 ID 헤더를 인증 수단으로 보내지 않는다.
 - POST·PUT·PATCH·DELETE에는 `X-LS-CSRF: 1`을 추가한다. 로그아웃도 동일하다.
 - 로그인은 `GET /auth/oauth/google/prepare`로 페이지 이동한다.
@@ -14,7 +18,7 @@
 
 ## 활동과 만료
 
-보호 요청의 인증 성공마다 서버 TTL과 같은 ID의 쿠키 만료가 14일로 연장된다.
+보호 요청의 인증 성공마다 [세션·쿠키 수명](BROWSER_SECURITY.md#세션-쿠키)이 연장된다.
 화면만 열어 두거나 입력만 하는 것은 활동으로 계산되지 않는다. 로그인 유지를 위한
 heartbeat를 추가하지 않는다. 실제 보호 API 폴링은 활동으로 계산된다.
 인증에 성공한 뒤 도메인 오류가 발생한 요청도 세션은 연장될 수 있다.
@@ -54,5 +58,5 @@ not_requested·rejected·unconfirmed를 구분하고 폐기 미확인을 완전�
 필드·상태는 [BFF 제공 API](API.md#로그아웃-응답)를 따른다.
 
 Content의 If-Match·X-Save-Id·409 충돌 처리·Location·검색 인코딩은
-[기존 도메인 계약](CONTENT_API.md)을 유지한다. 새 인증 연동의 쿠키 왕복·14일 경계·
+[Content 제공 계약](CONTENT_API.md)을 따른다. 쿠키 왕복·만료 경계·
 활동 연장·탭 전환·늦은 응답·장애는 실제 브라우저로 검증해야 한다.

@@ -1,5 +1,9 @@
 # BFF 브라우저 보안
 
+> **책임:** 브라우저 쿠키·CSRF·CORS와 환경별 보안 설정을 정한다.
+>
+> **확인할 때:** 쿠키 처리·보안 필터·브라우저 출처 설정을 변경할 때.
+
 ## 브라우저 경계
 
 로그인 인증값은 HttpOnly 세션 쿠키 하나다. OAuth 진행 중에만 별도 임시 쿠키를 사용한다.
@@ -77,7 +81,7 @@ localhost는 Windows 브라우저 기준이며 Linux 호스트의 서버에는 S
 
 HTTP 쿠키 예외는 명시적인 local 프로필의 localhost·루프백 공개 주소에만 적용한다.
 임의 요청 헤더나 ALB 뒤의 내부 HTTP 연결을 근거로 운영 쿠키의 Secure를 해제하지 않는다.
-OAuth 임시 쿠키도 [기존 환경별 계약](auth/LOGIN_FLOW.md#oauth-임시-쿠키)을 유지한다.
+OAuth 임시 쿠키도 [환경별 계약](auth/LOGIN_FLOW.md#oauth-임시-쿠키)을 유지한다.
 
 개발 Auth의 DB·Redis·자격 증명도 운영과 분리하고, 개발 주소가 없으면 운영으로 대체하지 않는다.
 Google 콜백은 [Auth 설정과 Google 등록값](../../loresentry-authentication/docs/API_CALLS.md#google-요청-설정)을 일치시킨다.
@@ -145,5 +149,4 @@ SameSite는 추가 방어이며 이 검사를 대체하지 않는다. 허용된 
 - 쿠키 만료·14일 비활동·응답 지연·다른 탭 로그인·로그아웃 경합을 검증한다.
 - 비허용 Origin·중복 헤더·폼 제출을 거절하고 정상 사전 요청은 허용하는지 확인한다.
 
-이전 브라우저 검증 제외 기록은 새 계약의 완료 판정이 아니다.
-구현 후 [프론트 인계](FRONTEND_AUTH_CONTRACT.md)와 [공동 전환](ROLLOUT.md)을 검증한다.
+프론트 동작은 [프론트 연동](FRONTEND_AUTH_CONTRACT.md), 배포 확인은 [배포·복구](ROLLOUT.md)를 따른다.
