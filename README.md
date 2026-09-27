@@ -1,20 +1,22 @@
 # loresentry-gateway
 
+> 현재 코드는 JWT 기반 AT·RT를 사용한다. 아래 API·쿠키·실행 안내는 현재 코드 기준이며, `docs/`의 인증 설계는 아직 구현하지 않은 단일 세션 ID 방식이다. [문서 안내](docs/README.md)에서 목표 계약을 확인한다.
+
 Lore Sentry의 브라우저 API 경계다. Java 21, Spring Boot 4.1.1의 Servlet MVC,
 Virtual Threads와 RestClient를 사용한다. 명시적인 외부 API를 통해 Auth·Content를
 호출하며, 도메인 데이터의 접근 권한과 규칙은 해당 서비스가 결정한다.
 
-BFF 인증·Content 구현과 격리 통합 검증은 완료했다. 프론트가 필요한 브라우저 검증은
-사용자 요청으로 이번 완료 범위에서 제외했으며 실제 검증을 수행한 것은 아니다.
-**운영 설정·ACL·접근 제한은 미준비이므로 main push·자동 배포 전 확인이 필요하다.**
-[운영 준비](docs/OPERATIONS.md)와 [공동 전환 절차](docs/ROLLOUT.md)를 따른다.
+main push는 자동 배포를 실행하므로 운영 설정·ACL·접근 제한을 확인한 뒤 진행한다.
+세션 ID 방식으로 전환할 때는 [운영 준비](docs/OPERATIONS.md)와 [공동 전환 절차](docs/ROLLOUT.md)를 따른다.
+
+제공 계약은 [API.md](docs/API.md), Auth·Content 호출 방법은 [API_CALLS.md](docs/API_CALLS.md)에서 관리한다.
 
 ## 요청 처리
 
 `web → application → client`로 HTTP 경계·요청 조율·내부 호출을 분리한다.
 `security`가 CSRF·AT·활성 세션을 검증하고 `config`가 키·연결·환경을 구성한다.
-[구조](docs/ARCHITECTURE.md), [외부 API](docs/EXTERNAL_API.md),
-[Content API](docs/CONTENT_API.md)에 경로와 응답을 정의한다.
+[Content API](docs/CONTENT_API.md)는 도메인 경로·응답을 정의한다.
+[목표 구조](docs/ARCHITECTURE.md)와 [목표 인증 API](docs/API.md)는 세션 ID 전환 시 적용한다.
 
 - 상태 변경 요청은 정확한 Origin과 `X-LS-CSRF: 1`을 먼저 검사한다.
 - 보호 요청은 HttpOnly AT 쿠키의 RS256 서명·kid·클레임·시각·sid를 검증한 뒤,
@@ -58,7 +60,8 @@ CORS는 위 Origin 하나만 정확하게 허용한다. credentials를 허용하
 서브도메인·다른 localhost 포트·127.0.0.1을 패턴으로 허용하지 않는다.
 프론트는 `credentials: "include"`, 상태 변경의 CSRF 헤더, 로그인 result 확인 후
 users/me 조회와 명시적 재발급·탭 조율을 구현해야 한다.
-[보안 계약](docs/BROWSER_SECURITY.md)과 [프론트 인계](docs/FRONTEND_AUTH_CONTRACT.md)를 참고한다.
+세션 ID 방식으로 전환할 때는 [목표 보안 계약](docs/BROWSER_SECURITY.md)과
+[프론트 연동 계약](docs/FRONTEND_AUTH_CONTRACT.md)을 적용한다.
 
 ## 로컬 실행
 
@@ -79,7 +82,8 @@ curl http://localhost:8000/health
 
 local/prod 프로필을 정확히 하나 선택해야 한다. 공개키 파일·kid·세션 Redis 계정은 필수이며
 누락되거나 잘못되면 기동을 거절한다. prod의 내부 서비스 주소는 Kubernetes Service DNS를
-사용한다. 세부 운영 주입 요구는 [운영 설정 표](docs/OPERATIONS.md#bff-설정과-secret)에 있다.
+사용한다. 위 JWT 설정은 현재 구현에 필요하며, 세션 ID 전환 후의 주입 요구는
+[목표 운영 설정 표](docs/OPERATIONS.md#설정과-secret)를 따른다.
 
 ## 검증
 
@@ -87,10 +91,23 @@ local/prod 프로필을 정확히 하나 선택해야 한다. 공개키 파일·
 ./gradlew --no-daemon build
 ```
 
-일반 테스트 204개가 통과했다. Redis 통합 테스트는 별도 태그·태스크로 분리한다.
-격리 Redis·Valkey를 준비하고 `TEST_REDIS_PORT`, `TEST_VALKEY_PORT`를 지정해
-`./gradlew sessionIntegrationTest`를 실행한다. 10개 테스트의 환경·재현 조건은
-[세션 조회 검증](docs/verification/LOREKEEPER-562.md)에 있다.
+일반 `build`는 `redis` 태그를 제외한다. Redis 통합 테스트는 별도 태스크로 실행한다.
+
+### Redis·Valkey 통합 테스트
+
+격리된 Redis 7.4와 Valkey 9.0.6 컨테이너에
+[`src/test/resources/session-redis.conf`](src/test/resources/session-redis.conf)를 설정 파일로
+마운트하고 해당 설정으로 서버를 시작한다. 호스트에는 루프백 포트로만 노출한다.
+이 설정은 비밀번호 없는 관리자 계정을 포함하므로 테스트 전용으로 사용한다.
+Gradle 프로세스가 두 서버의 루프백 포트에 접근할 수 있어야 한다.
+
+각 포트를 `TEST_REDIS_PORT`, `TEST_VALKEY_PORT` 환경변수로 지정한 뒤 실행한다.
+
+```bash
+./gradlew sessionIntegrationTest
+```
+
+### Auth·Content 통합 테스트
 
 실제 Auth·PostgreSQL·Valkey와 BFF 두 인스턴스, 선택한 Content를 자동으로 만들고 정리하는
 검증 도구도 제공한다. Docker·Python 3·OpenSSL 및 해당 서비스의 로컬 Git 저장소가 필요하다.
@@ -99,10 +116,9 @@ local/prod 프로필을 정확히 하나 선택해야 한다. 공개키 파일·
 python3 integration/session/run.py --content-source ../loresentry-content
 ```
 
-[통합 실행 안내](integration/session/README.md), [Auth 결과](docs/verification/LOREKEEPER-573.md),
-[Content 결과·브라우저 제외 범위](docs/verification/LOREKEEPER-574.md)를 참고한다.
+설정·격리 범위는 [통합 실행 안내](integration/session/README.md)를 따른다.
 외부 Google은 테스트용 HTTP/JWK 응답이며 운영 Google·실제 브라우저·운영 네트워크 검증을
-대체하지 않는다. 과거 이슈별 테스트 수치는 실행 당시 기록으로 보존한다.
+대체하지 않는다. 현재 도구는 JWT 방식용이며 새 세션 ID 설계의 검증에는 수정이 필요하다.
 
 ## 배포
 
@@ -110,6 +126,6 @@ main push는 [CI/CD](.github/workflows/ci-cd.yaml)를 통해 일반 build, ECR �
 GitOps 이미지 태그 변경과 Argo CD 배포를 실행한다. CI가 별도 실제 서비스 통합 태스크까지
 실행하는 것은 아니다. Work·Deliverable 브랜치 게시로는 이 파이프라인이 실행되지 않는다.
 
-[운영 준비](docs/OPERATIONS.md)가 미완료인 동안 main push를 보류한다. Auth와 BFF의
-sid 계약을 맞추고, 진행 요청 배출·구 인스턴스 제거·재로그인 및 롤백 시 구 세션 부활 위험을
-[전환 절차](docs/ROLLOUT.md)에 따라 확인한다. 설계·검증 문서는 [문서 안내](docs/README.md)에서 찾는다.
+Auth·BFF의 인증 계약과 프론트·운영 설정의 호환성을 확인한 뒤 배포한다.
+세션 ID 전환의 진행 요청 배출·구 인스턴스 제거·재로그인과 롤백은
+[전환 절차](docs/ROLLOUT.md)를 따른다.

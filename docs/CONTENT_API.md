@@ -1,13 +1,53 @@
-# BFF Content 외부 API 계약
+# BFF 제공 API — Content
 
-LOREKEEPER-551. [조사 결과](CONTENT_CONTRACT_AUDIT.md)의 26개 경로·메서드와 JSON
-필드를 외부 계약으로 유지한다. 해당 경로를 구현했고 실제 Content 연동 결과는
-[LOREKEEPER-574](verification/LOREKEEPER-574.md)에 기록했다.
+> **책임:** 브라우저가 BFF에 요청하는 Content API의 입력·응답·헤더·오류를 정한다.
+>
+> **제공자·호출자:** BFF가 제공하고 프론트엔드가 호출한다. Content 서버의 제공 명세가 아니다.
+>
+> **관련 기준:** 제공 API의 진입점은 [API.md](API.md), Content 서버 호출·DTO 변환은 [API_CALLS.md](API_CALLS.md#content-호출)를 본다.
+
+BFF가 제공하는 Content API의 경로·요청·응답과 오류 계약이다.
 Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는다.
+인증 경계는 목표 세션 ID 설계로 전환할 예정이며 도메인 API는 유지한다.
+
+## API 목록
+
+모든 ID는 UUID이며 JSON 이름은 snake_case다. 요청의 `?`는 선택 항목이고,
+`—`는 요청 본문이 없음을 뜻한다. 응답 객체의 필드는 아래 응답 데이터에서 정의한다.
+이미지 API는 현재 BFF 노출 범위에 포함하지 않는다.
+
+| 메서드·경로 | 요청 | 성공 |
+|---|---|---|
+| GET /projects | — | 200 `{projects: Project[]}` |
+| GET /projects/trash | — | 200 `{projects: Project[]}` |
+| POST /projects | name, description | 201 Project, Location |
+| GET /projects/{id} | — | 200 Project |
+| PATCH /projects/{id} | name?, description? | 200 Project |
+| POST /projects/{id}/trash | — | 204 |
+| POST /projects/{id}/restore | — | 200 Project |
+| DELETE /projects/{id} | — | 204 |
+| GET /projects/{id}/files | — | 200 folders, episodes, documents |
+| GET /projects/{id}/files/trash | — | 200 `{files: TrashEntry[]}` |
+| POST /projects/{id}/files | kind, title, folder_code?, episode_id? | 201 Document 또는 Episode |
+| PATCH /files/{id} | title | 200 Document |
+| PATCH /files/{id}/position | folder_code, episode_id?, before_file_id? | 200 Document |
+| POST /files/{id}/trash | — | 204 |
+| POST /files/{id}/restore | — | 200 Document |
+| DELETE /files/{id} | — | 204 |
+| PATCH /episodes/{id} | title | 200 Episode |
+| DELETE /episodes/{id} | — | 204 |
+| GET /files/{id}/content | — | 200 Content |
+| PUT /files/{id}/content | Snapshot, If-Match, X-Save-Id? | 200 Content |
+| PUT /files/{id}/lock | locked | 200 Content |
+| GET /files/{id}/versions | — | 200 `{versions: Version[]}` |
+| POST /files/{id}/versions | label?, 본문 생략 가능 | 201 Version |
+| POST /files/{id}/versions/{vid}/restore | If-Match | 200 Content |
+| DELETE /files/{id}/versions/{vid} | — | 204 |
+| GET /projects/{id}/search | q 쿼리, 생략 가능 | 200 `{hits: Hit[]}` |
 
 ## 명시적 API와 데이터 경계
 
-조사표의 각 경로·메서드를 컨트롤러에 선언한다. namespace 와일드카드 중계를 제거하고
+위 목록의 각 경로·메서드를 컨트롤러에 선언한다. namespace 와일드카드 중계를 제거하고
 지원하지 않는 경로는 404, 지원하지 않는 메서드는 405로 거절한다. HEAD는 명시한 GET의
 표준 HTTP 동작으로 제공하며 상태 변경을 수행하지 않는다.
 
@@ -26,22 +66,21 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 
 ## 인증과 헤더
 
-최종 보호 API는 CSRF(변경 요청)·AT·활성 세션 검사 후 검증된 UUID만 사용한다.
+최종 보호 API는 CSRF(변경 요청)·단일 세션 검증과 활동 만료 연장 후 검증된 UUID만 사용한다.
 외부 X-User-Id, Cookie, Authorization은 도메인 서비스 전달 목록에서 제외하고 client가
-검증된 사용자 ID 하나로 X-User-Id를 구성한다. AT·활성 세션 검사는 현재 구현에 포함된다.
-과거 구조 정렬만 완료된 중간 버전을 인증 완료로 취급하지 않는다.
+검증된 사용자 ID 하나로 X-User-Id를 구성한다. 단일 ID의 세션 검증·연장은 2026-09-26 목표 설계이며 현재 코드에는 아직 반영하지 않았다.
 
 | 헤더 | 처리 |
 |---|---|
 | Content-Type | JSON 본문 요청에서 application/json을 사용한다. |
-| If-Match | 문서 저장·버전 복원의 입력을 의미 변경 없이 전달한다. 필수 여부·revision 판단은 Content가 수행한다. |
-| X-Save-Id | 문서 저장의 선택적 멱등 키를 전달한다. BFF는 값을 새로 만들거나 실패 요청을 재전송하지 않는다. |
+| If-Match | 문서 저장·버전 복원에서 브라우저가 revision_no를 따옴표로 감싸 보낸 값을 변경 없이 전달한다. 필수 여부·revision 판단은 Content가 수행한다. |
+| X-Save-Id | 문서 저장의 선택적 UUID 멱등 키를 전달한다. BFF는 값을 새로 만들거나 실패 요청을 재전송하지 않는다. |
 | If-None-Match | GET에서 선택적으로 전달한다. 현재 Content는 이를 소비하지 않으며 BFF가 304·ETag 기능을 새로 제공하지 않는다. |
 | Location | 프로젝트 생성 시 검증된 응답 id로 상대 /projects/{id}를 구성한다. 내부 Location 원문을 복사하지 않는다. |
 | Cache-Control | 보호 Content 응답에 no-store를 적용한다. 임의 내부 캐시 정책을 복사하지 않는다. |
 
 전용 요청 헤더가 중복되면 모호한 값을 선택하지 않고 400 INVALID_REQUEST로 거절한다.
-일반 인증 쿠키가 RT를 포함해도 도메인 호출에 전달하지 않는다.
+브라우저의 인증 쿠키와 세션 ID는 도메인 호출에 전달하지 않는다.
 
 브라우저 CORS의 허용 메서드는 GET·HEAD·POST·PATCH·PUT·DELETE·OPTIONS,
 요청 헤더는 Content-Type·X-LS-CSRF·If-Match·If-None-Match·X-Save-Id다.
@@ -50,13 +89,26 @@ Origin·credentials·preflight·CSRF 순서는 [브라우저 보안](BROWSER_SEC
 
 ## 성공 응답
 
-조사표의 상태 코드·DTO·nullable 필드를 유지한다. 프로젝트 생성은 201과 상대 Location,
-파일·에피소드 생성 및 버전 생성은 201이다. 휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는
-204이며 본문이 없다. 그 밖의 표에 정의된 결과는 200이다.
+API 목록의 상태 코드·DTO·nullable 필드를 유지한다. null 필드를 임의로 생략하지 않는다.
+프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성 및 버전 생성은 201이다.
+휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는 204이며 본문이 없다.
+그 밖의 표에 정의된 결과는 200이다.
 
 프로젝트 last_file은 null 또는 최근 수정된 활성 문서의 id/title이며 외부 DTO로 변환한다.
 파일 생성은 요청 kind에 따라 문서와 에피소드 내부 DTO를 구분한다. 트리 응답은
 folders·episodes·documents의 정규화된 목록으로 유지한다.
+
+## 응답 데이터
+
+- Project: id, name, description, last_worked_at, trashed_at, created_at, last_file. last_file은 null 또는 최근 수정된 활성 문서의 `{id, title}`이다.
+- Document: id, title, folder_code, episode_id, rank, locked, char_count, revision_no, trashed_at, updated_at.
+- Episode: id, name, rank. 생성 요청의 title이 응답에서는 name이다.
+- 트리: folders는 code/name/position, episodes는 Episode 목록, documents는 Document 목록이다. 트리 조립은 프론트 책임이다.
+- TrashEntry: id, title, folder_code, episode_name, trashed_at.
+- Snapshot: title, body_md, properties(`{key,value}` 목록), relations(`{relation_key,target_document_id}` 목록).
+- Content: id, project_id, title, folder_code, episode_id, body_md, properties, relations, locked, char_count, revision_no, updated_at.
+- Version: id, file_id, kind, label, source_revision_no, created_at, snapshot.
+- Hit: file_id, title, folder_code, episode_name, snippet(`before,match,after` 또는 null), updated_at.
 
 ## 오류 변환
 
@@ -77,7 +129,7 @@ DOCUMENT_CONFLICT에는 current와 base를 명시적 DTO로 변환해 포함한�
 base는 Snapshot 또는 null이다. 추가 GET으로 이를 재구성하지 않는다. 잘못된 충돌 데이터는
 일반 409로 축소하거나 성공으로 전달하지 않고 UPSTREAM_INVALID_RESPONSE로 처리한다.
 
-Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으므로 브라우저 재발급
+Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으므로 브라우저 재로그인
 오류로 바꾸지 않는다. 알 수 없는 status/code/next_action 조합도 외부로 그대로 전달하지 않는다.
 성공 응답의 필수 필드·상태·JSON 타입을 확인하고 잘못된 결과는 502로 처리한다.
 응답을 받지 못한 변경 요청은 미실행으로 단정하지 않는다. RETRY_LATER는 자동 재실행 지시가 아니다.
@@ -85,10 +137,10 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 ## 외부 의존성과 적용 순서
 
 - Content·프론트의 실제 26개 API와 저장 헤더는 구조 전환에서 유지한다.
-- 프론트의 credentials, CSRF, Google 로그인 결과, 재발급·탭 조율과 개발 신원 제거는
+- 프론트의 credentials, CSRF, Google 로그인 결과, 세션 오류·인증 전환 조율과 개발 신원 제거는
   별도 연동 작업이다. 프론트가 준비되지 않아도 임시 신원을 최종 인증으로 허용하지 않는다.
 - 프론트 오류 매핑에는 CONTENT_UNAVAILABLE, UPSTREAM_INVALID_RESPONSE 및 인증·세션 오류가
-  추가로 필요하다. 기존 네트워크 오류를 새 재발급 조건으로 사용하지 않는다.
+  추가로 필요하다. 기존 네트워크 오류를 무조건 재로그인 조건으로 사용하지 않는다.
 - 배포는 각 중간 커밋의 안전성과 프론트·Auth·인프라 준비 상태를 별도로 확인한다.
 
 ## 검증 기준
