@@ -14,7 +14,6 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 
 모든 ID는 UUID이며 JSON 이름은 snake_case다. 요청의 `?`는 선택 항목이고,
 `—`는 요청 본문이 없음을 뜻한다. 응답 객체의 필드는 아래 응답 데이터에서 정의한다.
-이미지 API는 현재 BFF 노출 범위에 포함하지 않는다.
 
 | 메서드·경로 | 요청 | 성공 |
 |---|---|---|
@@ -44,6 +43,25 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | POST /files/{id}/versions/{vid}/restore | If-Match | 200 Content |
 | DELETE /files/{id}/versions/{vid} | — | 204 |
 | GET /projects/{id}/search | q 쿼리, 생략 가능 | 200 `{hits: Hit[]}` |
+
+| GET /projects/{id}/memos | scope 쿼리, file 이면 document_id | 200 `{memos: Memo[]}` |
+| POST /projects/{id}/memos | scope, document_id?, title?, body | 201 Memo, Location `/memos/{id}` |
+| PATCH /memos/{mid} | title?, body? | 200 Memo |
+| DELETE /memos/{mid} | — | 204 |
+| GET /projects/{id}/favorites | — | 200 `{file_ids: UUID[]}` |
+| PUT /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
+| DELETE /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
+| GET /projects/{id}/workspace-state | — | 200 `{layout}`; 처음이면 `layout: null` |
+| PUT /projects/{id}/workspace-state | layout | 204 |
+| POST /projects/{id}/images | file_name?, content_type, size_bytes | 201 ImageTicket, Location |
+| POST /projects/{id}/images/{iid}/complete | — | 200 Image |
+| GET /projects/{id}/images/{iid} | — | 200 Image |
+
+- Memo: id, project_id, scope(`project`·`file`), document_id, title, body, created_at, updated_at.
+- ImageTicket: image_id, key, upload_url, method, headers, expires_at, public_url.
+- Image: image_id, project_id, file_name, key, content_type, size_bytes, status(`PENDING`·`COMMITTED`),
+  public_url(`COMMITTED` 에서만), created_at, committed_at.
+- **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
 
 ## 명시적 API와 데이터 경계
 
@@ -148,3 +166,6 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 26개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
 문서 저장 헤더와 URI 인코딩을 검증한다. 임의 하위 경로와 HTTP 메서드·추가 요청 필드,
 내부 민감 필드 노출·잘못된 응답·통신 실패 및 하위 전송 계층의 자동 재시도 부재를 확인한다.
+
+메모·이미지 경로는 추가로 `400 INVALID_MEMO / INVALID_UPLOAD_REQUEST`,
+`404 MEMO_NOT_FOUND / IMAGE_NOT_FOUND`, `409 OBJECT_NOT_UPLOADED`를 반환할 수 있다.

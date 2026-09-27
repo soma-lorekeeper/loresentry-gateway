@@ -46,7 +46,7 @@ Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth AP
 
 ## Content 호출
 
-[제공 Content API 목록](CONTENT_API.md#api-목록)의 26개 경로는 **각각 같은 메서드·경로의
+[제공 Content API 목록](CONTENT_API.md#api-목록)의 38개 경로는 **각각 같은 메서드·경로의
 Content API를 호출한다.** 각 경로의 요청을 외부 DTO에서 내부 DTO로 변환하고 인증된
 사용자 UUID를 전달한다. namespace 하위의 임의 경로를 중계하지 않는다.
 실제 호출 목록은 [ContentApiClient](../src/main/java/com/loresentry/gateway/client/content/ContentApiClient.java)에 있다.

@@ -38,12 +38,12 @@ main push는 자동 배포를 실행하므로 운영 설정·ACL·접근 제한�
 | `POST /auth/tokens/refresh` | CSRF·RT 쿠키로 명시적 재발급, 성공 시 쿠키 교체와 204 |
 | `POST /auth/tokens/revoke` | CSRF 통과 후 AT·RT 삭제 헤더와 RT 폐기 확인 결과 반환 |
 | `GET/PATCH /auth/users/me` | AT·활성 세션을 확인한 본인 계정 조회·표시 이름 수정 |
-| 프로젝트·파일·에피소드 26개 경로 | [명시적 Content API 목록](docs/CONTENT_API.md)과 외부 DTO 사용 |
+| 프로젝트·파일·메모·이미지 등 38개 경로 | [명시적 Content API 목록](docs/CONTENT_API.md)과 외부 DTO 사용 |
 
 `/`, `/auth`, `/content`, `/graph`, `/ai-chat`, `/health/db` 등 기존 진단 경로도
 AT·세션 검사를 받는다. 연결 확인 응답은 기능 API의 계약으로 사용하지 않는다.
 임의 namespace relay, 클라이언트 사용자 헤더 인증, 내부 오류 원문 전달은 제거했다.
-AI 스트리밍·여러 서비스 응답 조합과 새 Content 이미지 API는 현재 노출 범위에 포함하지 않는다.
+AI 스트리밍·여러 서비스 응답 조합은 현재 노출 범위에 포함하지 않는다.
 
 ## 브라우저 계약
 
