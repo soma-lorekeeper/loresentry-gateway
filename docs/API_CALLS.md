@@ -8,9 +8,8 @@
 >
 > **관련 기준:** 브라우저에 제공하는 계약은 [API.md](API.md), Auth의 입력·응답 정의는 [Auth API](../../loresentry-authentication/docs/API.md)를 본다.
 
-Auth 호출은 단일 세션 ID 방식의 목표 계약이다. 현재 JWT 구현의 refresh·revoke는
-[프로젝트 README](../README.md#api)와 [AuthApiClient](../src/main/java/com/loresentry/gateway/client/auth/AuthApiClient.java)를 따른다.
-Content 호출 경로는 현재 구현을 유지하며 인증 선행 조건만 새 세션 방식으로 전환한다.
+Auth 호출은 단일 세션 ID 계약을 사용한다. 실제 호출 구현은
+[AuthApiClient](../src/main/java/com/loresentry/gateway/client/auth/AuthApiClient.java)에 있다.
 
 ## 공통 호출 규칙
 

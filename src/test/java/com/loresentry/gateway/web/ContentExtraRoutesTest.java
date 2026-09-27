@@ -22,7 +22,7 @@ import java.util.UUID;
 import com.loresentry.gateway.application.ContentService;
 import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.config.BrowserProperties;
-import com.loresentry.gateway.security.AccessTokenFilter;
+import com.loresentry.gateway.security.SessionFilter;
 import com.loresentry.gateway.security.CurrentUserArgumentResolver;
 import com.loresentry.gateway.web.content.ContentApiController;
 
@@ -64,7 +64,7 @@ class ContentExtraRoutesTest {
     private final JsonMapper json = JsonMapper.builder().build();
 
     private MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request) {
-        return request.requestAttr(AccessTokenFilter.USER_ATTRIBUTE, USER);
+        return request.requestAttr(SessionFilter.USER_ATTRIBUTE, USER);
     }
 
     private MockHttpServletRequestBuilder body(MockHttpServletRequestBuilder request, String payload) {

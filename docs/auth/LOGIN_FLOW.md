@@ -1,6 +1,6 @@
 # BFF 로그인 연동
 
-2026-09-26 목표 설계다. 외부 로그인 시작과 Google callback은 BFF가 받는다.
+외부 로그인 시작과 Google callback은 BFF가 받는다.
 
 1. **로그인 시작:** `GET /auth/oauth/google/prepare` 요청을 받으면 같은 경로의 Auth POST API에 로그인 준비를 요청한다.
    응답에 따라 브라우저 연결용 임시 쿠키를 설정하고 Google 로그인 URL로 리다이렉트한다.

@@ -1,6 +1,6 @@
 # Auth·BFF 단일 세션 ID 전환
 
-2026-09-26 목표 절차다. 문서만 변경했으며 코드·설정·운영 전환은 미실행이다.
+단일 세션 ID 방식의 배포·복구 절차다. 이 문서는 실제 운영 적용 완료를 의미하지 않는다.
 [세션 원본](../../loresentry-authentication/docs/session/SESSION_DESIGN.md)과
 [운영 준비](OPERATIONS.md)를 기준으로 Auth·BFF·프론트를 함께 전환한다.
 

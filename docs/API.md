@@ -8,10 +8,10 @@
 >
 > **관련 기준:** Auth·Content 호출은 [API_CALLS.md](API_CALLS.md), 쿠키·CSRF·CORS는 [브라우저 보안](BROWSER_SECURITY.md)을 본다.
 
-2026-09-26 단일 세션 ID 방식의 목표 계약이다. 아직 코드·브라우저·운영 검증에 반영하지 않았다.
+단일 세션 ID를 사용하는 현재 BFF API 계약이다.
 이 문서는 제공 API의 진입점이며 인증·본인 계정 API를 상세히 정의한다.
-Content의 26개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
-현재 JWT 방식의 경로와 공개 헬스 체크·진단 경로는 [프로젝트 README](../README.md#api)에서 확인한다.
+Content의 38개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
+공개 헬스 체크와 실행 안내는 [프로젝트 README](../README.md#인증과-api)에서 확인한다.
 
 ## 공통 계약
 

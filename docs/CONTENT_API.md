@@ -8,7 +8,6 @@
 
 BFF가 제공하는 Content API의 경로·요청·응답과 오류 계약이다.
 Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는다.
-인증 경계는 목표 세션 ID 설계로 전환할 예정이며 도메인 API는 유지한다.
 
 ## API 목록
 
@@ -86,7 +85,7 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 
 최종 보호 API는 CSRF(변경 요청)·단일 세션 검증과 활동 만료 연장 후 검증된 UUID만 사용한다.
 외부 X-User-Id, Cookie, Authorization은 도메인 서비스 전달 목록에서 제외하고 client가
-검증된 사용자 ID 하나로 X-User-Id를 구성한다. 단일 ID의 세션 검증·연장은 2026-09-26 목표 설계이며 현재 코드에는 아직 반영하지 않았다.
+검증된 사용자 ID 하나로 X-User-Id를 구성한다.
 
 | 헤더 | 처리 |
 |---|---|
@@ -154,7 +153,7 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 외부 의존성과 적용 순서
 
-- Content·프론트의 실제 26개 API와 저장 헤더는 구조 전환에서 유지한다.
+- Content·프론트의 실제 38개 API와 저장 헤더는 구조 전환에서 유지한다.
 - 프론트의 credentials, CSRF, Google 로그인 결과, 세션 오류·인증 전환 조율과 개발 신원 제거는
   별도 연동 작업이다. 프론트가 준비되지 않아도 임시 신원을 최종 인증으로 허용하지 않는다.
 - 프론트 오류 매핑에는 CONTENT_UNAVAILABLE, UPSTREAM_INVALID_RESPONSE 및 인증·세션 오류가
@@ -163,7 +162,7 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 검증 기준
 
-26개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
+38개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
 문서 저장 헤더와 URI 인코딩을 검증한다. 임의 하위 경로와 HTTP 메서드·추가 요청 필드,
 내부 민감 필드 노출·잘못된 응답·통신 실패 및 하위 전송 계층의 자동 재시도 부재를 확인한다.
 
