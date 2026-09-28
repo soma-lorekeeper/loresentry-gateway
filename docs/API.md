@@ -8,7 +8,7 @@
 >
 > **관련 기준:** Auth·Content 호출은 [API_CALLS.md](API_CALLS.md), 쿠키·CSRF·CORS는 [브라우저 보안](BROWSER_SECURITY.md)을 본다.
 
-단일 세션 ID를 사용하는 현재 BFF API 계약이다.
+단일 세션 ID를 사용하는 현재 BFF API 계약이다. 약관 동의 확장은 아래 미구현 절로 구분한다.
 이 문서는 제공 API의 진입점이며 인증·본인 계정 API를 상세히 정의한다.
 Content의 38개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
 공개 `GET /health`는 프로세스 상태를 확인한다. 실행 안내는 [프로젝트 README](../README.md)를 따른다.
@@ -59,6 +59,39 @@ Content의 38개 경로·요청·응답은 제공 계약의 세부 문서인 [Co
 `Referrer-Policy: no-referrer`를 적용한다. 실패 시 기존 세션 쿠키는 변경하지 않는다.
 임시 쿠키는 [소비 결과](auth/LOGIN_FLOW.md#oauth-임시-쿠키)에 따라 정리한다.
 `result=success`는 안내 값이며 프론트는 `GET /auth/users/me`로 실제 로그인을 확인한다.
+
+## 약관 동의 API (MVP 미구현)
+
+로그인 세션 발급 전의 브라우저 계약이다. 두 API는 일반 세션 필터에서 제외하고
+동의 대기 쿠키로 Auth 검증을 받는다. 일반 보호 API에 대한 접근 권한은 부여하지 않는다.
+완료 POST에는 [Origin·CSRF 검사](BROWSER_SECURITY.md#csrf-검증-계약)를 적용한다.
+응답은 `Cache-Control: no-store`이며 동의 대기·로그인 세션 ID를 JSON이나 URL로 반환하지 않는다.
+
+| 제공 API | 브라우저 입력 | 성공 결과 |
+|---|---|---|
+| `GET /auth/terms` | 동의 대기 쿠키, 본문 없음 | `200`, `terms_version_id`, `version`, `title`, `content`, `effective_at`, `expires_at` |
+| `POST /auth/terms/accept` | 동의 대기 쿠키·CSRF 헤더, JSON의 `terms_version_id` | `204`, 본문 없음. 로그인 쿠키 설정·동의 대기 쿠키 삭제 |
+
+버전 ID는 UUID 문자열이며 POST 본문에는 이 필드만 허용한다. 조회의 `expires_at`은 동의
+대기의 만료이고 시각은 UTC ISO 8601이다. 별도의 취소 API는 제공하지 않는다.
+쿠키 처리 순서는 [동의 연동](auth/LOGIN_FLOW.md#약관-동의-연동-mvp-미구현)을 따른다.
+
+Google 콜백에는 기존 결과에 `result=terms_required`를 추가한다. Auth의 `TERMS_REQUIRED`를
+확인하고 대기 쿠키를 설정한 뒤, 위 고정 로그인 주소로 `303` 복귀한다. 이 결과는 로그인
+성공을 뜻하지 않는다. 프론트는 약관 조회로 대기를 확인한다.
+
+오류는 기존 `code`, `message`, `next_action` 형식이다.
+
+| HTTP | code | 조건 | next_action |
+|---|---|---|---|
+| 400 | `INVALID_REQUEST` | 완료 본문·버전 ID 형식 오류 | `NONE` |
+| 401 | `CONSENT_REQUEST_INVALID` | 쿠키 부재·중복·형식 오류 또는 Auth가 대기 무효 확인 | `RESTART_LOGIN` |
+| 403 | `CSRF_REJECTED` | 완료 요청의 Origin·전용 헤더 오류 | `NONE` |
+| 409 | `TERMS_VERSION_MISMATCH` | Auth가 대상 버전 불일치 확인 | `NONE` |
+| 503 | `LOGIN_UNAVAILABLE` | 알려진 Auth 장애·통신 실패·완료 결과 불명 | `RESTART_LOGIN` |
+| 502 | `UPSTREAM_INVALID_RESPONSE` | 내부 응답 형식·ID·만료 검증 실패 | `RESTART_LOGIN` |
+
+오류별 화면 동작은 [프론트 동의 계약](FRONTEND_AUTH_CONTRACT.md#약관-동의-mvp-미구현)을 따른다.
 
 ## 보호 API 인증 실패
 

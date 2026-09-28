@@ -6,7 +6,8 @@
 
 ## 브라우저 경계
 
-로그인 인증값은 HttpOnly 세션 쿠키 하나다. OAuth 진행 중에만 별도 임시 쿠키를 사용한다.
+로그인 인증값은 HttpOnly 세션 쿠키 하나다. 현재 OAuth 진행 중에는 별도 임시 쿠키를 사용한다.
+추가할 동의 대기 쿠키는 아래 미구현 절을 따르며 일반 로그인 인증에 사용하지 않는다.
 세션 ID를 브라우저 JSON·URL·JavaScript 저장소에 노출하지 않는다.
 운영 프론트와 API는 같은 사이트의 다른 Origin이므로 CORS가 필요하다.
 쿠키 요청은 `credentials: "include"`를 사용한다.
@@ -41,6 +42,28 @@ BFF와 Redis의 시각 동기화를 운영에서 확인하며 인증 판정은 R
 늦은 응답은 새 쿠키를 덮을 수도 있다. 응답을 JS에서 무시해도 Set-Cookie는 적용될 수 있으므로
 [인증 전환 시 요청 조율](FRONTEND_AUTH_CONTRACT.md#인증-전환과-늦은-응답)을 구현한다.
 이 한계가 서버에서 이전 세션을 다시 활성화해도 된다는 뜻은 아니다.
+
+## 동의 대기 쿠키 (MVP 미구현)
+
+| 항목 | 계약 |
+|---|---|
+| 이름 | prod `__Host-ls_consent`, local `ls_consent` |
+| 값 | Auth가 발급한 `consent_request_id` 원문 |
+| 속성 | HttpOnly, SameSite=Strict, Path=/, Domain 생략 |
+| Secure | prod true, 명시적 local HTTP의 localhost·루프백에서만 false |
+| 수명 | Auth의 `expires_at`까지 남은 초를 내림한 Max-Age, 최대 1,800초 |
+
+ID 형식과 양수인 남은 수명을 확인한 뒤 발급하며 조회·새로고침으로 수명을 연장하지 않는다.
+삭제는 같은 이름·Path·Domain 범위에서 Max-Age=0으로 한다. 생성·교체·삭제 시점은
+[동의 연동](auth/LOGIN_FLOW.md#약관-동의-연동-mvp-미구현)에서 관리한다.
+
+식별자는 JavaScript·응답 JSON·URL·로그에 노출하지 않는다. 브라우저의 쿠키 전체를 Auth에
+전달하지 않고 [지정된 내부 요청 필드](API_CALLS.md#약관-동의-호출-mvp-미구현)로만 구성한다.
+브라우저에는 내부 `X-Consent-Request-Id` 헤더를 요구하거나 CORS 허용 헤더로 추가하지 않는다.
+
+약관 조회·완료 두 경로만 일반 세션 필터에서 제외한다. 완료 요청은 로그인 세션이 없어도
+기존 Origin·`X-LS-CSRF: 1` 검사를 먼저 수행한다. CSRF 실패 시 쿠키를 변경하지 않는다.
+기존 credentials·CORS 허용 Origin 규칙을 그대로 사용하며 `/auth/**` 전체를 예외 처리하지 않는다.
 
 ## SameSite 계약
 

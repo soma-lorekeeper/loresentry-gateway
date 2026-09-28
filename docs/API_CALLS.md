@@ -40,8 +40,23 @@ Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth AP
 응답 유실을 명령 미실행이나 폐기 성공으로 단정하지 않는다. 재요청·쿠키 처리의 기준은
 [로그인](auth/LOGIN_FLOW.md)과 [로그아웃](auth/LOGOUT_FLOW.md)을 따른다.
 
-약관 동의에 따른 가입 대기·완료 호출은 아직 API 경로·응답이 확정되지 않았다.
-[Auth 동의 설계](../../loresentry-authentication/docs/account/TERMS_CONSENT_DESIGN.md)에 맞춰 확정 후 이 목록에 추가한다.
+### 약관 동의 호출 (MVP 미구현)
+
+Auth 내부 필드·오류의 기준은 [Auth 동의 API](../../loresentry-authentication/docs/account/TERMS_CONSENT_DESIGN.md#4-api-계약)다.
+BFF가 브라우저 입력에서 내부 요청을 구성하는 규칙은 다음과 같다.
+
+| BFF 요청 | Auth 호출 | 입력 구성 | 응답 사용 |
+|---|---|---|---|
+| `GET /auth/terms` | 같은 GET 경로 | 동의 쿠키 값을 `X-Consent-Request-Id` 헤더로 구성 | 정의된 약관 조회 필드만 외부 DTO로 반환 |
+| `POST /auth/terms/accept` | 같은 POST 경로 | CSRF·입력 검증 후 쿠키의 `consent_request_id`와 본문의 `terms_version_id`로 내부 JSON 구성 | 세션 ID·만료 검증 후 로그인 완료 처리, 브라우저에는 `204` |
+
+브라우저가 보낸 내부 헤더나 사용자 ID는 사용하지 않는다. 쿠키 부재·중복·형식 오류는
+Auth 호출 전에 거절한다. 동의 대기 Redis를 직접 조회하지 않는다.
+콜백은 새 `status`로 로그인 완료와 동의 대기를 구분하고 각 분기의 필수 필드를 검증한다.
+결과는 [BFF 동의 흐름](auth/LOGIN_FLOW.md#약관-동의-연동-mvp-미구현)에 전달한다.
+
+알려진 Auth 오류는 [브라우저 동의 API](API.md#약관-동의-api-mvp-미구현)의 매핑을 따른다.
+공통 통신 제한·자동 재시도 금지 규칙을 유지하며, 응답 유실을 미실행으로 간주하지 않는다.
 
 ## Content 호출
 
