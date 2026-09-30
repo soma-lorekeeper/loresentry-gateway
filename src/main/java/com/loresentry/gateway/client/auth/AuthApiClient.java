@@ -46,6 +46,12 @@ public class AuthApiClient {
     public AuthData.Account updateAccount(UUID user,String displayName) {
         return ownAccount(user,call(HttpMethod.PATCH,"/auth/users/me",user,new AuthData.DisplayName(displayName),AuthData.Account.class,200,Operation.ACCOUNT));
     }
+    public void completeOnboarding(UUID user) {
+        call(HttpMethod.PUT,"/auth/users/me/onboarding",user,null,Void.class,204,Operation.ACCOUNT);
+    }
+    public void deleteAccount(UUID user) {
+        call(HttpMethod.DELETE,"/auth/users/me",user,null,Void.class,204,Operation.ACCOUNT);
+    }
     private AuthData.Account ownAccount(UUID user,AuthData.Account account) {
         if(!user.equals(account.id())) throw AuthCallFailure.invalid(null);
         return account;
@@ -99,6 +105,7 @@ public class AuthApiClient {
     private static void validate(Object response) {
         if(response instanceof AuthData.Account account) {
             java.util.Objects.requireNonNull(account.id());required(account.displayName());
+            java.util.Objects.requireNonNull(account.onboardingCompleted());
         } else if(response instanceof AuthData.Prepared p) {
             required(p.authorizationUrl());required(p.loginRequestId());java.util.Objects.requireNonNull(p.expiresAt());
         } else if(response instanceof AuthData.LoginSession t) {

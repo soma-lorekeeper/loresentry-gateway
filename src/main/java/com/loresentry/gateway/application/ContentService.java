@@ -14,6 +14,7 @@ public class ContentService {
     public ContentData.Projects listProjects(UUID userId, Conditions conditions) { return client.listProjects(userId, conditions); }
     public ContentData.Projects listProjectTrash(UUID userId, Conditions conditions) { return client.listProjectTrash(userId, conditions); }
     public ContentData.Project createProject(UUID userId, ContentData.ProjectInput body, Conditions conditions) { return client.createProject(userId, body, conditions); }
+    public ContentData.Project createSampleProject(UUID userId, Conditions conditions) { return client.createSampleProject(userId, conditions); }
     public ContentData.Project getProject(UUID userId, UUID projectId, Conditions conditions) { return client.getProject(userId, projectId, conditions); }
     public ContentData.Project updateProject(UUID userId, UUID projectId, ContentData.ProjectInput body, Conditions conditions) { return client.updateProject(userId, projectId, body, conditions); }
     public Void trashProject(UUID userId, UUID projectId, Conditions conditions) { return client.trashProject(userId, projectId, conditions); }

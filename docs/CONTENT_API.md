@@ -21,6 +21,7 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | GET /projects | — | 200 `{projects: Project[]}` |
 | GET /projects/trash | — | 200 `{projects: Project[]}` |
 | POST /projects | name, description | 201 Project, Location |
+| POST /projects/sample | — | 201 Project, Location |
 | GET /projects/{id} | — | 200 Project |
 | PATCH /projects/{id} | name?, description? | 200 Project |
 | POST /projects/{id}/trash | — | 204 |
@@ -57,6 +58,8 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | POST /projects/{id}/images/{iid}/complete | — | 200 Image |
 | GET /projects/{id}/images/{iid} | — | 200 Image |
 
+- **샘플 프로젝트는 본문 없이 요청한다.** 예제 원고·설정 문서를 채우는 일과 이름 중복 시 번호를
+  붙이는 일은 Content가 수행하며, 응답·Location·오류는 POST /projects와 같다.
 - **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
 
 ## 명시적 API와 데이터 경계
@@ -86,7 +89,7 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 | If-Match | 문서 저장·버전 복원에서 브라우저가 revision_no를 따옴표로 감싸 보낸 값을 변경 없이 전달한다. 필수 여부·revision 판단은 Content가 수행한다. |
 | X-Save-Id | 문서 저장의 선택적 UUID 멱등 키를 전달한다. BFF는 값을 새로 만들거나 실패 요청을 재전송하지 않는다. |
 | If-None-Match | GET에서 선택적으로 전달한다. 현재 Content는 이를 소비하지 않으며 BFF가 304·ETag 기능을 새로 제공하지 않는다. |
-| Location | 프로젝트 생성 시 검증된 응답 id로 상대 /projects/{id}를 구성한다. 내부 Location 원문을 복사하지 않는다. |
+| Location | 프로젝트·샘플 프로젝트 생성 시 검증된 응답 id로 상대 /projects/{id}를 구성한다. 내부 Location 원문을 복사하지 않는다. |
 | Cache-Control | 보호 Content 응답에 no-store를 적용한다. 임의 내부 캐시 정책을 복사하지 않는다. |
 
 전용 요청 헤더가 중복되면 모호한 값을 선택하지 않고 400 INVALID_REQUEST로 거절한다.
@@ -97,7 +100,7 @@ CORS의 허용·노출 헤더와 CSRF 검사 순서는 [브라우저 보안](BRO
 ## 성공 응답
 
 API 목록의 상태 코드·DTO·nullable 필드를 유지한다. null 필드를 임의로 생략하지 않는다.
-프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성 및 버전 생성은 201이다.
+프로젝트 생성과 샘플 프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성 및 버전 생성은 201이다.
 휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는 204이며 본문이 없다.
 그 밖의 표에 정의된 결과는 200이다.
 
@@ -147,6 +150,6 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 검증 기준
 
-38개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
+39개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
 문서 저장 헤더와 URI 인코딩을 검증한다. 임의 하위 경로와 HTTP 메서드·추가 요청 필드,
 내부 민감 필드 노출·잘못된 응답·통신 실패 및 하위 전송 계층의 자동 재시도 부재를 확인한다.

@@ -36,6 +36,11 @@ public class ContentApiController {
         var result = service.createProject(userId, body == null ? null : body.internal(), new Conditions(null, null, null));
         return ResponseEntity.created(URI.create("/projects/" + result.id())).cacheControl(CacheControl.noStore()).body(ContentDtos.Project.from(result));
     }
+    @PostMapping("/projects/sample")
+    public ResponseEntity<ContentDtos.Project> createSampleProject(@CurrentUser UUID userId) {
+        var result = service.createSampleProject(userId, new Conditions(null, null, null));
+        return ResponseEntity.created(URI.create("/projects/" + result.id())).cacheControl(CacheControl.noStore()).body(ContentDtos.Project.from(result));
+    }
     @GetMapping("/projects/{projectId}")
     public ResponseEntity<ContentDtos.Project> getProject(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
         var result = service.getProject(userId, projectId, new Conditions(null, null, single(request, "If-None-Match")));
