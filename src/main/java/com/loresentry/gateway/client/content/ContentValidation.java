@@ -31,6 +31,7 @@ final class ContentValidation {
             case TrashEntry v -> required(v.id(),v.title(),v.folderCode(),v.trashedAt());
             case Trash v -> items(v.files());
             case TextProperty v -> required(v.key(),v.value());
+            // description 은 비어 있을 수 있다. 적지 않은 관계가 대부분이다.
             case Relation v -> required(v.relationKey(),v.targetDocumentId());
             // 본문은 body 나 legacy_body_md 중 하나다. 변환 전 문서는 Markdown 만 온다.
             case Snapshot v -> { required(v.title());body(v.body(),v.legacyBodyMd());items(v.properties());items(v.relations()); }

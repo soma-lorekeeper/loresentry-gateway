@@ -61,9 +61,9 @@ public final class ContentDtos {
         public ContentData.TextProperty internal() { return new ContentData.TextProperty(key, value); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Relation(@JsonProperty("relation_key") String relationKey, @JsonProperty("target_document_id") UUID targetDocumentId) {
-        public static Relation from(ContentData.Relation value) { return value == null ? null : new Relation(value.relationKey(), value.targetDocumentId()); }
-        public ContentData.Relation internal() { return new ContentData.Relation(relationKey, targetDocumentId); }
+    public record Relation(@JsonProperty("relation_key") String relationKey, @JsonProperty("target_document_id") UUID targetDocumentId, String description) {
+        public static Relation from(ContentData.Relation value) { return value == null ? null : new Relation(value.relationKey(), value.targetDocumentId(), value.description()); }
+        public ContentData.Relation internal() { return new ContentData.Relation(relationKey, targetDocumentId, description); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Snapshot(String title, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<Relation> relations) {

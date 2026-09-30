@@ -50,6 +50,27 @@ class ContentApiRoutesTest {
         tools.jackson.databind.json.JsonMapper.builder().build()
             .readTree("{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":[]}}");
 
+    /**
+     * 프론트가 실제로 보내는 저장 요청이다. web 층은 모르는 필드를 **거절하므로**, content 가 필드를
+     * 하나 더하고 BFF 의 DTO 가 따라가지 않으면 저장이 전부 400 이 된다 — 실제로 관계 설명이
+     * 그렇게 깨졌다.
+     */
+    @Test void acceptsTheSaveRequestTheBrowserActuallySends() throws Exception {
+        var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
+        given(service.saveContent(eq(USER), eq(ID), any(), any())).willReturn(new ContentData.Content(
+            ID, ID, "Title", "CHARACTER", null, BODY, null, List.of(), List.of(), false, 4, 8L, now));
+
+        mvc.perform(put("/files/"+ID+"/content").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER)
+                .header("If-Match","\"7\"").header("X-Save-Id",ID).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Title\","
+                    + "\"body\":{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":["
+                    + "{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"본문\"}]}]}},"
+                    + "\"properties\":[{\"key\":\"description\",\"value\":\"설명\"}],"
+                    + "\"relations\":[{\"relation_key\":\"related_place\","
+                    + "\"target_document_id\":\""+ID+"\",\"description\":\"첫 등장\"}]}"))
+            .andExpect(status().isOk());
+    }
+
     @Test void keepsSaveRevisionAndIdempotencyHeaders() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
         given(service.saveContent(eq(USER), eq(ID), any(), any())).willReturn(new ContentData.Content(
