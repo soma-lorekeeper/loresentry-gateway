@@ -29,11 +29,11 @@ Auth의 필드·오류 정의는 [Auth 제공 API](../../loresentry-authenticati
 
 문서는 현재 구현의 계약과 반복해서 사용할 운영 절차를 유지한다. 일회성 전환 작업,
 작업 이력·테스트 실행 결과·실제 배포 상태는 해당 이슈에서 관리한다.
-약관 동의는 각 담당 문서의 **MVP 미구현** 절에서 관리한다.
-브라우저 요청·응답은 [제공 API](API.md#약관-동의-api-mvp-미구현), 내부 호출 구성은
-[호출 API](API_CALLS.md#약관-동의-호출-mvp-미구현), 쿠키 속성은
-[브라우저 보안](BROWSER_SECURITY.md#동의-대기-쿠키-mvp-미구현), 처리 순서는
-[로그인 흐름](auth/LOGIN_FLOW.md#약관-동의-연동-mvp-미구현), 모달·화면 동작은
-[프론트 연동](FRONTEND_AUTH_CONTRACT.md#약관-동의-mvp-미구현)이 담당한다.
+약관 동의는 아래 담당 문서에서 관리한다.
+브라우저 요청·응답은 [제공 API](API.md#약관-동의-api), 내부 호출 구성은
+[호출 API](API_CALLS.md#약관-동의-호출), 쿠키 속성은
+[브라우저 보안](BROWSER_SECURITY.md#동의-대기-쿠키), 처리 순서는
+[로그인 흐름](auth/LOGIN_FLOW.md#약관-동의-연동), 모달·화면 동작은
+[프론트 연동](FRONTEND_AUTH_CONTRACT.md#약관-동의)이 담당한다.
 계정·원문·동의 기록·대기 저장과 내부 API 정의는 [Auth 설계](../../loresentry-authentication/docs/account/TERMS_CONSENT_DESIGN.md)를 따른다.
 [통합 도구 사용법](../integration/session/README.md)은 실행 범위·기준 커밋·옵션을 안내한다.

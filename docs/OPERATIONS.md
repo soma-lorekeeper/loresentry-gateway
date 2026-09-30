@@ -33,8 +33,9 @@ BFF는 조회뿐 아니라 활동 만료를 연장한다. 허용 키 패턴은
 | BFF | `GET`, `EVAL`, `TIME`, `PTTL`, `PEXPIREAT` |
 | Auth 세션 | 생성·교체·폐기 스크립트의 `EVAL`, `TIME`, `GET`, `PTTL`, `SET`, `DEL` |
 | Auth OAuth | 별도 `auth:oauth:*`의 `SET NX`, `GET`, `GETDEL` |
+| Auth 동의 대기 | `auth:consent:by-id:*`의 `EVAL`, `TIME`, `GET`, `PTTL`, `SET`, `DEL` |
 
-BFF의 SET·DEL·GETDEL·키 탐색·관리·OAuth 키 접근을 거절한다. `+@read`나 `+@write` 전체를
+BFF의 SET·DEL·GETDEL·키 탐색·관리·OAuth·동의 대기 키 접근을 거절한다. `+@read`나 `+@write` 전체를
 허용하지 않는다. 연결 초기화의 AUTH·HELLO·PING·CLIENT SETINFO/SETNAME 등 실제 필요한
 명령을 드라이버로 확인해 추가한다. 필요하지 않은 EVALSHA·SCRIPT LOAD는 추가하지 않는다.
 
