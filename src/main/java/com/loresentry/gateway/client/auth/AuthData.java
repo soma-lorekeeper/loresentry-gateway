@@ -21,6 +21,14 @@ public final class AuthData {
     public record Session(@JsonProperty("session_id") String sessionId) {
         @Override public String toString(){return "Session[redacted]";}
     }
+    public record Terms(@JsonProperty("terms_version_id") String termsVersionId, String version, String title, String content,
+            @JsonProperty("effective_at") Instant effectiveAt, @JsonProperty("expires_at") Instant expiresAt) {}
+    public record AcceptTerms(@JsonProperty("consent_request_id") String consentRequestId, @JsonProperty("terms_version_id") String termsVersionId) {
+        @Override public String toString(){return "AcceptTerms[redacted]";}
+    }
+    public record AcceptedTerms(@JsonProperty("session_id") String sessionId, @JsonProperty("expires_at") Instant expiresAt) {
+        @Override public String toString(){return "AcceptedTerms[redacted]";}
+    }
     public record Account(java.util.UUID id,@JsonProperty("display_name") String displayName,String email) {}
     public record DisplayName(@JsonProperty("display_name") String displayName) {}
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,

@@ -23,7 +23,9 @@ public final class SessionFilter extends OncePerRequestFilter {
         return CorsUtils.isPreFlightRequest(request)
                 || (("GET".equals(method)||"HEAD".equals(method))&&"/health".equals(path))
                 || ("GET".equals(method)&&("/auth/oauth/google/prepare".equals(path)||"/auth/oauth/google/callback".equals(path)))
-                || ("POST".equals(method)&&"/auth/sessions/revoke".equals(path));
+                || ("POST".equals(method)&&"/auth/sessions/revoke".equals(path))
+                || ("GET".equals(method)&&"/auth/terms".equals(path))
+                || ("POST".equals(method)&&"/auth/terms/accept".equals(path));
     }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)
             throws IOException,ServletException {
