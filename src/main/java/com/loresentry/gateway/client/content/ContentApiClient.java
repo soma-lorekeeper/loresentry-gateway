@@ -95,6 +95,9 @@ public class ContentApiClient {
     public ContentData.Project createProject(UUID userId, ContentData.ProjectInput body, Conditions conditions) {
         return call("POST", "/projects", Map.of(), userId, body, ContentData.Project.class, 201, conditions);
     }
+    public ContentData.Project createSampleProject(UUID userId, Conditions conditions) {
+        return call("POST", "/projects/sample", Map.of(), userId, null, ContentData.Project.class, 201, conditions);
+    }
     public ContentData.Project getProject(UUID userId, UUID projectId, Conditions conditions) {
         return call("GET", "/projects/{projectId}", Map.of("projectId", projectId), userId, null, ContentData.Project.class, 200, conditions);
     }

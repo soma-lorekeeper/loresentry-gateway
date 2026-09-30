@@ -45,6 +45,23 @@ class ContentApiRoutesTest {
             .andExpect(jsonPath("$.name").value("Novel")).andExpect(jsonPath("$.last_file").value(org.hamcrest.Matchers.nullValue()));
         verify(service).createProject(USER, new ContentData.ProjectInput("Novel", ""), new Conditions(null,null,null));
     }
+    @Test void sampleProjectMirrorsProjectCreation() throws Exception {
+        given(service.createSampleProject(eq(USER), any())).willReturn(new ContentData.Project(
+            ID, "유리 정원의 기록", "", OffsetDateTime.parse("2026-09-24T00:00:00Z"), null,
+            OffsetDateTime.parse("2026-09-24T00:00:00Z"), null));
+        mvc.perform(post("/projects/sample").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isCreated()).andExpect(header().string("Location", "/projects/" + ID))
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.id").value(ID.toString())).andExpect(jsonPath("$.name").value("유리 정원의 기록"))
+            .andExpect(jsonPath("$.last_file").value(org.hamcrest.Matchers.nullValue()));
+        verify(service).createSampleProject(USER, new Conditions(null,null,null));
+    }
+    @Test void sampleProjectFailuresUseTheContentErrorBody() throws Exception {
+        given(service.createSampleProject(eq(USER), any())).willThrow(com.loresentry.gateway.client.content.ContentCallFailure.unavailable());
+        mvc.perform(post("/projects/sample").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("CONTENT_UNAVAILABLE"))
+            .andExpect(jsonPath("$.next_action").value("RETRY_LATER"));
+    }
     /** 본문은 에디터 문서 구조다. BFF 는 그것을 해석하지 않고 그대로 옮긴다. */
     private static final tools.jackson.databind.JsonNode BODY =
         tools.jackson.databind.json.JsonMapper.builder().build()
