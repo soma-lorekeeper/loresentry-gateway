@@ -40,6 +40,10 @@ final class ContentValidation {
             case Favorites v -> { Objects.requireNonNull(v.fileIds()); v.fileIds().forEach(Objects::requireNonNull); }
             // layout 은 null 일 수 있다. 처음 여는 프로젝트는 복원할 것이 없다.
             case WorkspaceState v -> { }
+            case GraphNode v -> required(v.id(),v.title(),v.folderCode(),v.description());
+            case GraphEdge v -> required(v.id(),v.source(),v.target(),v.relationKey(),v.description());
+            case GraphEpisode v -> { required(v.id(),v.name()); Objects.requireNonNull(v.documentIds()); v.documentIds().forEach(Objects::requireNonNull); }
+            case Graph v -> { items(v.nodes()); items(v.edges()); items(v.episodes()); }
             case ImageTicket v -> required(v.imageId(),v.key(),v.uploadUrl(),v.method(),v.headers(),v.expiresAt());
             case Image v -> required(v.imageId(),v.projectId(),v.key(),v.contentType(),v.sizeBytes(),v.status(),v.createdAt());
             default -> throw new IllegalArgumentException("Unsupported Content response");
