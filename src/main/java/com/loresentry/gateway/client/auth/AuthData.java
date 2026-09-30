@@ -13,7 +13,8 @@ public final class AuthData {
     public record Callback(@JsonProperty("login_request_id") String loginRequestId,String state,String code,String error) {
         @Override public String toString() { return "Callback[redacted]"; }
     }
-    public record LoginSession(@JsonProperty("session_id") String sessionId,
+    public record LoginSession(String status, @JsonProperty("session_id") String sessionId,
+            @JsonProperty("consent_request_id") String consentRequestId,
             @JsonProperty("expires_at") Instant expiresAt,@JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "LoginSession[redacted]"; }
     }

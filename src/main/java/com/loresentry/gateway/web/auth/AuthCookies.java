@@ -20,6 +20,11 @@ public class AuthCookies {
         return cookie(settings.sessionName(),value,remaining(clock.instant(),expiresAt,1209600),"Strict");
     }
     public ResponseCookie clearSession() { return cookie(settings.sessionName(),"",0,"Strict"); }
+    public ResponseCookie consent(String value,Instant expiresAt) {
+        new com.loresentry.gateway.application.ConsentId(value);
+        return cookie(settings.consentName(),value,remaining(clock.instant(),expiresAt,1800),"Strict");
+    }
+    public ResponseCookie clearConsent() { return cookie(settings.consentName(),"",0,"Strict"); }
     public void setSession(HttpServletResponse response,String value,Instant expiresAt) {
         var cookie=session(value,expiresAt);
         response.addHeader("Set-Cookie",cookie.toString());

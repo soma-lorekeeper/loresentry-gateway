@@ -44,7 +44,7 @@ class OAuthControllerTest {
             .header("Host","evil.test").header("X-Forwarded-Host","evil.test"))
             .andExpect(status().isSeeOther()).andExpect(header().string("Location","http://localhost:3000/login?result=success"))
             .andExpect(header().string("Referrer-Policy","no-referrer")).andExpect(content().string("")).andReturn().getResponse();
-        assertThat(response.getHeaders("Set-Cookie")).hasSize(2);
+        assertThat(response.getHeaders("Set-Cookie")).hasSize(3);
         assertThat(response.getHeaders("Set-Cookie")).anyMatch(s->s.startsWith("ls_oauth=")&&s.contains("Max-Age=0"));
         assertThat(response.getHeader("Location")).doesNotContain("secret","request-id","private","evil");
     }
@@ -77,6 +77,26 @@ class OAuthControllerTest {
         when(login.callback(any(),any(),any(),any())).thenReturn(new LoginService.CallbackResult(session(),LoginService.Result.SUCCESS,true));
         var response=mvc.perform(get("/auth/oauth/google/callback").param("state","state").param("code","code"))
             .andExpect(header().string("Location","https://loresentry.com/login?result=success")).andReturn().getResponse();
-        assertThat(response.getHeaders("Set-Cookie")).hasSize(2).allMatch(s->s.startsWith("__Host-")&&s.contains("Secure"));
+        assertThat(response.getHeaders("Set-Cookie")).hasSize(3).allMatch(s->s.startsWith("__Host-")&&s.contains("Secure"));
     }
+    @Test void pendingConsentUsesItsOwnSecureCookieAndFixedResult() throws Exception {
+        setup(true);
+        when(login.callback(any(),any(),any(),any())).thenReturn(new LoginService.CallbackResult(null,
+                new LoginService.Consent(new com.loresentry.gateway.application.ConsentId("A".repeat(43)),NOW.plusSeconds(1800)), LoginService.Result.TERMS_REQUIRED,true));
+        var response=mvc.perform(get("/auth/oauth/google/callback").param("state","state").param("code","code")
+                .cookie(new Cookie("__Host-ls_session","existing")))
+                .andExpect(status().isSeeOther()).andExpect(header().string("Location","https://loresentry.com/login?result=terms_required"))
+                .andExpect(content().string("")).andReturn().getResponse();
+        assertThat(response.getHeaders("Set-Cookie")).hasSize(2)
+                .anyMatch(s->s.startsWith("__Host-ls_consent=")&&s.contains("HttpOnly")&&s.contains("Secure")&&s.contains("SameSite=Strict")&&s.contains("Max-Age=1800")&&s.contains("Path=/")&&!s.contains("Domain="))
+                .noneMatch(s->s.startsWith("__Host-ls_session="));
+    }
+    @Test void expiredPendingConsentDoesNotWriteConsentOrSessionCookie() throws Exception {
+        when(login.callback(any(),any(),any(),any())).thenReturn(new LoginService.CallbackResult(null,
+                new LoginService.Consent(new com.loresentry.gateway.application.ConsentId("A".repeat(43)),NOW), LoginService.Result.TERMS_REQUIRED,true));
+        var response=mvc.perform(get("/auth/oauth/google/callback").param("state","state").param("code","code"))
+                .andExpect(header().string("Location","http://localhost:3000/login?result=failed")).andReturn().getResponse();
+        assertThat(response.getHeaders("Set-Cookie")).singleElement().asString().startsWith("ls_oauth=");
+    }
+
 }
