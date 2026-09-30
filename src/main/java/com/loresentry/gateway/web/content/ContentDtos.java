@@ -155,8 +155,8 @@ public final class ContentDtos {
         public static GraphNode from(ContentData.GraphNode v) { return v == null ? null : new GraphNode(v.id(), v.title(), v.folderCode(), v.description()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description) {
-        public static GraphEdge from(ContentData.GraphEdge v) { return v == null ? null : new GraphEdge(v.id(), v.source(), v.target(), v.relationKey(), v.description()); }
+    public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description, String origin) {
+        public static GraphEdge from(ContentData.GraphEdge v) { return v == null ? null : new GraphEdge(v.id(), v.source(), v.target(), v.relationKey(), v.description(), v.origin()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record GraphEpisode(UUID id, String name, @JsonProperty("document_ids") java.util.List<UUID> documentIds) {
