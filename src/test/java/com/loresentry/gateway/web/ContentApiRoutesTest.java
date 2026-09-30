@@ -45,13 +45,18 @@ class ContentApiRoutesTest {
             .andExpect(jsonPath("$.name").value("Novel")).andExpect(jsonPath("$.last_file").value(org.hamcrest.Matchers.nullValue()));
         verify(service).createProject(USER, new ContentData.ProjectInput("Novel", ""), new Conditions(null,null,null));
     }
+    /** 본문은 에디터 문서 구조다. BFF 는 그것을 해석하지 않고 그대로 옮긴다. */
+    private static final tools.jackson.databind.JsonNode BODY =
+        tools.jackson.databind.json.JsonMapper.builder().build()
+            .readTree("{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":[]}}");
+
     @Test void keepsSaveRevisionAndIdempotencyHeaders() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
         given(service.saveContent(eq(USER), eq(ID), any(), any())).willReturn(new ContentData.Content(
-            ID, ID, "Title", "MANUSCRIPT", null, "body", List.of(), List.of(), false, 4, 8L, now));
+            ID, ID, "Title", "MANUSCRIPT", null, BODY, null, List.of(), List.of(), false, 4, 8L, now));
         mvc.perform(put("/files/"+ID+"/content").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER)
                 .header("If-Match","\"7\"").header("X-Save-Id",ID).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\":\"Title\",\"body_md\":\"body\",\"properties\":[],\"relations\":[]}"))
+                .content("{\"title\":\"Title\",\"body\":{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":[]}},\"properties\":[],\"relations\":[]}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.revision_no").value(8))
             .andExpect(jsonPath("$.episode_id").value(org.hamcrest.Matchers.nullValue()));
         verify(service).saveContent(eq(USER),eq(ID),any(),eq(new Conditions("\"7\"",ID.toString(),null)));
@@ -95,7 +100,7 @@ class ContentApiRoutesTest {
     }
     @Test void mapsSafeBusinessErrorAndPreservesConflictSnapshot() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
-        var current = new ContentData.Content(ID,ID,"Latest","MANUSCRIPT",null,"body",List.of(),List.of(),false,4,9L,now);
+        var current = new ContentData.Content(ID,ID,"Latest","MANUSCRIPT",null,BODY,null,List.of(),List.of(),false,4,9L,now);
         given(service.saveContent(any(),any(),any(),any())).willThrow(
             new com.loresentry.gateway.client.content.ContentCallFailure(409,"DOCUMENT_CONFLICT",current,null));
         mvc.perform(put("/files/"+ID+"/content").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER).contentType(MediaType.APPLICATION_JSON).content("{}"))

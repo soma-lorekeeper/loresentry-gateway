@@ -10,6 +10,10 @@ final class ContentValidation {
     private static void required(Object... fields) {
         for (Object field : fields) Objects.requireNonNull(field);
     }
+    /** 둘 다 비어 있으면 본문이 없는 응답이다. 그것은 화면이 다룰 수 없다. */
+    private static void body(tools.jackson.databind.JsonNode body, String legacyBodyMd) {
+        if (body == null && legacyBodyMd == null) throw new NullPointerException("body");
+    }
     private static void items(List<?> values) {
         Objects.requireNonNull(values);
         values.forEach(ContentValidation::validate);
@@ -28,8 +32,9 @@ final class ContentValidation {
             case Trash v -> items(v.files());
             case TextProperty v -> required(v.key(),v.value());
             case Relation v -> required(v.relationKey(),v.targetDocumentId());
-            case Snapshot v -> { required(v.title(),v.bodyMd());items(v.properties());items(v.relations()); }
-            case Content v -> { required(v.id(),v.projectId(),v.title(),v.folderCode(),v.bodyMd(),v.locked(),v.charCount(),v.revisionNo(),v.updatedAt());items(v.properties());items(v.relations());nonnegative(v.charCount(),v.revisionNo()); }
+            // 본문은 body 나 legacy_body_md 중 하나다. 변환 전 문서는 Markdown 만 온다.
+            case Snapshot v -> { required(v.title());body(v.body(),v.legacyBodyMd());items(v.properties());items(v.relations()); }
+            case Content v -> { required(v.id(),v.projectId(),v.title(),v.folderCode(),v.locked(),v.charCount(),v.revisionNo(),v.updatedAt());body(v.body(),v.legacyBodyMd());items(v.properties());items(v.relations());nonnegative(v.charCount(),v.revisionNo()); }
             case Version v -> { required(v.id(),v.fileId(),v.kind(),v.sourceRevisionNo(),v.createdAt());validate(v.snapshot()); }
             case Versions v -> items(v.versions());
             case Snippet v -> required(v.before(),v.match(),v.after());
