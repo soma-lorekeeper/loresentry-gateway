@@ -29,7 +29,8 @@ public final class AuthData {
     public record AcceptedTerms(@JsonProperty("session_id") String sessionId, @JsonProperty("expires_at") Instant expiresAt) {
         @Override public String toString(){return "AcceptedTerms[redacted]";}
     }
-    public record Account(java.util.UUID id,@JsonProperty("display_name") String displayName,String email) {}
+    public record Account(java.util.UUID id,@JsonProperty("display_name") String displayName,String email,
+            @JsonProperty("onboarding_completed") Boolean onboardingCompleted) {}
     public record DisplayName(@JsonProperty("display_name") String displayName) {}
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,
                  @JsonProperty("login_request_consumed") Boolean consumed) {

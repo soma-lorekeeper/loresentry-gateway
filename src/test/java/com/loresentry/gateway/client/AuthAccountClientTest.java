@@ -22,12 +22,12 @@ class AuthAccountClientTest {
     @Test void getAndPatchUseOnlyVerifiedUuidAndExplicitPublicFields() {
         server.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.GET)).andExpect(header("X-User-Id",user.toString()))
             .andExpect(headerDoesNotExist("Cookie")).andExpect(headerDoesNotExist("Authorization"))
-            .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null,\"private_claim\":\"secret\"}",MediaType.APPLICATION_JSON));
+            .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null,\"onboarding_completed\":false,\"private_claim\":\"secret\"}",MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.PATCH))
             .andExpect(header("X-User-Id",user.toString())).andExpect(content().json("{\"display_name\":\"New name\"}"))
-            .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"New name\",\"email\":null}",MediaType.APPLICATION_JSON));
-        assertThat(service.get(user)).isEqualTo(new AccountService.Account(user,"Name",null));
-        assertThat(service.update(user,"New name").displayName()).isEqualTo("New name");server.verify();
+            .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"New name\",\"email\":null,\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
+        assertThat(service.get(user)).isEqualTo(new AccountService.Account(user,"Name",null,false));
+        assertThat(service.update(user,"New name")).extracting(AccountService.Account::displayName,AccountService.Account::onboardingCompleted).containsExactly("New name",true);server.verify();
     }
     @ParameterizedTest @CsvSource({"400,INVALID_DISPLAY_NAME,NONE", "401,USER_CONTEXT_REQUIRED,RELOGIN",
         "404,USER_NOT_FOUND,RELOGIN", "503,ACCOUNT_UNAVAILABLE,RETRY_LATER"})
@@ -43,8 +43,35 @@ class AuthAccountClientTest {
         server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess(body,MediaType.APPLICATION_JSON));
         assertThatThrownBy(()->service.get(user)).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
     }
+    @ParameterizedTest @ValueSource(strings={"","\"onboarding_completed\":null,","\"onboarding_completed\":\"true\",","\"onboarding_completed\":1,"})
+    void onboardingFlagMustBeAnExplicitBoolean(String flag) {
+        server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{"+flag+"\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->service.get(user)).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
+    }
+    @Test void onboardingCompletionSendsOnlyTheVerifiedUserWithoutBody() {
+        server.expect(requestTo("http://auth.test/auth/users/me/onboarding")).andExpect(method(HttpMethod.PUT))
+            .andExpect(header("X-User-Id",user.toString())).andExpect(headerDoesNotExist("Content-Type"))
+            .andExpect(content().string("")).andRespond(withNoContent());
+        service.completeOnboarding(user);server.verify();
+    }
+    @ParameterizedTest @CsvSource({"401,USER_CONTEXT_REQUIRED,RELOGIN","404,USER_NOT_FOUND,RELOGIN","503,ACCOUNT_UNAVAILABLE,RETRY_LATER"})
+    void onboardingErrorsFollowTheAccountMapping(int status,String code,String action) {
+        server.expect(requestTo("http://auth.test/auth/users/me/onboarding")).andRespond(withStatus(HttpStatusCode.valueOf(status)).contentType(MediaType.APPLICATION_JSON)
+            .body("{\"code\":\""+code+"\",\"message\":\"private detail\",\"next_action\":\""+action+"\"}"));
+        assertThatThrownBy(()->service.completeOnboarding(user)).isInstanceOf(com.loresentry.gateway.application.AuthOperationFailure.class).hasMessage(code)
+            .satisfies(error->assertThat(((com.loresentry.gateway.application.AuthOperationFailure)error).status()).isEqualTo(status));
+        server.verify();
+    }
+    @Test void onboardingSuccessWithUnexpectedStatusIs502() {
+        server.expect(requestTo("http://auth.test/auth/users/me/onboarding")).andRespond(withSuccess("{}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->service.completeOnboarding(user)).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
+    }
+    @Test void onboardingTransportFailureIsRetryLater() {
+        server.expect(requestTo("http://auth.test/auth/users/me/onboarding")).andRespond(withException(new java.net.SocketTimeoutException("private")));
+        assertThatThrownBy(()->service.completeOnboarding(user)).hasMessage("ACCOUNT_UNAVAILABLE");server.verify();
+    }
     @Test void responseForAnotherUserIsNotExposed() {
-        server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"display_name\":\"Other\",\"email\":null}",MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"display_name\":\"Other\",\"email\":null,\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
         assertThatThrownBy(()->service.get(user)).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
     }
     @Test void lostPatchResponseIsUnavailableAndNotRetried() {

@@ -12,14 +12,20 @@ import org.springframework.web.bind.annotation.*;
 public class AccountController {
     public record Update(@JsonProperty("display_name") String displayName) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Account(UUID id,@JsonProperty("display_name") String displayName,String email) {}
+    public record Account(UUID id,@JsonProperty("display_name") String displayName,String email,
+            @JsonProperty("onboarding_completed") boolean onboardingCompleted) {}
     private final AccountService accounts;
     public AccountController(AccountService accounts){this.accounts=accounts;}
     @GetMapping("/auth/users/me")
     public ResponseEntity<Account> get(@CurrentUser UUID user) {return response(accounts.get(user));}
     @PatchMapping("/auth/users/me")
     public ResponseEntity<Account> update(@CurrentUser UUID user,@RequestBody Update input) {return response(accounts.update(user,input.displayName()));}
+    @PutMapping("/auth/users/me/onboarding")
+    public ResponseEntity<Void> completeOnboarding(@CurrentUser UUID user) {
+        accounts.completeOnboarding(user);
+        return ResponseEntity.noContent().header("Cache-Control","no-store").build();
+    }
     private ResponseEntity<Account> response(AccountService.Account account) {
-        return ResponseEntity.ok().header("Cache-Control","no-store").body(new Account(account.id(),account.displayName(),account.email()));
+        return ResponseEntity.ok().header("Cache-Control","no-store").body(new Account(account.id(),account.displayName(),account.email(),account.onboardingCompleted()));
     }
 }
