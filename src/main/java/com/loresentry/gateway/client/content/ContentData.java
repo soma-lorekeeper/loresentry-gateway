@@ -30,7 +30,8 @@ public final class ContentData {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record TextProperty(String key, String value) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Relation(@JsonProperty("relation_key") String relationKey, @JsonProperty("target_document_id") UUID targetDocumentId) {}
+    /** {@code description} 은 대상 문서가 아니라 <b>이 연결</b>의 설명이다. */
+    public record Relation(@JsonProperty("relation_key") String relationKey, @JsonProperty("target_document_id") UUID targetDocumentId, String description) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Snapshot(String title, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<Relation> relations) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
