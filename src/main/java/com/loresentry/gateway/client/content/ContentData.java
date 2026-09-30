@@ -72,7 +72,7 @@ public final class ContentData {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record WorkspaceState(tools.jackson.databind.JsonNode layout) {}
     public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description) {}
-    public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description) {}
+    public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description, String origin) {}
     public record GraphEpisode(UUID id, String name, @JsonProperty("document_ids") List<UUID> documentIds) {}
     public record Graph(List<GraphNode> nodes, List<GraphEdge> edges, List<GraphEpisode> episodes) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)

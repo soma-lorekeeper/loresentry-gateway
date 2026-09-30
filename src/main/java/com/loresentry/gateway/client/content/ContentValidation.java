@@ -47,7 +47,8 @@ final class ContentValidation {
             // layout 은 null 일 수 있다. 처음 여는 프로젝트는 복원할 것이 없다.
             case WorkspaceState v -> { }
             case GraphNode v -> required(v.id(),v.title(),v.folderCode(),v.description());
-            case GraphEdge v -> required(v.id(),v.source(),v.target(),v.relationKey(),v.description());
+            // origin 은 관계를 누가 만들었는지다. graph-rag 가 붙어도 이 모양은 바뀌지 않는다.
+            case GraphEdge v -> required(v.id(),v.source(),v.target(),v.relationKey(),v.description(),v.origin());
             case GraphEpisode v -> { required(v.id(),v.name()); Objects.requireNonNull(v.documentIds()); v.documentIds().forEach(Objects::requireNonNull); }
             case Graph v -> { items(v.nodes()); items(v.edges()); items(v.episodes()); }
             case ImageTicket v -> required(v.imageId(),v.key(),v.uploadUrl(),v.method(),v.headers(),v.expiresAt());
