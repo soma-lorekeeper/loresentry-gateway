@@ -34,11 +34,31 @@ client는 내부 DTO를 검증·변환하고 application은 후속 처리를 결
 | `POST /auth/sessions/revoke` | `POST /auth/sessions/revoke` | CSRF 통과 후 쿠키의 ID를 `session_id` 본문으로 구성. 쿠키가 없으면 호출 생략 | 폐기 결과와 브라우저 쿠키 삭제를 구분하여 반환 |
 | `GET /auth/users/me` | `GET /auth/users/me` | 인증된 사용자 UUID를 `X-User-Id`로 구성 | 본인 계정 외부 DTO로 변환 |
 | `PATCH /auth/users/me` | `PATCH /auth/users/me` | 인증된 사용자 UUID와 검증한 `display_name` | 수정된 본인 계정 외부 DTO로 변환 |
+| `PUT /auth/users/me/onboarding` | `PUT /auth/users/me/onboarding` | 인증된 사용자 UUID, 본문 없음 | `204`만 성공으로 처리 |
+| `POST /auth/users/me/deletion` | `GET /auth/users/me` → Content `DELETE /users/me/data` → `DELETE /auth/users/me` | 인증된 사용자 UUID만 `X-User-Id`로 구성, 본문 없음 | 아래 탈퇴 호출 순서 참고 |
 
 Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth API](../../loresentry-authentication/docs/API.md)다.
 콜백의 `login_request_consumed`는 오류 전달 중에도 보존하고 확인할 수 없는 값을 false로 바꾸지 않는다.
 응답 유실을 명령 미실행이나 폐기 성공으로 단정하지 않는다. 재요청·쿠키 처리의 기준은
 [로그인](auth/LOGIN_FLOW.md)과 [로그아웃](auth/LOGOUT_FLOW.md)을 따른다.
+
+계정 응답의 `onboarding_completed`는 필수 boolean이다. 계정 조회·수정 응답의 `id`가 요청
+사용자와 다르면 잘못된 응답으로 처리한다.
+
+### 회원 탈퇴 호출
+
+하나의 브라우저 요청을 다음 순서로 처리하며 앞 단계가 실패하면 뒤 단계를 호출하지 않는다.
+
+| 순서 | 호출 | 성공 | 실패 처리 |
+|---|---|---|---|
+| 1 | Auth `GET /auth/users/me` | `200` 본인 계정. 이메일 비교 | 알려진 401·404는 유지, 장애·기타 알려진 오류는 `503 ACCOUNT_DELETION_UNAVAILABLE`, 잘못된 응답은 502 |
+| 2 | Content `DELETE /users/me/data` | `204` | 잘못된 응답은 502, 나머지는 `503 ACCOUNT_DELETION_UNAVAILABLE` |
+| 3 | Auth `DELETE /auth/users/me` | `204` 또는 `404 USER_NOT_FOUND` | 알려진 401은 유지, 장애·기타 알려진 오류는 503, 잘못된 응답은 502 |
+
+이메일이 일치하지 않으면 2단계부터 호출하지 않는다. Content 삭제는 반복해도 같은 결과이고 Auth
+삭제는 이미 없는 계정을 404로 알려 주므로, 결과를 모르는 실패 뒤에도 브라우저 재요청으로
+완료할 수 있다. BFF는 자동 재시도하지 않는다. Auth가 세션을 폐기한 뒤 응답이 유실되면
+재요청은 세션 필터에서 `401 SESSION_INVALID`가 된다.
 
 ### 약관 동의 호출
 
@@ -60,10 +80,11 @@ Auth 호출 전에 거절한다. 동의 대기 Redis를 직접 조회하지 않�
 
 ## Content 호출
 
-[제공 Content API 목록](CONTENT_API.md#api-목록)의 38개 경로는 **각각 같은 메서드·경로의
+[제공 Content API 목록](CONTENT_API.md#api-목록)의 39개 경로는 **각각 같은 메서드·경로의
 Content API를 호출한다.** 각 경로의 요청을 외부 DTO에서 내부 DTO로 변환하고 인증된
 사용자 UUID를 전달한다. namespace 하위의 임의 경로를 중계하지 않는다.
 실제 호출 목록은 [ContentApiClient](../src/main/java/com/loresentry/gateway/client/content/ContentApiClient.java)에 있다.
+Content `DELETE /users/me/data`는 브라우저 경로가 아니며 [회원 탈퇴](#회원-탈퇴-호출)에서만 호출한다.
 Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API](CONTENT_API.md)는 브라우저에 제공하는 계약이다.
 
 | 항목 | BFF가 구성·처리하는 내용 |
