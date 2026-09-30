@@ -6,18 +6,26 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import java.io.*;
 import java.time.Instant;
+import java.util.List;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.ServletResponseWrapper;
+import org.springframework.http.ResponseCookie;
 
 /** Computes remaining cookie lifetime when response headers are about to be sent. */
 public final class SessionCookieResponse extends HttpServletResponseWrapper {
     private final AuthCookies cookies;
     private final String id;
     private final Instant expiresAt;
+    private final List<ResponseCookie> legacy;
     private boolean renewed;
     private ServletOutputStream output;
     private PrintWriter writer;
 
     public SessionCookieResponse(HttpServletResponse response, AuthCookies cookies, String id, Instant expiresAt) {
-        super(response); this.cookies=cookies; this.id=id; this.expiresAt=expiresAt;
+        this(response,cookies,id,expiresAt,List.of());
+    }
+    public SessionCookieResponse(HttpServletResponse response, AuthCookies cookies, String id, Instant expiresAt, List<ResponseCookie> legacy) {
+        super(response); this.cookies=cookies; this.id=id; this.expiresAt=expiresAt; this.legacy=List.copyOf(legacy);
         // Validate before the request reaches a domain service; do not emit headers yet.
         cookies.session(id,expiresAt);
     }
@@ -26,6 +34,12 @@ public final class SessionCookieResponse extends HttpServletResponseWrapper {
             cookies.setSession((HttpServletResponse)getResponse(),id,expiresAt);
             renewed=true;
         }
+    }
+    /** Stops renewal of an ended session and returns the legacy clears seen on the original request. */
+    public static java.util.Optional<List<ResponseCookie>> end(ServletResponse response) {
+        for(var current=response;current!=null;current=current instanceof ServletResponseWrapper wrapper?wrapper.getResponse():null)
+            if(current instanceof SessionCookieResponse session) { session.renewed=true; return java.util.Optional.of(session.legacy); }
+        return java.util.Optional.empty();
     }
     @Override public void setHeader(String name,String value) {
         super.setHeader(name,"Cache-Control".equalsIgnoreCase(name)?"no-store":value);

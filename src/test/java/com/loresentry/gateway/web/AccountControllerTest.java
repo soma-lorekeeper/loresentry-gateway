@@ -23,9 +23,15 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @com.loresentry.gateway.LocalTestEnvironment
 @WebMvcTest(AccountController.class)
-@Import({CurrentUserArgumentResolver.class,JsonConfiguration.class})
+@Import({CurrentUserArgumentResolver.class,JsonConfiguration.class,AccountControllerTest.Wiring.class})
 class AccountControllerTest {
-    @Autowired MockMvc mvc;@MockitoBean AccountService service;
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
+    static class Wiring {
+        @org.springframework.context.annotation.Bean com.loresentry.gateway.web.auth.AuthCookies cookies() {
+            return new com.loresentry.gateway.web.auth.AuthCookies(new com.loresentry.gateway.config.CookieSettings("ls_oauth",false),java.time.Clock.systemUTC());
+        }
+    }
+    @Autowired MockMvc mvc;@MockitoBean AccountService service;@MockitoBean com.loresentry.gateway.application.AccountDeletionService deletions;
     UUID user=UUID.randomUUID();
     @Test void getAndPatchMapExplicitAccountDto() throws Exception {
         when(service.get(user)).thenReturn(new AccountService.Account(user,"Name",null,false));

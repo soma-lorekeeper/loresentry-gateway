@@ -86,6 +86,9 @@ public class ContentApiClient {
         }
     }
 
+    public Void deleteUserData(UUID userId) {
+        return call("DELETE", "/users/me/data", Map.of(), userId, null, Void.class, 204, null);
+    }
     public ContentData.Projects listProjects(UUID userId, Conditions conditions) {
         return call("GET", "/projects", Map.of(), userId, null, ContentData.Projects.class, 200, conditions);
     }

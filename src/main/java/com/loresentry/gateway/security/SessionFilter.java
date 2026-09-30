@@ -37,7 +37,7 @@ public final class SessionFilter extends OncePerRequestFilter {
             catch(IllegalArgumentException duplicate) { throw new SecurityFailure(SecurityFailure.Reason.SESSION_INVALID); }
             var verified=verifier.verify(id);
             user=verified.userId();
-            renewed=new SessionCookieResponse(response,cookies,id,verified.expiresAt());
+            renewed=new SessionCookieResponse(response,cookies,id,verified.expiresAt(),cookies.clearLegacy(request));
         } catch(SecurityFailure failure) { SecurityResponses.write(response,failure.reason());return; }
         catch(RuntimeException unavailable) { SecurityResponses.write(response,SecurityFailure.Reason.SESSION_UNAVAILABLE);return; }
         var sanitized=new HttpServletRequestWrapper(request) {
