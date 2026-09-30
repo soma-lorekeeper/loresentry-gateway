@@ -26,7 +26,7 @@ import urllib.parse
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-AUTH_REF = "980a27e4935cdc6f7bc1e15940368842dd15295f"
+AUTH_REF = "0adc41de89cb95df8408be770cbd59c81ba82f52"
 CONTENT_REF = "d26a3d3a244bdebb79375290b9d032f232da5563"
 JAVA = "eclipse-temurin:21-jdk-alpine"
 containers = []
@@ -249,6 +249,7 @@ def main():
     parser.add_argument("--gradle-cache", type=Path, default=Path("/tmp/loresentry-auth-gradle"))
     parser.add_argument("--terms-project", type=Path, help="Verify terms end-to-end with this built frontend; fixture Google")
     args = parser.parse_args()
+    check(not args.terms_project or not (args.browser_project or args.browser_only), "terms-project is a separate browser verification mode")
     frontend_port = free_port() if args.terms_project else 3000
     check(not args.browser_only or args.browser_project, "browser-only requires browser-project")
     check(not args.browser_project or args.content_source, "browser checks require real Content")

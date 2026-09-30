@@ -7,8 +7,8 @@
 양쪽 절대 만료 일치, 14일 활동 연장과 쿠키 Max-Age도 비교한다. 실제 브라우저·운영 검증은 별도다.
 
 Linux 호스트의 Docker, Python 3와 Auth Git 저장소가 필요하다. Java 21과 Gradle은
-컨테이너에서 실행한다. 기본 Auth 기준은 LOREKEEPER-590 커밋
-`980a27e4935cdc6f7bc1e15940368842dd15295f`이며 원본 작업 트리는 변경하지 않는다.
+컨테이너에서 실행한다. 기본 Auth 기준은 새 콜백 계약을 제공하는 커밋
+`0adc41de89cb95df8408be770cbd59c81ba82f52`이며 원본 작업 트리는 변경하지 않는다.
 
 ```bash
 python3 integration/session/run.py --auth-source ../loresentry-authentication
@@ -72,3 +72,26 @@ python3 integration/session/run.py \
 콜백 URI를 사용하는 별도 Auth도 격리 환경에서 기동한다. 프론트의
 `integration/browser/README.md`에 프록시·TLS 범위와 실제 Google 수동 절차가 있다.
 이 옵션의 자동 검증에서 Google은 테스트 공급자이며 실제 Google 통과를 의미하지 않는다.
+
+## 약관 동의 전체 흐름
+
+프론트에서 `pnpm check:cdn`으로 정적 빌드를 만든 후 `--terms-project`를 사용한다.
+Node.js, 설치된 `playwright-core` 모듈과 Chromium 실행 파일이 필요하다. 경로는 실행 환경에 맞춰 주입한다.
+
+```bash
+PLAYWRIGHT_MODULE=<playwright-core-module-path> \
+CHROMIUM_EXECUTABLE=<chromium-executable-path> \
+<workspace-python> integration/session/run.py --terms-project ../loresentry-frontend
+```
+
+워크스페이스 Python은 `tools/python/.venv/bin/python`의 절대 경로다.
+`--auth-ref`로 다른 확정 커밋을 지정할 수 있으며 해당 커밋은 동의 API를 제공해야 한다.
+이 모드는 격리 DB에 테스트 원문을 등록하고 Auth 동의 검사를 활성화한다. 운영 원문이나 DB는 사용하지 않는다.
+현재·미래·개정 원문, 미동의·기존 동의 계정, 동시 완료·만료·응답 유실 복구를 HTTP로 검사한다.
+
+프론트의 `integration/browser/terms.mjs`는 브라우저 전용 loopback 프록시로 고정 local Origin을
+유지하면서 정적 빌드와 실제 BFF에 연결한다. 기존 개발 서버를 변경하지 않는다.
+Google 인가 URL을 관찰한 뒤 테스트 code를 실제 콜백에 전달한다. 외부 Google 네트워크는 사용하지 않는다.
+Chromium의 동의 쿠키·CSRF·닫기·재진입·새 본인 조회·로그아웃을 검사하고
+`terms-browser-report.json`을 기본 `report.json`과 함께 남긴다.
+실제 Google 화면과 Google 도메인의 브라우저 왕복, 운영 HTTPS·인프라 및 Content 업무 API는 별도 검증 대상이다.
