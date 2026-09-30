@@ -247,7 +247,9 @@ def main():
     parser.add_argument("--redis-image", choices=["redis:7.4-alpine", "valkey/valkey:9.0.6-alpine"],
                         default="valkey/valkey:9.0.6-alpine")
     parser.add_argument("--gradle-cache", type=Path, default=Path("/tmp/loresentry-auth-gradle"))
+    parser.add_argument("--terms-project", type=Path, help="Verify terms end-to-end with this built frontend; fixture Google")
     args = parser.parse_args()
+    frontend_port = free_port() if args.terms_project else 3000
     check(not args.browser_only or args.browser_project, "browser-only requires browser-project")
     check(not args.browser_project or args.content_source, "browser checks require real Content")
     scratch = Path(tempfile.mkdtemp(prefix="bff-auth-integration-"))
@@ -305,6 +307,7 @@ def main():
             "DB_HOST=127.0.0.1", f"DB_PORT={published_port(pg, 5432)}", "DB_NAME=authentication",
             "DB_USERNAME=integration", "DB_PASSWORD=isolated-test", "SPRING_DATA_REDIS_HOST=127.0.0.1",
             f"SPRING_DATA_REDIS_PORT={auth_redis_proxy.port}",
+            "AUTH_TERMS_ENABLED=" + str(bool(args.terms_project)).lower(),
             "AUTH_GOOGLE_CLIENT_ID=test-client", "AUTH_GOOGLE_CLIENT_SECRET=fixture-only",
             "AUTH_GOOGLE_REDIRECT_URI=http://localhost:8000/auth/oauth/google/callback"]) + "\n")
         auth_env.chmod(0o600)
@@ -375,7 +378,8 @@ def main():
         bff_env = scratch / "bff.env"
         internal = "http://127.0.0.1:" + str(proxy.server_port)
         bff_env.write_text("\n".join([
-            "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1", "BFF_AUTH_BASE_URL=" + internal, "BFF_CONTENT_BASE_URL=" + internal,
+            "SPRING_PROFILES_ACTIVE=local", "SERVER_ADDRESS=127.0.0.1",
+            "BFF_AUTH_BASE_URL=" + internal, "BFF_CONTENT_BASE_URL=" + internal,
             "BFF_GRAPH_BASE_URL=" + internal, "BFF_CHAT_BASE_URL=" + internal,
             "BFF_SESSION_REDIS_HOST=127.0.0.1", f"BFF_SESSION_REDIS_PORT={redis_proxy.port}",
             "BFF_SESSION_REDIS_USERNAME=bff", "BFF_SESSION_REDIS_PASSWORD=bff-test-password", "BFF_SESSION_REDIS_TLS=false"]) + "\n")
@@ -388,7 +392,10 @@ def main():
                    "-v", str(bff_jar) + ":/app.jar:ro", JAVA, "java", "-jar", "/app.jar")
             wait_http(port)
             ports.append(port)
-        if not args.browser_only:
+        if args.terms_project:
+            from terms_checks import verify_terms
+            verify_terms(sys.modules[__name__], ports, redis_port, pg, args.terms_project, scratch, frontend_port)
+        if not args.browser_only and not args.terms_project:
             if content_commit:
                 from content_checks import verify_content
                 verify_content(ports, request, login, check, error, passed)
@@ -407,7 +414,7 @@ def main():
                   "scenarios": results, "postgres": "18.4", "session_store_image": args.redis_image, "bff_instances": 2,
                   "external_google": "isolated HTTP/JWK fixture; real Auth OIDC client",
                   "not_verified": ["real Google consent", "production infrastructure"]
-                                  + ([] if args.browser_project else ["browser cookies"])
+                                  + ([] if args.browser_project or args.terms_project else ["browser cookies"])
                                   + ([] if content_commit else ["Content"])}
         (scratch / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print("All Auth/session integration scenarios passed.", flush=True)
