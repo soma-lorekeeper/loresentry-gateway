@@ -86,4 +86,29 @@ class TermsControllerTest {
                 .contentType("application/json").content(body)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         verifyNoInteractions(client,verifier);
     }
+    @Test void invalidPendingClearsCookieButMismatchAndUncertainResultsKeepIt() throws Exception {
+        for(var failure:List.of(
+                new AuthCallFailure(AuthCallFailure.Kind.CONTRACT,401,"CONSENT_REQUEST_INVALID","RESTART_LOGIN",null,false),
+                new AuthCallFailure(AuthCallFailure.Kind.CONTRACT,409,"TERMS_VERSION_MISMATCH","NONE",null,false),
+                new AuthCallFailure(AuthCallFailure.Kind.CONTRACT,503,"LOGIN_UNAVAILABLE","RESTART_LOGIN",null,false),
+                AuthCallFailure.unavailable(false),AuthCallFailure.invalid(null))) {
+            doThrow(failure).when(client).acceptTerms(ID,version);
+            int expected=failure.kind()==AuthCallFailure.Kind.UNAVAILABLE?503:failure.status();
+            var response=mvc.perform(post("/auth/terms/accept").cookie(new Cookie("ls_consent",ID)).header("Origin","http://localhost:3000").header("X-LS-CSRF","1")
+                    .contentType("application/json").content("{\"terms_version_id\":\""+version+"\"}"))
+                    .andExpect(status().is(expected)).andReturn().getResponse();
+            if(expected==401)assertThat(response.getHeaders("Set-Cookie")).singleElement().asString().startsWith("ls_consent=").contains("Max-Age=0");
+            else assertThat(response.getHeaders("Set-Cookie")).isEmpty();
+            assertThat(response.getContentAsString()).doesNotContain(ID,SESSION);
+        }
+        verify(client,times(5)).acceptTerms(ID,version);verifyNoInteractions(verifier);
+    }
+    @Test void expiredSuccessCannotSetLoginCookie() throws Exception {
+        when(client.acceptTerms(ID,version)).thenReturn(new AuthData.AcceptedTerms(SESSION,NOW));
+        mvc.perform(post("/auth/terms/accept").cookie(new Cookie("ls_consent",ID)).header("Origin","http://localhost:3000").header("X-LS-CSRF","1")
+                .contentType("application/json").content("{\"terms_version_id\":\""+version+"\"}"))
+                .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("UPSTREAM_INVALID_RESPONSE"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
+    }
+
 }

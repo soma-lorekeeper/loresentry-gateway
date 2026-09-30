@@ -118,8 +118,10 @@ public class AuthApiClient {
     private static boolean known(Operation operation,int status,String code,String action) {
         return switch(code) {
             case "INVALID_REQUEST" -> status==400&&"NONE".equals(action);
-            case "INTERNAL_ERROR" -> status==500&&"NONE".equals(action);
-            case "LOGIN_UNAVAILABLE" -> (operation==Operation.PREPARE||operation==Operation.CALLBACK)&&status==503&&"RESTART_LOGIN".equals(action);
+            case "INTERNAL_ERROR" -> operation!=Operation.TERMS&&status==500&&"NONE".equals(action);
+            case "LOGIN_UNAVAILABLE" -> (operation==Operation.PREPARE||operation==Operation.CALLBACK||operation==Operation.TERMS)&&status==503&&"RESTART_LOGIN".equals(action);
+            case "CONSENT_REQUEST_INVALID" -> operation==Operation.TERMS&&status==401&&"RESTART_LOGIN".equals(action);
+            case "TERMS_VERSION_MISMATCH" -> operation==Operation.TERMS&&status==409&&"NONE".equals(action);
             case "OAUTH_REQUEST_INVALID","OAUTH_LOGIN_DENIED" -> operation==Operation.CALLBACK&&status==400&&"RESTART_LOGIN".equals(action);
             case "OAUTH_IDENTITY_INVALID" -> operation==Operation.CALLBACK&&status==401&&"RESTART_LOGIN".equals(action);
             case "INVALID_SESSION_ID" -> operation==Operation.SESSION_REVOKE&&status==400&&"NONE".equals(action);
