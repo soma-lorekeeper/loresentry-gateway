@@ -30,4 +30,29 @@ class AuthTermsClientTest {
         assertThat(client.terms(ID).termsVersionId()).isEqualTo(VERSION);
         assertThat(client.acceptTerms(ID,VERSION).sessionId()).isEqualTo(ID);server.verify();
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"400,INVALID_REQUEST,NONE","401,CONSENT_REQUEST_INVALID,RESTART_LOGIN","409,TERMS_VERSION_MISMATCH,NONE","503,LOGIN_UNAVAILABLE,RESTART_LOGIN"})
+    void knownConsentFailuresRetainTheirContract(int status,String code,String action) {
+        server.expect(requestTo("http://auth.test/auth/terms/accept"))
+                .andRespond(withStatus(HttpStatusCode.valueOf(status)).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"code\":\""+code+"\",\"message\":\"private detail\",\"next_action\":\""+action+"\"}"));
+        assertThatThrownBy(()->client.acceptTerms(ID,VERSION)).isInstanceOfSatisfying(com.loresentry.gateway.client.auth.AuthCallFailure.class, failure->{
+            assertThat(failure.kind()).isEqualTo(com.loresentry.gateway.client.auth.AuthCallFailure.Kind.CONTRACT);
+            assertThat(failure.status()).isEqualTo(status);assertThat(failure.code()).isEqualTo(code);
+            assertThat(failure.getMessage()).doesNotContain("private detail");
+        });server.verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"{}","{\"session_id\":42,\"expires_at\":\"2026-10-14T00:00:00Z\"}","{\"session_id\":\"invalid\",\"expires_at\":\"2026-10-14T00:00:00Z\"}","[]"})
+    void malformedSuccessNeverBecomesAnAuthenticatedSession(String body) {
+        server.expect(requestTo("http://auth.test/auth/terms/accept")).andRespond(withSuccess(body,MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->client.acceptTerms(ID,VERSION)).isInstanceOfSatisfying(com.loresentry.gateway.client.auth.AuthCallFailure.class,
+                failure->assertThat(failure.kind()).isEqualTo(com.loresentry.gateway.client.auth.AuthCallFailure.Kind.INVALID_RESPONSE));server.verify();
+    }
+    @Test void responseLossIsUnavailableAndDoesNotRepeatThePost() {
+        server.expect(requestTo("http://auth.test/auth/terms/accept")).andRespond(withException(new java.net.SocketTimeoutException("private")));
+        assertThatThrownBy(()->client.acceptTerms(ID,VERSION)).isInstanceOfSatisfying(com.loresentry.gateway.client.auth.AuthCallFailure.class,
+                failure->assertThat(failure.kind()).isEqualTo(com.loresentry.gateway.client.auth.AuthCallFailure.Kind.UNAVAILABLE));server.verify();
+    }
+
 }
