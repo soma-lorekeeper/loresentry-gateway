@@ -10,12 +10,15 @@ import org.springframework.stereotype.Service;
 public class LoginService {
     private final AuthApiClient client;
     public LoginService(AuthApiClient client) {this.client=client;}
-    public enum Result { SUCCESS, CANCELLED, INVALID, UNAVAILABLE, FAILED }
+    public enum Result { SUCCESS, TERMS_REQUIRED, CANCELLED, INVALID, UNAVAILABLE, FAILED }
     public record Preparation(String authorizationUrl,String requestId,Instant expiresAt,Result result) {
         @Override public String toString(){return "Preparation[result="+result+"]";}
     }
     public record Session(SessionId id,Instant expiresAt) {}
-    public record CallbackResult(Session session,Result result,Boolean consumed) {}
+    public record Consent(ConsentId id,Instant expiresAt) {}
+    public record CallbackResult(Session session,Consent consent,Result result,Boolean consumed) {
+        public CallbackResult(Session session,Result result,Boolean consumed) { this(session,null,result,consumed); }
+    }
     public Preparation prepare() {
         try {
             var response=client.prepare();
@@ -26,6 +29,8 @@ public class LoginService {
         if(blank(requestId)||blank(state)||(blank(code)==blank(error))) return new CallbackResult(null,Result.INVALID,null);
         try {
             var response=client.callback(new AuthData.Callback(requestId,state,code,error));
+            if("TERMS_REQUIRED".equals(response.status()))
+                return new CallbackResult(null,new Consent(new ConsentId(response.consentRequestId()),response.expiresAt()),Result.TERMS_REQUIRED,response.consumed());
             var session=new Session(new SessionId(response.sessionId()),response.expiresAt());
             return new CallbackResult(session,Result.SUCCESS,response.consumed());
         } catch(AuthCallFailure failure) {return new CallbackResult(null,result(failure),failure.consumed());}

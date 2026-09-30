@@ -92,7 +92,10 @@ public class AuthApiClient {
         } else if(response instanceof AuthData.Prepared p) {
             required(p.authorizationUrl());required(p.loginRequestId());java.util.Objects.requireNonNull(p.expiresAt());
         } else if(response instanceof AuthData.LoginSession t) {
-            new com.loresentry.gateway.application.SessionId(t.sessionId());java.util.Objects.requireNonNull(t.expiresAt());
+            if("AUTHENTICATED".equals(t.status()) && t.consentRequestId()==null) new com.loresentry.gateway.application.SessionId(t.sessionId());
+            else if("TERMS_REQUIRED".equals(t.status()) && t.sessionId()==null) new com.loresentry.gateway.application.ConsentId(t.consentRequestId());
+            else throw new IllegalArgumentException();
+            java.util.Objects.requireNonNull(t.expiresAt());
         }
     }
     private static void required(String value) {if(value==null||value.isBlank()) throw new IllegalArgumentException();}

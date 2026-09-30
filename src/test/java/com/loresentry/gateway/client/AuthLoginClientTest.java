@@ -34,7 +34,7 @@ class AuthLoginClientTest {
         server.expect(requestTo("http://auth.test/auth/oauth/google/callback")).andExpect(method(HttpMethod.POST))
             .andExpect(content().json("{\"login_request_id\":\"request-id\",\"state\":\"state\",\"code\":\"code\",\"error\":null}"))
             .andExpect(headerDoesNotExist("Cookie")).andRespond(withSuccess("""
-                {"session_id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","expires_at":"2026-10-08T00:00:00Z","login_request_consumed":true}
+                {"status":"AUTHENTICATED","session_id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","expires_at":"2026-10-08T00:00:00Z","login_request_consumed":true}
                 """,MediaType.APPLICATION_JSON));
         var result=service.callback("request-id","state","code",null);
         assertThat(result.result()).isEqualTo(LoginService.Result.SUCCESS);assertThat(result.consumed()).isTrue();
@@ -80,4 +80,23 @@ class AuthLoginClientTest {
         var response=service.callback("request","state","code",null);
         assertThat(response.result()).isEqualTo(LoginService.Result.UNAVAILABLE);assertThat(response.consumed()).isNull();server.verify();
     }
+    @Test void pendingConsentHasNoSessionAndNoCredentialInDiagnostics() {
+        server.expect(requestTo("http://auth.test/auth/oauth/google/callback")).andRespond(withSuccess("""
+                {"status":"TERMS_REQUIRED","consent_request_id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","expires_at":"2026-09-30T01:00:00Z","login_request_consumed":true}
+                """, MediaType.APPLICATION_JSON));
+        var result=service.callback("request","state","code",null);
+        assertThat(result.result()).isEqualTo(LoginService.Result.TERMS_REQUIRED);
+        assertThat(result.session()).isNull();assertThat(result.consent()).isNotNull();
+        assertThat(result.toString()).doesNotContain("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        server.verify();
+    }
+    @Test void callbackRejectsConflictingCredentialKinds() {
+        server.expect(requestTo("http://auth.test/auth/oauth/google/callback")).andRespond(withSuccess("""
+                {"status":"TERMS_REQUIRED","session_id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","consent_request_id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","expires_at":"2026-09-30T01:00:00Z","login_request_consumed":true}
+                """, MediaType.APPLICATION_JSON));
+        var result=service.callback("request","state","code",null);
+        assertThat(result.result()).isEqualTo(LoginService.Result.FAILED);
+        assertThat(result.consumed()).isTrue();server.verify();
+    }
+
 }
