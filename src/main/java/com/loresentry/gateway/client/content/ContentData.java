@@ -70,6 +70,10 @@ public final class ContentData {
     /** 화면이 만든 레이아웃 JSON. BFF 도 Content 처럼 이 구조를 해석하지 않는다. */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record WorkspaceState(tools.jackson.databind.JsonNode layout) {}
+    public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description) {}
+    public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description) {}
+    public record GraphEpisode(UUID id, String name, @JsonProperty("document_ids") List<UUID> documentIds) {}
+    public record Graph(List<GraphNode> nodes, List<GraphEdge> edges, List<GraphEpisode> episodes) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record ImageTicketRequest(@JsonProperty("file_name") String fileName, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)

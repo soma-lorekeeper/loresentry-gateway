@@ -186,6 +186,11 @@ public class ContentApiController {
         var result = service.removeFavorite(userId, projectId, fileId, new Conditions(null, null, null));
         return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Favorites.from(result));
     }
+    @GetMapping("/projects/{projectId}/graph")
+    public ResponseEntity<ContentDtos.Graph> graph(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
+        var result = service.graph(userId, projectId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Graph.from(result));
+    }
     @GetMapping("/projects/{projectId}/workspace-state")
     public ResponseEntity<ContentDtos.WorkspaceState> loadWorkspaceState(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
         var result = service.loadWorkspaceState(userId, projectId, new Conditions(null, null, single(request, "If-None-Match")));

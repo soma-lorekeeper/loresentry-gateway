@@ -151,6 +151,26 @@ public final class ContentDtos {
         public static Favorites from(ContentData.Favorites value) { return value == null ? null : new Favorites(value.fileIds()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description) {
+        public static GraphNode from(ContentData.GraphNode v) { return v == null ? null : new GraphNode(v.id(), v.title(), v.folderCode(), v.description()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description) {
+        public static GraphEdge from(ContentData.GraphEdge v) { return v == null ? null : new GraphEdge(v.id(), v.source(), v.target(), v.relationKey(), v.description()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record GraphEpisode(UUID id, String name, @JsonProperty("document_ids") java.util.List<UUID> documentIds) {
+        public static GraphEpisode from(ContentData.GraphEpisode v) { return v == null ? null : new GraphEpisode(v.id(), v.name(), v.documentIds()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Graph(java.util.List<GraphNode> nodes, java.util.List<GraphEdge> edges, java.util.List<GraphEpisode> episodes) {
+        public static Graph from(ContentData.Graph v) {
+            return v == null ? null : new Graph(
+                    v.nodes().stream().map(GraphNode::from).toList(),
+                    v.edges().stream().map(GraphEdge::from).toList(),
+                    v.episodes().stream().map(GraphEpisode::from).toList());
+        }
+    }
     public record WorkspaceState(tools.jackson.databind.JsonNode layout) {
         public static WorkspaceState from(ContentData.WorkspaceState value) { return value == null ? null : new WorkspaceState(value.layout()); }
         public ContentData.WorkspaceState internal() { return new ContentData.WorkspaceState(layout); }

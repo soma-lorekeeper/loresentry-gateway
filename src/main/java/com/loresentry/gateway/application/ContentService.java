@@ -44,6 +44,7 @@ public class ContentService {
     public ContentData.Favorites listFavorites(UUID userId, UUID projectId, Conditions conditions) { return client.listFavorites(userId, projectId, conditions); }
     public ContentData.Favorites addFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) { return client.addFavorite(userId, projectId, fileId, conditions); }
     public ContentData.Favorites removeFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) { return client.removeFavorite(userId, projectId, fileId, conditions); }
+    public ContentData.Graph graph(UUID userId, UUID projectId, Conditions conditions) { return client.graph(userId, projectId, conditions); }
     public ContentData.WorkspaceState loadWorkspaceState(UUID userId, UUID projectId, Conditions conditions) { return client.loadWorkspaceState(userId, projectId, conditions); }
     public Void saveWorkspaceState(UUID userId, UUID projectId, ContentData.WorkspaceState body, Conditions conditions) { return client.saveWorkspaceState(userId, projectId, body, conditions); }
     public ContentData.ImageTicket createImageTicket(UUID userId, UUID projectId, ContentData.ImageTicketRequest body, Conditions conditions) { return client.createImageTicket(userId, projectId, body, conditions); }

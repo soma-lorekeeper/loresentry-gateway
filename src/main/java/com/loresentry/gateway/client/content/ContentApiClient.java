@@ -187,6 +187,9 @@ public class ContentApiClient {
     public ContentData.Favorites removeFavorite(UUID userId, UUID projectId, UUID fileId, Conditions conditions) {
         return call("DELETE", "/projects/{projectId}/favorites/{fileId}", Map.of("projectId", projectId, "fileId", fileId), userId, null, ContentData.Favorites.class, 200, conditions);
     }
+    public ContentData.Graph graph(UUID userId, UUID projectId, Conditions conditions) {
+        return call("GET", "/projects/{projectId}/graph", Map.of("projectId", projectId), userId, null, ContentData.Graph.class, 200, conditions);
+    }
     public ContentData.WorkspaceState loadWorkspaceState(UUID userId, UUID projectId, Conditions conditions) {
         return call("GET", "/projects/{projectId}/workspace-state", Map.of("projectId", projectId), userId, null, ContentData.WorkspaceState.class, 200, conditions);
     }
