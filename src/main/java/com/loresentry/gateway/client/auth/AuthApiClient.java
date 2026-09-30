@@ -15,7 +15,7 @@ import tools.jackson.core.JacksonException;
 @Component
 public class AuthApiClient {
     private final RestClient client;
-    private enum Operation { PREPARE, CALLBACK, SESSION_REVOKE, ACCOUNT }
+    private enum Operation { PREPARE, CALLBACK, SESSION_REVOKE, ACCOUNT, TERMS }
     private static final JsonMapper JSON=JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
@@ -34,6 +34,12 @@ public class AuthApiClient {
     public void revokeSession(String id) {
         call(HttpMethod.POST,"/auth/sessions/revoke",null,new AuthData.Session(id),Void.class,204,Operation.SESSION_REVOKE);
     }
+    public AuthData.Terms terms(String consentId) {
+        return call(HttpMethod.GET,"/auth/terms",null,null,AuthData.Terms.class,200,Operation.TERMS,consentId);
+    }
+    public AuthData.AcceptedTerms acceptTerms(String consentId,String version) {
+        return call(HttpMethod.POST,"/auth/terms/accept",null,new AuthData.AcceptTerms(consentId,version),AuthData.AcceptedTerms.class,200,Operation.TERMS);
+    }
     public AuthData.Account account(UUID user) {
         return ownAccount(user,call(HttpMethod.GET,"/auth/users/me",user,null,AuthData.Account.class,200,Operation.ACCOUNT));
     }
@@ -45,9 +51,13 @@ public class AuthApiClient {
         return account;
     }
     private <T> T call(HttpMethod method,String path,UUID user,Object body,Class<T> type,int expected,Operation operation) {
+        return call(method,path,user,body,type,expected,operation,null);
+    }
+    private <T> T call(HttpMethod method,String path,UUID user,Object body,Class<T> type,int expected,Operation operation,String consentId) {
         try {
             var request=client.method(method).uri(path);
             if(user!=null) request.header("X-User-Id",user.toString());
+            if(consentId!=null) request.header("X-Consent-Request-Id",consentId);
             if(body!=null) request.contentType(MediaType.APPLICATION_JSON).body(body);
             return request.exchange((outgoing,response)-> {
                 int status=response.getStatusCode().value();
@@ -96,6 +106,12 @@ public class AuthApiClient {
             else if("TERMS_REQUIRED".equals(t.status()) && t.sessionId()==null) new com.loresentry.gateway.application.ConsentId(t.consentRequestId());
             else throw new IllegalArgumentException();
             java.util.Objects.requireNonNull(t.expiresAt());
+        } else if(response instanceof AuthData.Terms t) {
+            if(!UUID.fromString(t.termsVersionId()).toString().equals(t.termsVersionId())) throw new IllegalArgumentException();
+            required(t.version());required(t.title());required(t.content());
+            java.util.Objects.requireNonNull(t.effectiveAt());java.util.Objects.requireNonNull(t.expiresAt());
+        } else if(response instanceof AuthData.AcceptedTerms t) {
+            new com.loresentry.gateway.application.SessionId(t.sessionId());java.util.Objects.requireNonNull(t.expiresAt());
         }
     }
     private static void required(String value) {if(value==null||value.isBlank()) throw new IllegalArgumentException();}
