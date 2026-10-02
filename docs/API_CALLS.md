@@ -80,7 +80,7 @@ Auth 호출 전에 거절한다. 동의 대기 Redis를 직접 조회하지 않�
 
 ## Content 호출
 
-[제공 Content API 목록](CONTENT_API.md#api-목록)의 39개 경로는 **각각 같은 메서드·경로의
+[제공 Content API 목록](CONTENT_API.md#api-목록)의 40개 경로는 **각각 같은 메서드·경로의
 Content API를 호출한다.** 각 경로의 요청을 외부 DTO에서 내부 DTO로 변환하고 인증된
 사용자 UUID를 전달한다. namespace 하위의 임의 경로를 중계하지 않는다.
 실제 호출 목록은 [ContentApiClient](../src/main/java/com/loresentry/gateway/client/content/ContentApiClient.java)에 있다.
@@ -96,6 +96,7 @@ Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API]
 | 검색 | q의 한글·공백·예약 문자 의미를 보존해 한 번만 인코딩 |
 | 성공 | 내부 DTO의 필수 필드·상태·타입을 검사해 외부 DTO로 변환. nullable 필드 유지 |
 | 생성 Location | 반환된 프로젝트 ID로 상대 `/projects/{id}` 구성. 내부 주소를 복사하지 않음 |
+| 피드백 | `POST /feedback`의 category·message·page·client만 내부 DTO로 전달. 길이·종류 판단과 시간당 횟수 제한은 Content가 수행 |
 | 충돌 | `DOCUMENT_CONFLICT`의 current·base를 외부 DTO로 변환. 추가 GET으로 재구성하지 않음 |
 | 실패 | 제공 Content API의 오류 변환 규칙 적용. 응답이 유실된 변경 요청을 미실행으로 단정하지 않음 |
 

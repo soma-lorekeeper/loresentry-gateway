@@ -57,9 +57,12 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | POST /projects/{id}/images | file_name?, content_type, size_bytes | 201 ImageTicket, Location |
 | POST /projects/{id}/images/{iid}/complete | — | 200 Image |
 | GET /projects/{id}/images/{iid} | — | 200 Image |
+| POST /feedback | category, message, page?, client? | 201 `{id, created_at}`, Location 없음 |
 
 - **샘플 프로젝트는 본문 없이 요청한다.** 예제 원고·설정 문서를 채우는 일과 이름 중복 시 번호를
   붙이는 일은 Content가 수행하며, 응답·Location·오류는 POST /projects와 같다.
+- **피드백은 Content DB에 저장한다.** category는 `BUG`·`IDEA`·`OTHER`, message는 공백 제거 후 1~2000자다.
+  page는 보낸 화면 경로(200자 이하), client는 user agent다. 검증과 시간당 20건 제한은 Content가 판단한다.
 - **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
 
 ## 명시적 API와 데이터 경계
@@ -100,7 +103,7 @@ CORS의 허용·노출 헤더와 CSRF 검사 순서는 [브라우저 보안](BRO
 ## 성공 응답
 
 API 목록의 상태 코드·DTO·nullable 필드를 유지한다. null 필드를 임의로 생략하지 않는다.
-프로젝트 생성과 샘플 프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성 및 버전 생성은 201이다.
+프로젝트 생성과 샘플 프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성·버전 생성·피드백 생성은 201이다.
 휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는 204이며 본문이 없다.
 그 밖의 표에 정의된 결과는 200이다.
 
@@ -110,6 +113,7 @@ folders·episodes·documents의 정규화된 목록으로 유지한다.
 
 ## 응답 데이터
 
+- FeedbackCreated: id, created_at.
 - Memo: id, project_id, scope(`project`·`file`), document_id, title, body, created_at, updated_at.
 - ImageTicket: image_id, key, upload_url, method, headers, expires_at, public_url.
 - Image: image_id, project_id, file_name, key, content_type, size_bytes, status(`PENDING`·`COMMITTED`),
@@ -131,10 +135,11 @@ message는 BFF가 정의한 고정 문구를 사용하며 내부 원문·SQL·�
 
 | HTTP | code | next_action |
 |---|---|---|
-| 400 | INVALID_REQUEST, INVALID_PROJECT_NAME, INVALID_PROJECT_DESCRIPTION, INVALID_FILE_TITLE, INVALID_FILE_LOCATION, INVALID_RELATION_TARGET, INVALID_MEMO, INVALID_UPLOAD_REQUEST | NONE |
+| 400 | INVALID_REQUEST, INVALID_PROJECT_NAME, INVALID_PROJECT_DESCRIPTION, INVALID_FILE_TITLE, INVALID_FILE_LOCATION, INVALID_RELATION_TARGET, INVALID_MEMO, INVALID_UPLOAD_REQUEST, INVALID_FEEDBACK | NONE |
 | 404 | PROJECT_NOT_FOUND, FILE_NOT_FOUND, VERSION_NOT_FOUND, NOT_FOUND, MEMO_NOT_FOUND, IMAGE_NOT_FOUND | NONE |
 | 409 | PROJECT_NAME_TAKEN, PROJECT_NOT_TRASHED, FILE_TITLE_TAKEN, FILE_NOT_TRASHED, DOCUMENT_LOCKED, OBJECT_NOT_UPLOADED | NONE |
 | 409 | DOCUMENT_CONFLICT | NONE |
+| 429 | FEEDBACK_RATE_LIMITED | RETRY_LATER |
 | 500 | INTERNAL_ERROR(알려진 Content 계약) | NONE |
 | 503 | CONTENT_UNAVAILABLE(연결 실패·읽기 시간 초과) | RETRY_LATER |
 | 502 | UPSTREAM_INVALID_RESPONSE(알 수 없는 오류·상태 불일치·잘못된 본문·내부 사용자 컨텍스트 오류) | NONE |
@@ -150,6 +155,6 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 검증 기준
 
-39개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
+40개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
 문서 저장 헤더와 URI 인코딩을 검증한다. 임의 하위 경로와 HTTP 메서드·추가 요청 필드,
 내부 민감 필드 노출·잘못된 응답·통신 실패 및 하위 전송 계층의 자동 재시도 부재를 확인한다.
