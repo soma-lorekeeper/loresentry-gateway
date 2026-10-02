@@ -80,4 +80,43 @@ class ContentApiClientTest {
         assertThatThrownBy(()->new ContentApiClient(builder.build()).createSampleProject(UUID.randomUUID(),null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
         mocks.getServer().verify();
     }
+    @Test void feedbackPostsTheContractBodyWithTheVerifiedUser() {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        var user=UUID.randomUUID();var id=UUID.randomUUID();
+        mocks.getServer().expect(requestTo("http://content.test/feedback")).andExpect(method(org.springframework.http.HttpMethod.POST))
+            .andExpect(header("X-User-Id",user.toString())).andExpect(headerDoesNotExist("Cookie"))
+            .andExpect(content().json("{\"category\":\"BUG\",\"message\":\"m\",\"page\":\"/projects/\",\"client\":null}",
+                org.springframework.test.json.JsonCompareMode.STRICT))
+            .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"id\":\""+id+"\",\"created_at\":\"2026-10-02T00:00:00Z\"}"));
+        var created=new ContentService(new ContentApiClient(builder.build())).createFeedback(user,
+            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m","/projects/",null),new Conditions(null,null,null));
+        assertThat(created.id()).isEqualTo(id);
+        mocks.getServer().verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"400,INVALID_FEEDBACK,NONE,INVALID_FEEDBACK", "429,FEEDBACK_RATE_LIMITED,RETRY_LATER,FEEDBACK_RATE_LIMITED",
+        "429,FEEDBACK_RATE_LIMITED,NONE,UPSTREAM_INVALID_RESPONSE", "400,INVALID_FEEDBACK,RETRY_LATER,UPSTREAM_INVALID_RESPONSE",
+        "429,INVALID_FEEDBACK,NONE,UPSTREAM_INVALID_RESPONSE"})
+    void feedbackErrorsPassThroughOnlyWhenContracted(int status,String code,String action,String result) {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        mocks.getServer().expect(requestTo("http://content.test/feedback")).andRespond(withStatus(org.springframework.http.HttpStatusCode.valueOf(status))
+            .contentType(MediaType.APPLICATION_JSON).body("{\"code\":\""+code+"\",\"message\":\"m\",\"next_action\":\""+action+"\"}"));
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).createFeedback(UUID.randomUUID(),
+            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m",null,null),null)).hasMessage(result);
+        mocks.getServer().verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"{}","{\"id\":\"00000000-0000-0000-0000-000000000001\"}","{\"created_at\":\"2026-10-02T00:00:00Z\"}"})
+    void feedbackRequiresIdAndCreatedAt(String payload) {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        mocks.getServer().expect(requestTo("http://content.test/feedback"))
+            .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body(payload));
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).createFeedback(UUID.randomUUID(),
+            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m",null,null),null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        mocks.getServer().verify();
+    }
 }

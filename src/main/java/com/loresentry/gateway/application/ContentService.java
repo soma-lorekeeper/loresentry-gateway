@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 public class ContentService {
     private final ContentApiClient client;
     public ContentService(ContentApiClient client) { this.client = client; }
+    public ContentData.FeedbackCreated createFeedback(UUID userId, ContentData.FeedbackInput body, Conditions conditions) { return client.createFeedback(userId, body, conditions); }
     public ContentData.Projects listProjects(UUID userId, Conditions conditions) { return client.listProjects(userId, conditions); }
     public ContentData.Projects listProjectTrash(UUID userId, Conditions conditions) { return client.listProjectTrash(userId, conditions); }
     public ContentData.Project createProject(UUID userId, ContentData.ProjectInput body, Conditions conditions) { return client.createProject(userId, body, conditions); }

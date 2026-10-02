@@ -10,7 +10,7 @@
 |---|---|---|
 | 로직을 어느 계층에 둘 것인가? | [서버 구조](ARCHITECTURE.md) | BFF 책임·패키지·의존 방향·데이터와 오류 전달 경계 |
 | 브라우저가 BFF를 어떻게 호출하는가? | [제공 API](API.md) | 공통 HTTP 계약·인증·계정·오류 응답 |
-| 브라우저의 Content 요청·응답은 무엇인가? | [Content 제공 API](CONTENT_API.md) | 39개 경로·DTO·저장 헤더·도메인 오류 |
+| 브라우저의 Content 요청·응답은 무엇인가? | [Content 제공 API](CONTENT_API.md) | 40개 경로·DTO·저장 헤더·도메인 오류 |
 | BFF가 다른 서버를 어떻게 호출하는가? | [호출 API](API_CALLS.md) | Auth·Content 호출 매핑·내부 입력·응답 변환·통신 제한 |
 | 쿠키·CSRF·CORS를 어떻게 처리하는가? | [브라우저 보안](BROWSER_SECURITY.md) | 쿠키 속성·환경별 주소·출처와 헤더 검사 |
 | Google 로그인 요청을 어떻게 연결하는가? | [로그인 흐름](auth/LOGIN_FLOW.md) | 페이지 이동·콜백·동의 완료 순서·OAuth 임시 쿠키 |

@@ -10,7 +10,7 @@
 
 단일 세션 ID를 사용하는 현재 BFF API 계약이다. 약관 동의도 아래 API 계약에 포함한다.
 이 문서는 제공 API의 진입점이며 인증·본인 계정 API를 상세히 정의한다.
-Content의 39개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
+Content의 40개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
 공개 `GET /health`는 프로세스 상태를 확인한다. 실행 안내는 [프로젝트 README](../README.md)를 따른다.
 
 ## 공통 계약

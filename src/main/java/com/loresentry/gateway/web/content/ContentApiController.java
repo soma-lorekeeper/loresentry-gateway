@@ -21,6 +21,11 @@ public class ContentApiController {
         if (values.size() > 1) throw new GatewayFailure(GatewayFailure.Reason.INVALID_REQUEST);
         return values.isEmpty() ? null : values.getFirst();
     }
+    @PostMapping("/feedback")
+    public ResponseEntity<ContentDtos.FeedbackCreated> createFeedback(@CurrentUser UUID userId, @RequestBody ContentDtos.FeedbackInput body) {
+        var result = service.createFeedback(userId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ContentDtos.FeedbackCreated.from(result));
+    }
     @GetMapping("/projects")
     public ResponseEntity<ContentDtos.Projects> listProjects(@CurrentUser UUID userId, HttpServletRequest request) {
         var result = service.listProjects(userId, new Conditions(null, null, single(request, "If-None-Match")));

@@ -34,14 +34,18 @@ public class ContentApiClient {
         return switch (code) {
             case "INVALID_REQUEST", "INVALID_PROJECT_NAME", "INVALID_PROJECT_DESCRIPTION", "INVALID_FILE_TITLE",
                     "INVALID_FILE_LOCATION", "INVALID_RELATION_TARGET", "INVALID_MEMO",
-                    "INVALID_UPLOAD_REQUEST" -> 400;
+                    "INVALID_UPLOAD_REQUEST", "INVALID_FEEDBACK" -> 400;
             case "PROJECT_NOT_FOUND", "FILE_NOT_FOUND", "VERSION_NOT_FOUND", "NOT_FOUND",
                     "MEMO_NOT_FOUND", "IMAGE_NOT_FOUND" -> 404;
             case "PROJECT_NAME_TAKEN", "PROJECT_NOT_TRASHED", "FILE_TITLE_TAKEN", "FILE_NOT_TRASHED",
                     "DOCUMENT_LOCKED", "DOCUMENT_CONFLICT", "OBJECT_NOT_UPLOADED" -> 409;
+            case "FEEDBACK_RATE_LIMITED" -> 429;
             case "INTERNAL_ERROR" -> 500;
             default -> 0;
         };
+    }
+    private static String errorAction(String code) {
+        return "FEEDBACK_RATE_LIMITED".equals(code) ? "RETRY_LATER" : "NONE";
     }
     public ContentApiClient(RestClient contentApiRestClient) { this.client = contentApiRestClient; }
     public record Conditions(String ifMatch, String saveId, String ifNoneMatch) {}
@@ -66,7 +70,7 @@ public class ContentApiClient {
                 if (status == expected) return ContentValidation.validate(JSON.readValue(response.getBody(), type));
                 if (status < 400) throw ContentCallFailure.invalid();
                 var error = JSON.readValue(response.getBody(), Error.class);
-                if (error == null || errorStatus(error.code()) != status || !"NONE".equals(error.nextAction())
+                if (error == null || errorStatus(error.code()) != status || !errorAction(error.code()).equals(error.nextAction())
                         || error.message() == null) throw ContentCallFailure.invalid();
                 if ("DOCUMENT_CONFLICT".equals(error.code())) {
                     ContentValidation.validate(error.current());
@@ -88,6 +92,9 @@ public class ContentApiClient {
 
     public Void deleteUserData(UUID userId) {
         return call("DELETE", "/users/me/data", Map.of(), userId, null, Void.class, 204, null);
+    }
+    public ContentData.FeedbackCreated createFeedback(UUID userId, ContentData.FeedbackInput body, Conditions conditions) {
+        return call("POST", "/feedback", Map.of(), userId, body, ContentData.FeedbackCreated.class, 201, conditions);
     }
     public ContentData.Projects listProjects(UUID userId, Conditions conditions) {
         return call("GET", "/projects", Map.of(), userId, null, ContentData.Projects.class, 200, conditions);
