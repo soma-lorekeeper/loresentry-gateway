@@ -23,7 +23,7 @@ public class ContentExceptionHandler {
             return ResponseEntity.status(409).header("Cache-Control","no-store").body(new Conflict(
                     failure.code(), "The document changed. Resolve the conflict.", "NONE",
                     ContentDtos.Content.from(failure.current()), ContentDtos.Snapshot.from(failure.base())));
-        return error(failure.status(), failure.code(), failure.status() == 503 ? "RETRY_LATER" : "NONE");
+        return error(failure.status(), failure.code(), failure.status() == 503 || failure.status() == 429 ? "RETRY_LATER" : "NONE");
     }
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<?> invalid() { return error(400, "INVALID_REQUEST", "NONE"); }
@@ -34,6 +34,7 @@ public class ContentExceptionHandler {
             case 400 -> "Invalid request.";
             case 404 -> "The requested resource was not found.";
             case 409 -> "The operation conflicts with the current state.";
+            case 429 -> "Too many requests. Try again later.";
             case 503 -> "Content service is unavailable.";
             case 502 -> "The service returned an invalid response.";
             default -> "An internal error occurred.";

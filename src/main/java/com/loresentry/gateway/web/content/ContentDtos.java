@@ -187,4 +187,12 @@ public final class ContentDtos {
     public record Image(@JsonProperty("image_id") UUID imageId, @JsonProperty("project_id") UUID projectId, @JsonProperty("file_name") String fileName, String key, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes, String status, @JsonProperty("public_url") String publicUrl, @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("committed_at") OffsetDateTime committedAt) {
         public static Image from(ContentData.Image value) { return value == null ? null : new Image(value.imageId(), value.projectId(), value.fileName(), value.key(), value.contentType(), value.sizeBytes(), value.status(), value.publicUrl(), value.createdAt(), value.committedAt()); }
     }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record FeedbackInput(String category, String message, String page, String client) {
+        public ContentData.FeedbackInput internal() { return new ContentData.FeedbackInput(category, message, page, client); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record FeedbackCreated(UUID id, @JsonProperty("created_at") OffsetDateTime createdAt) {
+        public static FeedbackCreated from(ContentData.FeedbackCreated value) { return value == null ? null : new FeedbackCreated(value.id(), value.createdAt()); }
+    }
 }

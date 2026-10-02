@@ -53,6 +53,7 @@ final class ContentValidation {
             case Graph v -> { items(v.nodes()); items(v.edges()); items(v.episodes()); }
             case ImageTicket v -> required(v.imageId(),v.key(),v.uploadUrl(),v.method(),v.headers(),v.expiresAt());
             case Image v -> required(v.imageId(),v.projectId(),v.key(),v.contentType(),v.sizeBytes(),v.status(),v.createdAt());
+            case FeedbackCreated v -> required(v.id(),v.createdAt());
             default -> throw new IllegalArgumentException("Unsupported Content response");
         }
         return value;

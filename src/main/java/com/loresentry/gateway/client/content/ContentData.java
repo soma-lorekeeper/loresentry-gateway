@@ -81,4 +81,8 @@ public final class ContentData {
     public record ImageTicket(@JsonProperty("image_id") UUID imageId, String key, @JsonProperty("upload_url") String uploadUrl, String method, java.util.Map<String, String> headers, @JsonProperty("expires_at") java.time.Instant expiresAt, @JsonProperty("public_url") String publicUrl) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Image(@JsonProperty("image_id") UUID imageId, @JsonProperty("project_id") UUID projectId, @JsonProperty("file_name") String fileName, String key, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes, String status, @JsonProperty("public_url") String publicUrl, @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("committed_at") OffsetDateTime committedAt) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record FeedbackInput(String category, String message, String page, String client) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record FeedbackCreated(UUID id, @JsonProperty("created_at") OffsetDateTime createdAt) {}
 }
