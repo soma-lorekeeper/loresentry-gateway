@@ -34,6 +34,7 @@ client는 내부 DTO를 검증·변환하고 application은 후속 처리를 결
 | `POST /auth/sessions/revoke` | `POST /auth/sessions/revoke` | CSRF 통과 후 쿠키의 ID를 `session_id` 본문으로 구성. 쿠키가 없으면 호출 생략 | 폐기 결과와 브라우저 쿠키 삭제를 구분하여 반환 |
 | `GET /auth/users/me` | `GET /auth/users/me` | 인증된 사용자 UUID를 `X-User-Id`로 구성 | 본인 계정 외부 DTO로 변환 |
 | `PATCH /auth/users/me` | `PATCH /auth/users/me` | 인증된 사용자 UUID와 검증한 `display_name` | 수정된 본인 계정 외부 DTO로 변환 |
+| `PUT /auth/users/me/locale` | `PUT /auth/users/me/locale` | 인증된 사용자 UUID와 `ko`·`en`으로 검증한 `{"locale"}` 본문. 검증 실패 시 호출 생략 | 수정된 본인 계정 외부 DTO로 변환 |
 | `PUT /auth/users/me/onboarding` | `PUT /auth/users/me/onboarding` | 인증된 사용자 UUID, 본문 없음 | `204`만 성공으로 처리 |
 | `POST /auth/users/me/deletion` | `GET /auth/users/me` → Content `DELETE /users/me/data` → `DELETE /auth/users/me` | 인증된 사용자 UUID만 `X-User-Id`로 구성, 본문 없음 | 아래 탈퇴 호출 순서 참고 |
 
@@ -42,7 +43,8 @@ Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth AP
 응답 유실을 명령 미실행이나 폐기 성공으로 단정하지 않는다. 재요청·쿠키 처리의 기준은
 [로그인](auth/LOGIN_FLOW.md)과 [로그아웃](auth/LOGOUT_FLOW.md)을 따른다.
 
-계정 응답의 `onboarding_completed`는 필수 boolean이다. 계정 조회·수정 응답의 `id`가 요청
+계정 응답의 `onboarding_completed`는 필수 boolean이다. `locale`은 선택이며 없으면 `null`로 변환하고,
+`ko`·`en`·null이 아닌 값은 잘못된 응답이다. 계정 조회·수정 응답의 `id`가 요청
 사용자와 다르면 잘못된 응답으로 처리한다.
 
 ### 회원 탈퇴 호출
@@ -67,7 +69,7 @@ BFF가 브라우저 입력에서 내부 요청을 구성하는 규칙은 다음�
 
 | BFF 요청 | Auth 호출 | 입력 구성 | 응답 사용 |
 |---|---|---|---|
-| `GET /auth/terms` | 같은 GET 경로 | 동의 쿠키 값을 `X-Consent-Request-Id` 헤더로 구성 | 정의된 약관 조회 필드만 외부 DTO로 반환 |
+| `GET /auth/terms` | 같은 GET 경로 | 동의 쿠키 값을 `X-Consent-Request-Id` 헤더로 구성. 브라우저 `locale`이 `ko`·`en`일 때만 같은 쿼리로 전달 | 정의된 약관 조회 필드만 외부 DTO로 반환. `locale`은 없으면 `null`, `ko`·`en` 외의 값은 잘못된 응답 |
 | `POST /auth/terms/accept` | 같은 POST 경로 | CSRF·입력 검증 후 쿠키의 `consent_request_id`와 본문의 `terms_version_id`로 내부 JSON 구성 | 세션 ID·만료 검증 후 로그인 완료 처리, 브라우저에는 `204` |
 
 브라우저가 보낸 내부 헤더나 사용자 ID는 사용하지 않는다. 쿠키 부재·중복·형식 오류는
@@ -94,6 +96,7 @@ Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API]
 | 저장 헤더 | `If-Match`·`X-Save-Id`를 값 변경 없이 전달. BFF가 멱등 키를 생성하거나 요청을 자동 재전송하지 않음 |
 | 조건 조회 | GET의 `If-None-Match`를 선택적으로 전달. BFF가 별도 304·ETag 기능을 만들지 않음 |
 | 검색 | q의 한글·공백·예약 문자 의미를 보존해 한 번만 인코딩 |
+| 샘플 언어 | `POST /projects/sample`의 `locale`이 `ko`·`en`일 때만 같은 쿼리로 전달. 생략·그 밖의 값은 쿼리 없이 호출 |
 | 성공 | 내부 DTO의 필수 필드·상태·타입을 검사해 외부 DTO로 변환. nullable 필드 유지 |
 | 생성 Location | 반환된 프로젝트 ID로 상대 `/projects/{id}` 구성. 내부 주소를 복사하지 않음 |
 | 피드백 | `POST /feedback`의 category·message·page·client만 내부 DTO로 전달. 길이·종류 판단과 시간당 횟수 제한은 Content가 수행 |

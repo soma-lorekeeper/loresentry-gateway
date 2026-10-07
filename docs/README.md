@@ -16,7 +16,7 @@
 | Google 로그인 요청을 어떻게 연결하는가? | [로그인 흐름](auth/LOGIN_FLOW.md) | 페이지 이동·콜백·동의 완료 순서·OAuth 임시 쿠키 |
 | 보호 요청을 어떤 순서로 인증하는가? | [세션 활동 흐름](auth/SESSION_FLOW.md) | CSRF·세션 검증·활동 연장·사용자 전달 순서 |
 | 로그아웃에서 무엇을 먼저 처리하는가? | [로그아웃 흐름](auth/LOGOUT_FLOW.md) | CSRF·Auth 폐기·쿠키 삭제의 순서와 실패 처리 |
-| 프론트는 인증 상태와 진행 요청을 어떻게 관리하는가? | [프론트 연동](FRONTEND_AUTH_CONTRACT.md) | 로그인 확인·동의 모달·오류별 화면 동작·탭 간 인증 전환 조율 |
+| 프론트는 인증 상태와 진행 요청을 어떻게 관리하는가? | [프론트 연동](FRONTEND_AUTH_CONTRACT.md) | 로그인 확인·동의 모달·계정 언어·오류별 화면 동작·탭 간 인증 전환 조율 |
 | 운영 환경에 어떤 설정과 권한이 필요한가? | [운영 설정](OPERATIONS.md) | 환경변수·Redis ACL·네트워크 접근·관측 기준 |
 | 배포·롤백·저장소 복구를 어떻게 수행하는가? | [배포·복구](ROLLOUT.md) | 서비스 호환성·트래픽 제어·재인증·복구 확인 |
 | Auth·BFF가 공유하는 저장 규칙은 무엇인가? | [Auth 세션 계약](../../loresentry-authentication/docs/session/SESSION_DESIGN.md) | ID 형식·Redis 레코드·수명·원자성·동시성 |
