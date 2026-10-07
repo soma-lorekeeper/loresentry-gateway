@@ -46,7 +46,7 @@ class ContentApiRoutesTest {
         verify(service).createProject(USER, new ContentData.ProjectInput("Novel", ""), new Conditions(null,null,null));
     }
     @Test void sampleProjectMirrorsProjectCreation() throws Exception {
-        given(service.createSampleProject(eq(USER), any())).willReturn(new ContentData.Project(
+        given(service.createSampleProject(eq(USER), any(), any())).willReturn(new ContentData.Project(
             ID, "유리 정원의 기록", "", OffsetDateTime.parse("2026-09-24T00:00:00Z"), null,
             OffsetDateTime.parse("2026-09-24T00:00:00Z"), null));
         mvc.perform(post("/projects/sample").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
@@ -54,10 +54,21 @@ class ContentApiRoutesTest {
             .andExpect(header().string("Cache-Control", "no-store"))
             .andExpect(jsonPath("$.id").value(ID.toString())).andExpect(jsonPath("$.name").value("유리 정원의 기록"))
             .andExpect(jsonPath("$.last_file").value(org.hamcrest.Matchers.nullValue()));
-        verify(service).createSampleProject(USER, new Conditions(null,null,null));
+        verify(service).createSampleProject(USER, null, new Conditions(null,null,null));
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "ko", "fr"})
+    void sampleProjectHandsTheLocaleQueryToTheClientFilter(String locale) throws Exception {
+        given(service.createSampleProject(eq(USER), any(), any())).willReturn(new ContentData.Project(
+            ID, "The Glass Garden Records", "", OffsetDateTime.parse("2026-09-24T00:00:00Z"), null,
+            OffsetDateTime.parse("2026-09-24T00:00:00Z"), null));
+        mvc.perform(post("/projects/sample").param("locale", locale).requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isCreated()).andExpect(header().string("Location", "/projects/" + ID))
+            .andExpect(jsonPath("$.name").value("The Glass Garden Records"));
+        verify(service).createSampleProject(USER, locale, new Conditions(null,null,null));
     }
     @Test void sampleProjectFailuresUseTheContentErrorBody() throws Exception {
-        given(service.createSampleProject(eq(USER), any())).willThrow(com.loresentry.gateway.client.content.ContentCallFailure.unavailable());
+        given(service.createSampleProject(eq(USER), any(), any())).willThrow(com.loresentry.gateway.client.content.ContentCallFailure.unavailable());
         mvc.perform(post("/projects/sample").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
             .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("CONTENT_UNAVAILABLE"))
             .andExpect(jsonPath("$.next_action").value("RETRY_LATER"));

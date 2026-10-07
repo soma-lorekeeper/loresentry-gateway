@@ -11,9 +11,9 @@ public final class TermsService {
     private final AuthApiClient client;
     private final Clock clock;
     public TermsService(AuthApiClient client,Clock clock){this.client=client;this.clock=clock;}
-    public AuthData.Terms query(ConsentId id) {
+    public AuthData.Terms query(ConsentId id,String locale) {
         try {
-            var result=client.terms(id.value());
+            var result=client.terms(id.value(),locale);
             validExpiry(result.expiresAt());return result;
         } catch(AuthCallFailure failure){throw mapped(failure);}
     }

@@ -68,8 +68,23 @@ class ContentApiClientTest {
             .andExpect(header("X-User-Id",user.toString())).andExpect(headerDoesNotExist("Content-Type")).andExpect(content().string(""))
             .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"id\":\""+project+"\",\"name\":\"유리 정원의 기록\",\"description\":\"\",\"last_worked_at\":\"2026-09-30T00:00:00Z\",\"trashed_at\":null,\"created_at\":\"2026-09-30T00:00:00Z\",\"last_file\":null}"));
-        var created=new ContentService(new ContentApiClient(builder.build())).createSampleProject(user,new Conditions(null,null,null));
+        var created=new ContentService(new ContentApiClient(builder.build())).createSampleProject(user,null,new Conditions(null,null,null));
         assertThat(created.id()).isEqualTo(project);assertThat(created.name()).isEqualTo("유리 정원의 기록");
+        mocks.getServer().verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(nullValues="NULL",value={"en,http://content.test/projects/sample?locale=en","ko,http://content.test/projects/sample?locale=ko",
+        "NULL,http://content.test/projects/sample","'',http://content.test/projects/sample","fr,http://content.test/projects/sample",
+        "EN,http://content.test/projects/sample","'en&locale=ko',http://content.test/projects/sample"})
+    void sampleProjectForwardsOnlySupportedLocale(String locale,String upstream) {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        var user=UUID.randomUUID();var project=UUID.randomUUID();
+        mocks.getServer().expect(requestTo(upstream)).andExpect(method(org.springframework.http.HttpMethod.POST))
+            .andExpect(header("X-User-Id",user.toString())).andExpect(content().string(""))
+            .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"id\":\""+project+"\",\"name\":\"The Glass Garden Records\",\"description\":\"\",\"last_worked_at\":\"2026-09-30T00:00:00Z\",\"trashed_at\":null,\"created_at\":\"2026-09-30T00:00:00Z\",\"last_file\":null}"));
+        assertThat(new ContentService(new ContentApiClient(builder.build())).createSampleProject(user,locale,new Conditions(null,null,null)).id()).isEqualTo(project);
         mocks.getServer().verify();
     }
     @Test void sampleProjectRequiresCreatedStatus() {
@@ -77,7 +92,7 @@ class ContentApiClientTest {
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
         mocks.getServer().expect(requestTo("http://content.test/projects/sample"))
             .andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"name\":\"n\",\"description\":\"\",\"last_worked_at\":\"2026-09-30T00:00:00Z\",\"created_at\":\"2026-09-30T00:00:00Z\"}",MediaType.APPLICATION_JSON));
-        assertThatThrownBy(()->new ContentApiClient(builder.build()).createSampleProject(UUID.randomUUID(),null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).createSampleProject(UUID.randomUUID(),null,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
         mocks.getServer().verify();
     }
     @Test void feedbackPostsTheContractBodyWithTheVerifiedUser() {

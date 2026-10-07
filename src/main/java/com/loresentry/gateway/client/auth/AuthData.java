@@ -22,7 +22,7 @@ public final class AuthData {
         @Override public String toString(){return "Session[redacted]";}
     }
     public record Terms(@JsonProperty("terms_version_id") String termsVersionId, String version, String title, String content,
-            @JsonProperty("effective_at") Instant effectiveAt, @JsonProperty("expires_at") Instant expiresAt) {}
+            @JsonProperty("effective_at") Instant effectiveAt, @JsonProperty("expires_at") Instant expiresAt, String locale) {}
     public record AcceptTerms(@JsonProperty("consent_request_id") String consentRequestId, @JsonProperty("terms_version_id") String termsVersionId) {
         @Override public String toString(){return "AcceptTerms[redacted]";}
     }
@@ -30,8 +30,9 @@ public final class AuthData {
         @Override public String toString(){return "AcceptedTerms[redacted]";}
     }
     public record Account(java.util.UUID id,@JsonProperty("display_name") String displayName,String email,
-            @JsonProperty("onboarding_completed") Boolean onboardingCompleted) {}
+            @JsonProperty("onboarding_completed") Boolean onboardingCompleted,String locale) {}
     public record DisplayName(@JsonProperty("display_name") String displayName) {}
+    public record AccountLocale(String locale) {}
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,
                  @JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "AuthError[redacted]"; }

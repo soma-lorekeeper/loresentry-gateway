@@ -26,8 +26,53 @@ class AuthAccountClientTest {
         server.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.PATCH))
             .andExpect(header("X-User-Id",user.toString())).andExpect(content().json("{\"display_name\":\"New name\"}"))
             .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"New name\",\"email\":null,\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
-        assertThat(service.get(user)).isEqualTo(new AccountService.Account(user,"Name",null,false));
+        assertThat(service.get(user)).isEqualTo(new AccountService.Account(user,"Name",null,false,null));
         assertThat(service.update(user,"New name")).extracting(AccountService.Account::displayName,AccountService.Account::onboardingCompleted).containsExactly("New name",true);server.verify();
+    }
+    @ParameterizedTest @ValueSource(strings={"ko","en"})
+    void storedLocaleIsPassedThrough(String locale) {
+        server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null,\"onboarding_completed\":true,\"locale\":\""+locale+"\"}",MediaType.APPLICATION_JSON));
+        assertThat(service.get(user).locale()).isEqualTo(locale);server.verify();
+    }
+    @ParameterizedTest @ValueSource(strings={"","\"locale\":null,"})
+    void missingOrUnsetLocaleIsNull(String field) {
+        server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{"+field+"\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null,\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
+        assertThat(service.get(user).locale()).isNull();server.verify();
+    }
+    @ParameterizedTest @ValueSource(strings={"\"fr\"","\"EN\"","\"ko-KR\"","\"\"","42","true","[\"en\"]","{}"})
+    void unsupportedLocaleIs502(String locale) {
+        server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"locale\":"+locale+",\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null,\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->service.get(user)).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
+    }
+    @Test void localeUpdatePutsOnlyTheLocaleForTheVerifiedUser() {
+        server.expect(requestTo("http://auth.test/auth/users/me/locale")).andExpect(method(HttpMethod.PUT)).andExpect(header("X-User-Id",user.toString()))
+            .andExpect(headerDoesNotExist("Cookie")).andExpect(headerDoesNotExist("Authorization"))
+            .andExpect(content().json("{\"locale\":\"en\"}",org.springframework.test.json.JsonCompareMode.STRICT))
+            .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":null,\"onboarding_completed\":true,\"locale\":\"en\"}",MediaType.APPLICATION_JSON));
+        assertThat(service.updateLocale(user,"en")).isEqualTo(new AccountService.Account(user,"Name",null,true,"en"));server.verify();
+    }
+    @ParameterizedTest @CsvSource({"400,INVALID_REQUEST,NONE","401,USER_CONTEXT_REQUIRED,RELOGIN","404,USER_NOT_FOUND,RELOGIN","503,ACCOUNT_UNAVAILABLE,RETRY_LATER"})
+    void localeUpdateErrorsFollowTheAccountMapping(int status,String code,String action) {
+        server.expect(requestTo("http://auth.test/auth/users/me/locale")).andRespond(withStatus(HttpStatusCode.valueOf(status)).contentType(MediaType.APPLICATION_JSON)
+            .body("{\"code\":\""+code+"\",\"message\":\"private detail\",\"next_action\":\""+action+"\"}"));
+        assertThatThrownBy(()->service.updateLocale(user,"en")).isInstanceOf(com.loresentry.gateway.application.AuthOperationFailure.class).hasMessage(code)
+            .satisfies(error->assertThat(((com.loresentry.gateway.application.AuthOperationFailure)error).status()).isEqualTo(status));
+        server.verify();
+    }
+    @Test void localeUpdateOnAnAuthWithoutTheRouteKeepsItsInternalError() {
+        server.expect(requestTo("http://auth.test/auth/users/me/locale")).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON)
+            .body("{\"code\":\"INTERNAL_ERROR\",\"message\":\"private detail\",\"next_action\":\"NONE\"}"));
+        assertThatThrownBy(()->service.updateLocale(user,"en")).isInstanceOf(com.loresentry.gateway.application.AuthOperationFailure.class).hasMessage("INTERNAL_ERROR")
+            .satisfies(error->assertThat(((com.loresentry.gateway.application.AuthOperationFailure)error).status()).isEqualTo(500));
+        server.verify();
+    }
+    @Test void localeUpdateResponseForAnotherUserIsNotExposed() {
+        server.expect(requestTo("http://auth.test/auth/users/me/locale")).andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"display_name\":\"Other\",\"email\":null,\"onboarding_completed\":true,\"locale\":\"en\"}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->service.updateLocale(user,"en")).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
+    }
+    @Test void lostLocaleUpdateResponseIsUnavailableAndNotRetried() {
+        server.expect(requestTo("http://auth.test/auth/users/me/locale")).andExpect(method(HttpMethod.PUT)).andRespond(withException(new java.net.SocketTimeoutException("private")));
+        assertThatThrownBy(()->service.updateLocale(user,"en")).hasMessage("ACCOUNT_UNAVAILABLE");server.verify();
     }
     @ParameterizedTest @CsvSource({"400,INVALID_DISPLAY_NAME,NONE", "401,USER_CONTEXT_REQUIRED,RELOGIN",
         "404,USER_NOT_FOUND,RELOGIN", "503,ACCOUNT_UNAVAILABLE,RETRY_LATER"})

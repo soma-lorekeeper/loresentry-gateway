@@ -4,6 +4,7 @@ import java.util.UUID;
 import java.io.InputStream;
 import java.io.IOException;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.loresentry.gateway.client.SupportedLocale;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -34,8 +35,9 @@ public class AuthApiClient {
     public void revokeSession(String id) {
         call(HttpMethod.POST,"/auth/sessions/revoke",null,new AuthData.Session(id),Void.class,204,Operation.SESSION_REVOKE);
     }
-    public AuthData.Terms terms(String consentId) {
-        return call(HttpMethod.GET,"/auth/terms",null,null,AuthData.Terms.class,200,Operation.TERMS,consentId);
+    public AuthData.Terms terms(String consentId,String locale) {
+        var path=SupportedLocale.valid(locale)?"/auth/terms?locale="+locale:"/auth/terms";
+        return call(HttpMethod.GET,path,null,null,AuthData.Terms.class,200,Operation.TERMS,consentId);
     }
     public AuthData.AcceptedTerms acceptTerms(String consentId,String version) {
         return call(HttpMethod.POST,"/auth/terms/accept",null,new AuthData.AcceptTerms(consentId,version),AuthData.AcceptedTerms.class,200,Operation.TERMS);
@@ -45,6 +47,9 @@ public class AuthApiClient {
     }
     public AuthData.Account updateAccount(UUID user,String displayName) {
         return ownAccount(user,call(HttpMethod.PATCH,"/auth/users/me",user,new AuthData.DisplayName(displayName),AuthData.Account.class,200,Operation.ACCOUNT));
+    }
+    public AuthData.Account updateLocale(UUID user,String locale) {
+        return ownAccount(user,call(HttpMethod.PUT,"/auth/users/me/locale",user,new AuthData.AccountLocale(locale),AuthData.Account.class,200,Operation.ACCOUNT));
     }
     public void completeOnboarding(UUID user) {
         call(HttpMethod.PUT,"/auth/users/me/onboarding",user,null,Void.class,204,Operation.ACCOUNT);
@@ -105,7 +110,7 @@ public class AuthApiClient {
     private static void validate(Object response) {
         if(response instanceof AuthData.Account account) {
             java.util.Objects.requireNonNull(account.id());required(account.displayName());
-            java.util.Objects.requireNonNull(account.onboardingCompleted());
+            java.util.Objects.requireNonNull(account.onboardingCompleted());locale(account.locale());
         } else if(response instanceof AuthData.Prepared p) {
             required(p.authorizationUrl());required(p.loginRequestId());java.util.Objects.requireNonNull(p.expiresAt());
         } else if(response instanceof AuthData.LoginSession t) {
@@ -116,12 +121,13 @@ public class AuthApiClient {
         } else if(response instanceof AuthData.Terms t) {
             if(!UUID.fromString(t.termsVersionId()).toString().equals(t.termsVersionId())) throw new IllegalArgumentException();
             required(t.version());required(t.title());required(t.content());
-            java.util.Objects.requireNonNull(t.effectiveAt());java.util.Objects.requireNonNull(t.expiresAt());
+            java.util.Objects.requireNonNull(t.effectiveAt());java.util.Objects.requireNonNull(t.expiresAt());locale(t.locale());
         } else if(response instanceof AuthData.AcceptedTerms t) {
             new com.loresentry.gateway.application.SessionId(t.sessionId());java.util.Objects.requireNonNull(t.expiresAt());
         }
     }
     private static void required(String value) {if(value==null||value.isBlank()) throw new IllegalArgumentException();}
+    private static void locale(String value) {if(value!=null&&!SupportedLocale.valid(value)) throw new IllegalArgumentException();}
     private static boolean known(Operation operation,int status,String code,String action) {
         return switch(code) {
             case "INVALID_REQUEST" -> status==400&&"NONE".equals(action);
