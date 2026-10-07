@@ -43,12 +43,22 @@ class TermsControllerTest {
         @Bean @Order(2) SessionFilter session(OpaqueSessionVerifier verifier,CookieSettings names,AuthCookies cookies){return new SessionFilter(verifier,names,cookies);}
     }
     @Test void termsQuerySkipsSessionAndDoesNotRenewEitherCookie() throws Exception {
-        when(client.terms(ID)).thenReturn(new AuthData.Terms(version,"1","Terms","Original\ntext",NOW,NOW.plusSeconds(1800)));
+        when(client.terms(ID,null)).thenReturn(new AuthData.Terms(version,"1","Terms","Original\ntext",NOW,NOW.plusSeconds(1800),null));
         mvc.perform(get("/auth/terms").cookie(new Cookie("ls_consent",ID),new Cookie("ls_session",SESSION)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(6))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(7))
                 .andExpect(jsonPath("$.terms_version_id").value(version)).andExpect(jsonPath("$.consent_request_id").doesNotExist())
+                .andExpect(jsonPath("$.locale").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(header().doesNotExist("Set-Cookie")).andExpect(header().string("Cache-Control","no-store"));
-        verifyNoInteractions(verifier);verify(client).terms(ID);
+        verifyNoInteractions(verifier);verify(client).terms(ID,null);
+    }
+    @ParameterizedTest @org.junit.jupiter.params.provider.CsvSource({"en,en","ko,ko","en,ko"})
+    void termsQueryPassesTheLocaleQueryAndReturnsTheTextLanguage(String requested,String returned) throws Exception {
+        when(client.terms(ID,requested)).thenReturn(new AuthData.Terms(version,"1","Terms","Text",NOW,NOW.plusSeconds(1800),returned));
+        mvc.perform(get("/auth/terms").param("locale",requested).cookie(new Cookie("ls_consent",ID)))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(content().json("{\"terms_version_id\":\""+version+"\",\"version\":\"1\",\"title\":\"Terms\",\"content\":\"Text\",\"effective_at\":\"2026-09-30T00:00:00Z\",\"expires_at\":\"2026-09-30T00:30:00Z\",\"locale\":\""+returned+"\"}",
+                        org.springframework.test.json.JsonCompareMode.STRICT));
+        verify(client).terms(ID,requested);verifyNoInteractions(verifier);
     }
     @Test void acceptanceReturnsOnly204AndSetsSessionAfterVerifiedSuccess() throws Exception {
         when(client.acceptTerms(ID,version)).thenReturn(new AuthData.AcceptedTerms(SESSION,NOW.plusSeconds(1209600)));

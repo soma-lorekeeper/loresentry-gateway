@@ -1,5 +1,6 @@
 package com.loresentry.gateway.web.auth;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loresentry.gateway.application.*;
 import com.loresentry.gateway.config.CookieSettings;
@@ -12,18 +13,19 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 public final class TermsController {
     public record Accept(@JsonProperty("terms_version_id") String termsVersionId) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Terms(@JsonProperty("terms_version_id") String termsVersionId,String version,String title,String content,
-            @JsonProperty("effective_at") Instant effectiveAt,@JsonProperty("expires_at") Instant expiresAt) {}
+            @JsonProperty("effective_at") Instant effectiveAt,@JsonProperty("expires_at") Instant expiresAt,String locale) {}
     private final TermsService terms;
     private final AuthCookies cookies;
     private final CookieSettings names;
     public TermsController(TermsService terms,AuthCookies cookies,CookieSettings names){this.terms=terms;this.cookies=cookies;this.names=names;}
 
     @GetMapping("/auth/terms")
-    public ResponseEntity<Terms> query(HttpServletRequest request,HttpServletResponse response) {
+    public ResponseEntity<Terms> query(@RequestParam(name="locale",required=false) String locale,HttpServletRequest request,HttpServletResponse response) {
         try {
-            var value=terms.query(credential(request));
-            return ResponseEntity.ok().header("Cache-Control","no-store").body(new Terms(value.termsVersionId(),value.version(),value.title(),value.content(),value.effectiveAt(),value.expiresAt()));
+            var value=terms.query(credential(request),locale);
+            return ResponseEntity.ok().header("Cache-Control","no-store").body(new Terms(value.termsVersionId(),value.version(),value.title(),value.content(),value.effectiveAt(),value.expiresAt(),value.locale()));
         } catch(AuthOperationFailure failure){clearInvalid(response,failure);throw failure;}
     }
     @PostMapping("/auth/terms/accept")

@@ -21,7 +21,7 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | GET /projects | — | 200 `{projects: Project[]}` |
 | GET /projects/trash | — | 200 `{projects: Project[]}` |
 | POST /projects | name, description | 201 Project, Location |
-| POST /projects/sample | — | 201 Project, Location |
+| POST /projects/sample | locale 쿼리, 생략 가능 | 201 Project, Location |
 | GET /projects/{id} | — | 200 Project |
 | PATCH /projects/{id} | name?, description? | 200 Project |
 | POST /projects/{id}/trash | — | 204 |
@@ -61,6 +61,8 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 
 - **샘플 프로젝트는 본문 없이 요청한다.** 예제 원고·설정 문서를 채우는 일과 이름 중복 시 번호를
   붙이는 일은 Content가 수행하며, 응답·Location·오류는 POST /projects와 같다.
+  `locale` 쿼리가 `ko`·`en`이면 Content에 전달해 그 언어의 샘플을 만든다. 생략·빈 값·그 밖의 값은
+  오류 없이 쿼리를 보내지 않으며 한국어 샘플이 된다.
 - **피드백은 Content DB에 저장한다.** category는 `BUG`·`IDEA`·`OTHER`, message는 공백 제거 후 1~2000자다.
   page는 보낸 화면 경로(200자 이하), client는 user agent다. 검증과 시간당 20건 제한은 Content가 판단한다.
 - **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
@@ -79,7 +81,8 @@ Content에서 판단한다. PATCH name/description의 null은 현행 Content와 
 설명을 비우려면 빈 문자열을 사용한다. label 요청 본문은 버전 생성에서만 생략할 수 있다.
 
 경로 UUID 형식 오류는 현재 Content가 사용하는 404 PROJECT_NOT_FOUND/NONE을 유지한다.
-검색 q는 원래 문자열의 의미를 보존해 한 번만 인코딩한다. 임의 쿼리를 통째로 전달하지 않는다.
+검색 q는 원래 문자열의 의미를 보존해 한 번만 인코딩한다. 샘플의 locale은 허용 값만 전달한다.
+임의 쿼리를 통째로 전달하지 않는다.
 
 ## 인증과 헤더
 

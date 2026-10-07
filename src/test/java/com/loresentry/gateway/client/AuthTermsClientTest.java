@@ -27,8 +27,26 @@ class AuthTermsClientTest {
         server.expect(requestTo("http://auth.test/auth/terms/accept")).andExpect(method(HttpMethod.POST))
                 .andExpect(content().json("{\"consent_request_id\":\""+ID+"\",\"terms_version_id\":\""+VERSION+"\"}"))
                 .andExpect(headerDoesNotExist("Cookie")).andRespond(withSuccess("{\"session_id\":\""+ID+"\",\"expires_at\":\"2026-10-14T00:00:00Z\"}",MediaType.APPLICATION_JSON));
-        assertThat(client.terms(ID).termsVersionId()).isEqualTo(VERSION);
+        var terms=client.terms(ID,null);
+        assertThat(terms.termsVersionId()).isEqualTo(VERSION);assertThat(terms.locale()).isNull();
         assertThat(client.acceptTerms(ID,VERSION).sessionId()).isEqualTo(ID);server.verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(nullValues="NULL",value={"en,http://auth.test/auth/terms?locale=en,en","ko,http://auth.test/auth/terms?locale=ko,ko",
+        "NULL,http://auth.test/auth/terms,ko","'',http://auth.test/auth/terms,ko","fr,http://auth.test/auth/terms,ko","EN,http://auth.test/auth/terms,ko",
+        "ko-KR,http://auth.test/auth/terms,ko","'en&locale=ko',http://auth.test/auth/terms,ko","en%26x,http://auth.test/auth/terms,ko"})
+    void forwardsOnlySupportedLocaleAndReturnsTheTextLanguage(String locale,String upstream,String returned){
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.GET)).andExpect(header("X-Consent-Request-Id",ID))
+                .andRespond(withSuccess("{\"terms_version_id\":\""+VERSION+"\",\"version\":\"1\",\"title\":\"Terms\",\"content\":\"Text\",\"effective_at\":\"2026-09-30T00:00:00Z\",\"expires_at\":\"2026-09-30T00:30:00Z\",\"locale\":\""+returned+"\"}",MediaType.APPLICATION_JSON));
+        assertThat(client.terms(ID,locale).locale()).isEqualTo(returned);server.verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"\"fr\"","\"EN\"","\"\"","42","[\"en\"]"})
+    void unsupportedTermsLocaleIsAnInvalidResponse(String locale){
+        server.expect(requestTo("http://auth.test/auth/terms?locale=en"))
+                .andRespond(withSuccess("{\"terms_version_id\":\""+VERSION+"\",\"version\":\"1\",\"title\":\"Terms\",\"content\":\"Text\",\"effective_at\":\"2026-09-30T00:00:00Z\",\"expires_at\":\"2026-09-30T00:30:00Z\",\"locale\":"+locale+"}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->client.terms(ID,"en")).isInstanceOfSatisfying(com.loresentry.gateway.client.auth.AuthCallFailure.class,
+                failure->assertThat(failure.kind()).isEqualTo(com.loresentry.gateway.client.auth.AuthCallFailure.Kind.INVALID_RESPONSE));server.verify();
     }
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"400,INVALID_REQUEST,NONE","401,CONSENT_REQUEST_INVALID,RESTART_LOGIN","409,TERMS_VERSION_MISMATCH,NONE","503,LOGIN_UNAVAILABLE,RESTART_LOGIN"})

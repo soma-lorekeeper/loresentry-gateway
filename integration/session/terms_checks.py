@@ -50,7 +50,12 @@ def verify_terms(api, ports, store, pg, frontend, scratch, frontend_port):
     for item in (jar, another):
         response = api.request(port, 'GET', '/auth/terms', item)
         api.check(response[0] == 200 and response[2]['terms_version_id'] == V1, 'current original excludes future')
-        api.check(set(response[2]) == {'terms_version_id', 'version', 'title', 'content', 'effective_at', 'expires_at'}, 'terms response whitelist')
+        api.check(set(response[2]) == {'terms_version_id', 'version', 'title', 'content', 'effective_at', 'expires_at', 'locale'}, 'terms response whitelist')
+        api.check(response[2]['locale'] in (None, 'ko'), 'untranslated original reports Korean or predates locale')
+        for locale in ('en', 'fr'):
+            fallback = api.request(port, 'GET', '/auth/terms?locale=' + locale, item)
+            api.check(fallback[0] == 200 and fallback[2]['terms_version_id'] == V1, 'locale query keeps the version')
+            api.check(fallback[2]['content'] == response[2]['content'] and fallback[2]['locale'] in (None, 'ko'), 'missing translation returns the original')
         api.check(not response[1].get_all('Set-Cookie'), 'query does not renew cookie')
         api.check(api.request(port, 'GET', '/auth/users/me', item)[0] == 401, 'pending is not login')
         api.check(api.request(port, 'POST', '/auth/terms/accept', item, {'terms_version_id': V1}, {'X-LS-CSRF': ''})[0] == 403, 'CSRF required')

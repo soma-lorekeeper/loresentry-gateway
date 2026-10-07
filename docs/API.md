@@ -32,11 +32,14 @@ Content의 40개 경로·요청·응답은 제공 계약의 세부 문서인 [Co
 | `POST /auth/sessions/revoke` | CSRF 헤더와 세션 쿠키, 본문 없음 | 쿠키 삭제 헤더와 폐기 확인 결과 |
 | `GET /auth/users/me` | 세션 쿠키 | `200`, 계정 |
 | `PATCH /auth/users/me` | CSRF 헤더·세션 쿠키와 `display_name` 본문 | `200`, 수정된 계정 |
+| `PUT /auth/users/me/locale` | CSRF 헤더·세션 쿠키와 `locale` 본문 | `200`, 수정된 계정 |
 | `PUT /auth/users/me/onboarding` | CSRF 헤더와 세션 쿠키, 본문 없음 | `204`, 본문 없음 |
 | `POST /auth/users/me/deletion` | CSRF 헤더·세션 쿠키와 `confirmation_email` 본문 | `204`, 본문 없음. 세션 쿠키 삭제 |
 
-계정 응답은 `id`, `display_name`, `email`, `onboarding_completed`, 수정 입력은 `display_name`만 허용한다.
+계정 응답은 `id`, `display_name`, `email`, `onboarding_completed`, `locale`, 수정 입력은 `display_name`만 허용한다.
 `onboarding_completed`는 boolean이며 Auth 응답에 없거나 boolean이 아니면 502로 처리한다.
+`locale`은 `"ko"`, `"en"` 또는 언어를 기록한 적 없는 계정의 `null`이며 null이어도 항상 포함한다.
+Auth 응답에 없으면 `null`, 그 밖의 값이면 502로 처리한다. 변경은 [계정 언어](#계정-언어)를 따른다.
 내부 호출의 입력 구성과 응답 변환은 [Auth 호출](API_CALLS.md#auth-호출)을 따른다.
 세션 활동 연장을 위한 별도 브라우저 엔드포인트는 없다.
 
@@ -72,11 +75,17 @@ Content의 40개 경로·요청·응답은 제공 계약의 세부 문서인 [Co
 
 | 제공 API | 브라우저 입력 | 성공 결과 |
 |---|---|---|
-| `GET /auth/terms` | 동의 대기 쿠키, 본문 없음 | `200`, `terms_version_id`, `version`, `title`, `content`, `effective_at`, `expires_at` |
+| `GET /auth/terms` | 동의 대기 쿠키, 선택 쿼리 `locale`, 본문 없음 | `200`, `terms_version_id`, `version`, `title`, `content`, `effective_at`, `expires_at`, `locale` |
 | `POST /auth/terms/accept` | 동의 대기 쿠키·CSRF 헤더, JSON의 `terms_version_id` | `204`, 본문 없음. 로그인 쿠키 설정·동의 대기 쿠키 삭제 |
 
 버전 ID는 UUID 문자열이며 POST 본문에는 이 필드만 허용한다. 조회의 `expires_at`은 동의
 대기의 만료이고 시각은 UTC ISO 8601이다. 별도의 취소 API는 제공하지 않는다.
+
+조회의 `locale` 쿼리는 `ko`·`en`일 때만 Auth에 전달한다. 생략·빈 값·그 밖의 값은 오류 없이
+쿼리를 보내지 않으며 한국어 원문이 반환된다. 응답의 `locale`은 반환된 `title`·`content`의 언어(`"ko"`·`"en"`)다.
+`en`을 요청해도 번역이 없으면 한국어 원문과 `"ko"`를 받는다. 동의는 언어와 관계없이 같은
+`terms_version_id`로 기록한다. 이 필드를 반환하지 않는 이전 Auth와 연결되면 `locale`은 `null`이며
+이때 본문은 한국어 원문이다. 그 밖의 값은 502로 처리한다.
 쿠키 처리 순서는 [동의 연동](auth/LOGIN_FLOW.md#약관-동의-연동)을 따른다.
 
 Google 콜백에는 기존 결과에 `result=terms_required`를 추가한다. Auth의 `TERMS_REQUIRED`를
@@ -136,6 +145,17 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 도움말에서 온보딩을 다시 보는 것은 프론트 화면 동작이며 이 API를 호출하지 않는다.
 오류는 아래 [계정 오류](#계정-오류와-검증)를 따른다.
 
+## 계정 언어
+
+`PUT /auth/users/me/locale`은 본인 계정의 언어를 기록한다. 본문은 `{"locale": "ko"}` 또는
+`{"locale": "en"}` 하나다. 본문 없음·필드 누락·null·다른 타입·알 수 없는 필드와 `ko`·`en`이 아닌 값
+(대문자·지역 표기 포함)은 Auth를 호출하지 않고 `400 INVALID_REQUEST`로 거절한다.
+오류 본문은 다른 계정 입력 오류와 같다. 성공하면 `GET /auth/users/me`와 같은 계정 본문을 `200`으로 반환한다.
+
+세션·CSRF·활동 연장은 `PATCH /auth/users/me`와 같다. 같은 값을 다시 보내도 결과는 같다.
+화면 언어를 정하고 전환하는 일은 프론트가 담당하며 BFF는 값을 기록·전달만 한다.
+오류는 아래 [계정 오류](#계정-오류와-검증)를 따른다.
+
 ## 회원 탈퇴
 
 `POST /auth/users/me/deletion`은 확인용 이메일을 받아 본인 계정과 모든 작업 데이터를
@@ -169,7 +189,7 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 
 알려진 계정 오류는 Auth 계약의 상태·code·next_action을 유지한다.
 `USER_CONTEXT_REQUIRED`는 BFF 전달 결함일 수 있으므로 일반 세션 오류로 바꾸지 않는다.
-온보딩 완료도 같은 규칙을 따른다. 탈퇴 오류는 [회원 탈퇴](#회원-탈퇴)의 별도 표를 따른다.
+온보딩 완료·계정 언어도 같은 규칙을 따른다. 탈퇴 오류는 [회원 탈퇴](#회원-탈퇴)의 별도 표를 따른다.
 통신 장애는 `503 ACCOUNT_UNAVAILABLE / RETRY_LATER`, 잘못된 내부 응답은
 `502 UPSTREAM_INVALID_RESPONSE / NONE`으로 변환한다. 수정 결과 유실을 자동 재시도하지 않는다.
 
