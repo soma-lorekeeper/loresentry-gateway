@@ -85,4 +85,8 @@ public final class ContentData {
     public record FeedbackInput(String category, String message, String page, String client) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record FeedbackCreated(UUID id, @JsonProperty("created_at") OffsetDateTime createdAt) {}
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record WithdrawalSurvey(List<String> reasons, String comment) {
+        @Override public String toString(){return "WithdrawalSurvey[redacted]";}
+    }
 }

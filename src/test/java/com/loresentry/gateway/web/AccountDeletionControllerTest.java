@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import com.loresentry.gateway.application.*;
+import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.client.session.OpaqueSessionReader.VerifiedSession;
 import com.loresentry.gateway.config.*;
 import com.loresentry.gateway.security.*;
@@ -60,19 +61,26 @@ class AccountDeletionControllerTest {
                 .allMatch(s->s.contains("Max-Age=0")&&s.contains("Secure")&&s.contains("HttpOnly")&&s.contains("SameSite=Strict")&&s.contains("Path=/"))
                 .anyMatch(s->s.startsWith("__Host-ls_session=;")).anyMatch(s->s.startsWith("__Host-ls_at=;"))
                 .noneMatch(s->s.contains(SESSION));
-        verify(deletions).delete(USER,"writer@example.test");
+        verify(deletions).delete(USER,"writer@example.test",null);
+    }
+    @Test void passesTheSurveyAlongWithTheConfirmation() throws Exception {
+        mvc.perform(deletion("{\"confirmation_email\":\"writer@example.test\",\"survey\":{\"reasons\":[\"PRIVACY\"],\"comment\":\"잘 썼어요\"}}"))
+                .andExpect(status().isNoContent());
+        verify(deletions).delete(USER,"writer@example.test",new ContentData.WithdrawalSurvey(List.of("PRIVACY"),"잘 썼어요"));
     }
     @ParameterizedTest @CsvSource({"400,ACCOUNT_CONFIRMATION_MISMATCH,NONE","503,ACCOUNT_DELETION_UNAVAILABLE,RETRY_LATER",
         "502,UPSTREAM_INVALID_RESPONSE,NONE","401,USER_CONTEXT_REQUIRED,RELOGIN","404,USER_NOT_FOUND,RELOGIN"})
     void failureKeepsTheSessionCookie(int status,String code,String action) throws Exception {
-        doThrow(new AuthOperationFailure(status,code,action)).when(deletions).delete(USER,"writer@example.test");
+        doThrow(new AuthOperationFailure(status,code,action)).when(deletions).delete(USER,"writer@example.test",null);
         var response=mvc.perform(deletion("{\"confirmation_email\":\"writer@example.test\"}"))
                 .andExpect(status().is(status)).andExpect(jsonPath("$.code").value(code)).andExpect(jsonPath("$.next_action").value(action))
                 .andExpect(header().string("Cache-Control","no-store")).andReturn().getResponse();
         assertNotCleared(response);
     }
     @ParameterizedTest @ValueSource(strings={"{}","null","{\"confirmation_email\":null}","{\"confirmation_email\":42}",
-        "{\"confirmation_email\":\"writer@example.test\",\"user_id\":\"x\"}","{\"confirmation_email\":\"a\"} {}",""})
+        "{\"confirmation_email\":\"writer@example.test\",\"user_id\":\"x\"}",
+        "{\"confirmation_email\":\"writer@example.test\",\"survey\":{\"why\":1}}",
+        "{\"confirmation_email\":\"writer@example.test\",\"survey\":{\"reasons\":\"PRIVACY\"}}","{\"confirmation_email\":\"a\"} {}",""})
     void malformedBodyIsRejectedBeforeAnyUpstreamCall(String body) throws Exception {
         var response=mvc.perform(deletion(body)).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST")).andExpect(jsonPath("$.next_action").value("NONE")).andReturn().getResponse();
