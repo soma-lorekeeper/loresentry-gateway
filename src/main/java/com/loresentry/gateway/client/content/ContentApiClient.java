@@ -94,6 +94,9 @@ public class ContentApiClient {
     public Void deleteUserData(UUID userId) {
         return call("DELETE", "/users/me/data", Map.of(), userId, null, Void.class, 204, null);
     }
+    public Void recordWithdrawalSurvey(UUID userId, ContentData.WithdrawalSurvey body) {
+        return call("POST", "/withdrawal-surveys", Map.of(), userId, body, Void.class, 204, null);
+    }
     public ContentData.FeedbackCreated createFeedback(UUID userId, ContentData.FeedbackInput body, Conditions conditions) {
         return call("POST", "/feedback", Map.of(), userId, body, ContentData.FeedbackCreated.class, 201, conditions);
     }

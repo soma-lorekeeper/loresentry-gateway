@@ -6,14 +6,19 @@ import com.loresentry.gateway.client.auth.AuthApiClient;
 import com.loresentry.gateway.client.auth.AuthCallFailure;
 import com.loresentry.gateway.client.content.ContentApiClient;
 import com.loresentry.gateway.client.content.ContentCallFailure;
+import com.loresentry.gateway.client.content.ContentData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AccountDeletionService {
+    private static final Logger log=LoggerFactory.getLogger(AccountDeletionService.class);
     private final AuthApiClient auth;
     private final ContentApiClient content;
     public AccountDeletionService(AuthApiClient auth,ContentApiClient content){this.auth=auth;this.content=content;}
-    public void delete(UUID user,String confirmationEmail) {
+    public void delete(UUID user,String confirmationEmail){delete(user,confirmationEmail,null);}
+    public void delete(UUID user,String confirmationEmail,ContentData.WithdrawalSurvey survey) {
         String email;
         try {email=auth.account(user).email();}catch(AuthCallFailure failure){throw failure(failure);}
         if(email==null||!normalize(email).equals(normalize(confirmationEmail)))
@@ -28,6 +33,18 @@ public class AccountDeletionService {
             if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&failure.status()==404&&"USER_NOT_FOUND".equals(failure.code())) return;
             throw failure(failure);
         }
+        record(user,survey);
+    }
+    private void record(UUID user,ContentData.WithdrawalSurvey survey) {
+        if(!answered(survey)) return;
+        try {content.recordWithdrawalSurvey(user,survey);}
+        catch(RuntimeException failure){log.warn("Withdrawal survey was not recorded: {}",failure.getClass().getSimpleName());}
+    }
+    private static boolean answered(ContentData.WithdrawalSurvey survey) {
+        if(survey==null) return false;
+        boolean reasons=survey.reasons()!=null&&!survey.reasons().isEmpty();
+        boolean comment=survey.comment()!=null&&!survey.comment().isBlank();
+        return reasons||comment;
     }
     private static String normalize(String value){return value.trim().toLowerCase(Locale.ROOT);}
     private static AuthOperationFailure failure(AuthCallFailure failure) {

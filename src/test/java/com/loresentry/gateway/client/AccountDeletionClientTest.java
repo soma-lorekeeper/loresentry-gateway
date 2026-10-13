@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.client.ExpectedCount.never;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
+import java.util.List;
 import java.util.UUID;
 import com.loresentry.gateway.application.AccountDeletionService;
 import com.loresentry.gateway.application.AuthOperationFailure;
 import com.loresentry.gateway.client.auth.AuthApiClient;
 import com.loresentry.gateway.client.content.ContentApiClient;
+import com.loresentry.gateway.client.content.ContentData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -37,6 +39,16 @@ class AccountDeletionClientTest {
     static org.springframework.test.web.client.ResponseCreator error(int status,String code,String action) {
         return withStatus(HttpStatusCode.valueOf(status)).contentType(MediaType.APPLICATION_JSON)
             .body("{\"code\":\""+code+"\",\"message\":\"private detail\",\"next_action\":\""+action+"\"}");
+    }
+    void deleted() {
+        auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.DELETE)).andRespond(withNoContent());
+    }
+    static final ContentData.WithdrawalSurvey SURVEY=new ContentData.WithdrawalSurvey(List.of("RARELY_USED","PRIVACY"),"타임라인이 더 필요해요");
+    void surveyAnswers(org.springframework.test.web.client.ResponseCreator response) {
+        content.expect(requestTo("http://content.test/withdrawal-surveys")).andExpect(method(HttpMethod.POST)).andExpect(header("X-User-Id",user.toString()))
+            .andExpect(headerDoesNotExist("Cookie"))
+            .andExpect(content().json("{\"reasons\":[\"RARELY_USED\",\"PRIVACY\"],\"comment\":\"타임라인이 더 필요해요\"}",org.springframework.test.json.JsonCompareMode.STRICT))
+            .andRespond(response);
     }
     void verifyAll(){auth.verify();content.verify();}
     AuthOperationFailure failure(String confirmation) {
@@ -117,5 +129,36 @@ class AccountDeletionClientTest {
         auth.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"display_name\":\"Other\",\"email\":\"writer@example.test\",\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
         content.expect(never(),requestTo("http://content.test/users/me/data"));
         assertThat(failure("writer@example.test").code()).isEqualTo("UPSTREAM_INVALID_RESPONSE");verifyAll();
+    }
+
+    @Test void recordsTheSurveyOnlyAfterTheAccountIsGone() {
+        account("\"writer@example.test\"");purge();deleted();surveyAnswers(withNoContent());
+        service.delete(user,"writer@example.test",SURVEY);verifyAll();
+    }
+    @ParameterizedTest @CsvSource({"400,INVALID_WITHDRAWAL_SURVEY,NONE","500,INTERNAL_ERROR,NONE"})
+    void surveyFailureStillCountsAsDeleted(int status,String code,String action) {
+        account("\"writer@example.test\"");purge();deleted();surveyAnswers(error(status,code,action));
+        service.delete(user,"writer@example.test",SURVEY);verifyAll();
+    }
+    @Test void lostSurveyResponseStillCountsAsDeleted() {
+        account("\"writer@example.test\"");purge();deleted();surveyAnswers(withException(new java.net.SocketTimeoutException("private")));
+        service.delete(user,"writer@example.test",SURVEY);verifyAll();
+    }
+    @Test void failedAccountDeletionRecordsNoSurvey() {
+        account("\"writer@example.test\"");purge();
+        auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.DELETE)).andRespond(error(503,"ACCOUNT_UNAVAILABLE","RETRY_LATER"));
+        content.expect(never(),requestTo("http://content.test/withdrawal-surveys"));
+        assertThat(catchThrowableOfType(AuthOperationFailure.class,()->service.delete(user,"writer@example.test",SURVEY)).code()).isEqualTo("ACCOUNT_DELETION_UNAVAILABLE");
+        verifyAll();
+    }
+    @Test void retryAfterTheAccountIsAlreadyGoneRecordsNoSecondSurvey() {
+        account("\"writer@example.test\"");purge();
+        auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.DELETE)).andRespond(error(404,"USER_NOT_FOUND","RELOGIN"));
+        content.expect(never(),requestTo("http://content.test/withdrawal-surveys"));
+        service.delete(user,"writer@example.test",SURVEY);verifyAll();
+    }
+    @Test void anEmptySurveyIsNotSent() {
+        account("\"writer@example.test\"");purge();deleted();
+        service.delete(user,"writer@example.test",new ContentData.WithdrawalSurvey(List.of(),"   "));verifyAll();
     }
 }

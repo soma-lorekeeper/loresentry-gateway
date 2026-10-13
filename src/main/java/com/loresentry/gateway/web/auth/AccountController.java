@@ -1,5 +1,6 @@
 package com.loresentry.gateway.web.auth;
 
+import java.util.List;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -7,6 +8,7 @@ import com.loresentry.gateway.application.AccountDeletionService;
 import com.loresentry.gateway.application.AccountService;
 import com.loresentry.gateway.application.AuthOperationFailure;
 import com.loresentry.gateway.client.SupportedLocale;
+import com.loresentry.gateway.client.content.ContentData;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import com.loresentry.gateway.security.CurrentUser;
@@ -17,7 +19,10 @@ import org.springframework.web.bind.annotation.*;
 public class AccountController {
     public record Update(@JsonProperty("display_name") String displayName) {}
     public record LocaleUpdate(String locale) {}
-    public record Deletion(@JsonProperty("confirmation_email") String confirmationEmail) {
+    public record Survey(List<String> reasons, String comment) {
+        @Override public String toString(){return "Survey[redacted]";}
+    }
+    public record Deletion(@JsonProperty("confirmation_email") String confirmationEmail, Survey survey) {
         @Override public String toString(){return "Deletion[redacted]";}
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -46,7 +51,8 @@ public class AccountController {
     @PostMapping("/auth/users/me/deletion")
     public ResponseEntity<Void> delete(@CurrentUser UUID user,@RequestBody Deletion input,HttpServletRequest request,HttpServletResponse response) {
         if(input==null||input.confirmationEmail()==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
-        deletions.delete(user,input.confirmationEmail());
+        var survey=input.survey()==null?null:new ContentData.WithdrawalSurvey(input.survey().reasons(),input.survey().comment());
+        deletions.delete(user,input.confirmationEmail(),survey);
         var legacy=SessionCookieResponse.end(response).orElseGet(()->cookies.clearLegacy(request));
         var result=ResponseEntity.noContent().header("Cache-Control","no-store").header("Set-Cookie",cookies.clearSession().toString());
         legacy.forEach(cookie->result.header("Set-Cookie",cookie.toString()));
