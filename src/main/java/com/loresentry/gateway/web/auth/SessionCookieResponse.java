@@ -29,7 +29,7 @@ public final class SessionCookieResponse extends HttpServletResponseWrapper {
         // Validate before the request reaches a domain service; do not emit headers yet.
         cookies.session(id,expiresAt);
     }
-    public void finish() {
+    public synchronized void finish() {
         if (!renewed && !isCommitted()) {
             cookies.setSession((HttpServletResponse)getResponse(),id,expiresAt);
             renewed=true;

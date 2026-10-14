@@ -41,6 +41,12 @@ BFF는 계정 응답의 `onboarding_completed`를 필수로 검사하므로 Auth
 먼저 배포한다. 이후 BFF, 마지막으로 온보딩·탈퇴 화면을 사용하는 프론트를 배포한다.
 BFF를 되돌릴 때는 새 화면을 먼저 되돌리며, Auth·Content의 추가 API는 이전 BFF와 호환된다.
 
+## AI 챗
+
+BFF는 탈퇴 중에 ai-chat `DELETE /users/me/data`를 부르므로 이 API를 가진 ai-chat을 먼저 배포한다.
+그렇지 않으면 탈퇴가 `503`·`502`로 멈춘다. 허용 목록은 비운 채로 BFF를 배포하고, ai-chat 동작을 확인한 뒤
+`LORESENTRY_CHAT_ALLOWED_USERS`에 사용자를 넣는다. Pod 종료 유예 시간은 BFF의 종료 대기(150초)보다 길게 맞춘다.
+
 ## 계정 언어와 번역 데이터
 
 BFF는 Auth 계정·약관 응답에 `locale`이 없으면 `null`로 처리하고 `ko`·`en`만 Auth·Content에 전달한다.

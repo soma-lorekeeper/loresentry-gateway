@@ -17,7 +17,7 @@ class ContentApiClientTest {
         var builder = RestClient.builder().baseUrl("http://content.test");
         var mocks = new MockServerRestClientCustomizer();mocks.customize(builder);
         var server = mocks.getServer();
-        var service = new ContentService(new ContentApiClient(builder.build()));
+        var service = new ContentService(new ContentApiClient(builder.build()), null);
         var user = UUID.randomUUID();var project = UUID.randomUUID();
         server.expect(requestTo("http://content.test/projects/"+project+"/search?q=%EC%9C%A0%EB%A6%AC%20%26%20%2B%3F"))
             .andExpect(header("X-User-Id",user.toString())).andExpect(headerDoesNotExist("Cookie"))
@@ -68,7 +68,7 @@ class ContentApiClientTest {
             .andExpect(header("X-User-Id",user.toString())).andExpect(headerDoesNotExist("Content-Type")).andExpect(content().string(""))
             .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"id\":\""+project+"\",\"name\":\"유리 정원의 기록\",\"description\":\"\",\"last_worked_at\":\"2026-09-30T00:00:00Z\",\"trashed_at\":null,\"created_at\":\"2026-09-30T00:00:00Z\",\"last_file\":null}"));
-        var created=new ContentService(new ContentApiClient(builder.build())).createSampleProject(user,null,new Conditions(null,null,null));
+        var created=new ContentService(new ContentApiClient(builder.build()), null).createSampleProject(user,null,new Conditions(null,null,null));
         assertThat(created.id()).isEqualTo(project);assertThat(created.name()).isEqualTo("유리 정원의 기록");
         mocks.getServer().verify();
     }
@@ -84,7 +84,7 @@ class ContentApiClientTest {
             .andExpect(header("X-User-Id",user.toString())).andExpect(content().string(""))
             .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"id\":\""+project+"\",\"name\":\"The Glass Garden Records\",\"description\":\"\",\"last_worked_at\":\"2026-09-30T00:00:00Z\",\"trashed_at\":null,\"created_at\":\"2026-09-30T00:00:00Z\",\"last_file\":null}"));
-        assertThat(new ContentService(new ContentApiClient(builder.build())).createSampleProject(user,locale,new Conditions(null,null,null)).id()).isEqualTo(project);
+        assertThat(new ContentService(new ContentApiClient(builder.build()), null).createSampleProject(user,locale,new Conditions(null,null,null)).id()).isEqualTo(project);
         mocks.getServer().verify();
     }
     @Test void sampleProjectRequiresCreatedStatus() {
@@ -105,7 +105,7 @@ class ContentApiClientTest {
                 org.springframework.test.json.JsonCompareMode.STRICT))
             .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"id\":\""+id+"\",\"created_at\":\"2026-10-02T00:00:00Z\"}"));
-        var created=new ContentService(new ContentApiClient(builder.build())).createFeedback(user,
+        var created=new ContentService(new ContentApiClient(builder.build()), null).createFeedback(user,
             new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m","/projects/",null),new Conditions(null,null,null));
         assertThat(created.id()).isEqualTo(id);
         mocks.getServer().verify();

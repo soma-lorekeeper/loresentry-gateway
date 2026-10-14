@@ -5,7 +5,7 @@
 > **확인할 때:** 개발 환경을 준비하거나 빌드·테스트를 실행할 때.
 
 Lore Sentry의 브라우저 API 경계다. Java 21, Spring Boot 4.1.1 Servlet MVC와
-RestClient를 사용한다. Auth·Content의 명시적 API를 호출하며 도메인 권한은
+RestClient를 사용한다. Auth·Content·AI 챗의 명시적 API를 호출하며 도메인 권한은
 각 서비스가 판단한다. 브라우저 인증은 단일 세션 ID를 사용한다.
 
 제공 계약은 [API.md](docs/API.md), 서버 호출은 [API_CALLS.md](docs/API_CALLS.md),

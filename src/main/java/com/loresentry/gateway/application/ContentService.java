@@ -1,16 +1,22 @@
 package com.loresentry.gateway.application;
 
 import java.util.UUID;
+import com.loresentry.gateway.client.chat.ChatApiClient;
+import com.loresentry.gateway.client.chat.ChatCallFailure;
 import com.loresentry.gateway.client.content.ContentApiClient;
 import com.loresentry.gateway.client.content.ContentApiClient.Conditions;
 import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.client.content.FileCreated;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ContentService {
+    private static final Logger log = LoggerFactory.getLogger(ContentService.class);
     private final ContentApiClient client;
-    public ContentService(ContentApiClient client) { this.client = client; }
+    private final ChatApiClient chat;
+    public ContentService(ContentApiClient client, ChatApiClient chat) { this.client = client; this.chat = chat; }
     public ContentData.FeedbackCreated createFeedback(UUID userId, ContentData.FeedbackInput body, Conditions conditions) { return client.createFeedback(userId, body, conditions); }
     public ContentData.Projects listProjects(UUID userId, Conditions conditions) { return client.listProjects(userId, conditions); }
     public ContentData.Projects listProjectTrash(UUID userId, Conditions conditions) { return client.listProjectTrash(userId, conditions); }
@@ -20,7 +26,15 @@ public class ContentService {
     public ContentData.Project updateProject(UUID userId, UUID projectId, ContentData.ProjectInput body, Conditions conditions) { return client.updateProject(userId, projectId, body, conditions); }
     public Void trashProject(UUID userId, UUID projectId, Conditions conditions) { return client.trashProject(userId, projectId, conditions); }
     public ContentData.Project restoreProject(UUID userId, UUID projectId, Conditions conditions) { return client.restoreProject(userId, projectId, conditions); }
-    public Void deleteProject(UUID userId, UUID projectId, Conditions conditions) { return client.deleteProject(userId, projectId, conditions); }
+    public Void deleteProject(UUID userId, UUID projectId, Conditions conditions) {
+        client.deleteProject(userId, projectId, conditions);
+        try { chat.deleteProjectData(userId, projectId); }
+        catch (RuntimeException failure) {
+            log.warn("AI chat data of deleted project {} was not removed: {}", projectId,
+                    failure instanceof ChatCallFailure chatFailure ? chatFailure.code() : failure.getClass().getSimpleName());
+        }
+        return null;
+    }
     public ContentData.Tree tree(UUID userId, UUID projectId, Conditions conditions) { return client.tree(userId, projectId, conditions); }
     public ContentData.Trash fileTrash(UUID userId, UUID projectId, Conditions conditions) { return client.fileTrash(userId, projectId, conditions); }
     public FileCreated createFile(UUID userId, UUID projectId, ContentData.FileCreate body, Conditions conditions) { return client.createFile(userId, projectId, body, conditions); }

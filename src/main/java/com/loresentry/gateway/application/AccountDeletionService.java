@@ -4,6 +4,8 @@ import java.util.Locale;
 import java.util.UUID;
 import com.loresentry.gateway.client.auth.AuthApiClient;
 import com.loresentry.gateway.client.auth.AuthCallFailure;
+import com.loresentry.gateway.client.chat.ChatApiClient;
+import com.loresentry.gateway.client.chat.ChatCallFailure;
 import com.loresentry.gateway.client.content.ContentApiClient;
 import com.loresentry.gateway.client.content.ContentCallFailure;
 import com.loresentry.gateway.client.content.ContentData;
@@ -16,7 +18,8 @@ public class AccountDeletionService {
     private static final Logger log=LoggerFactory.getLogger(AccountDeletionService.class);
     private final AuthApiClient auth;
     private final ContentApiClient content;
-    public AccountDeletionService(AuthApiClient auth,ContentApiClient content){this.auth=auth;this.content=content;}
+    private final ChatApiClient chat;
+    public AccountDeletionService(AuthApiClient auth,ContentApiClient content,ChatApiClient chat){this.auth=auth;this.content=content;this.chat=chat;}
     public void delete(UUID user,String confirmationEmail){delete(user,confirmationEmail,null);}
     public void delete(UUID user,String confirmationEmail,ContentData.WithdrawalSurvey survey) {
         String email;
@@ -25,6 +28,11 @@ public class AccountDeletionService {
             throw new AuthOperationFailure(400,"ACCOUNT_CONFIRMATION_MISMATCH","NONE");
         try {content.deleteUserData(user);}
         catch(ContentCallFailure failure) {
+            if("UPSTREAM_INVALID_RESPONSE".equals(failure.code())) throw invalid();
+            throw unavailable();
+        }
+        try {chat.deleteUserData(user);}
+        catch(ChatCallFailure failure) {
             if("UPSTREAM_INVALID_RESPONSE".equals(failure.code())) throw invalid();
             throw unavailable();
         }

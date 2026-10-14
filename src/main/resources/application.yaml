@@ -8,7 +8,16 @@ spring:
     clients:
       connect-timeout: 2s
       read-timeout: 10s
+  mvc:
+    async:
+      request-timeout: 180s
+  lifecycle:
+    timeout-per-shutdown-phase: 150s
 
 server:
   port: 8000
   shutdown: graceful
+
+loresentry:
+  chat:
+    allowed-users: ${LORESENTRY_CHAT_ALLOWED_USERS:}

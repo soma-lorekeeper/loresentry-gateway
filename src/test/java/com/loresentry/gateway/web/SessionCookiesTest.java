@@ -58,6 +58,25 @@ class SessionCookiesTest {
         assertThat(response.getContentAsString()).isEmpty();assertThat(response.getHeader("Location")).isNull();
         assertThat(response.getHeader("Cache-Control")).isEqualTo("no-store");
     }
+    @Test void streamThreadAndFilterThreadRenewOnlyOnce() throws Exception {
+        for(int round=0;round<300;round++) {
+            var response=new MockHttpServletResponse();
+            var wrapped=new SessionCookieResponse(response,cookies(false,Clock.fixed(NOW,ZoneOffset.UTC)),ID,NOW.plusSeconds(100));
+            var output=wrapped.getOutputStream();
+            var start=new java.util.concurrent.CountDownLatch(1);
+            var stream=Thread.ofVirtual().start(()-> {
+                try {start.await();output.write("event: phase\n\n".getBytes());output.flush();}
+                catch(Exception failure){throw new RuntimeException(failure);}
+            });
+            var filter=Thread.ofVirtual().start(()-> {
+                try {start.await();wrapped.finish();}
+                catch(InterruptedException failure){throw new RuntimeException(failure);}
+            });
+            start.countDown();stream.join();filter.join();
+            assertThat(response.getHeaders("Set-Cookie")).hasSize(1);
+            assertThat(response.getContentAsString()).isEqualTo("event: phase\n\n");
+        }
+    }
     @Test void invalidExpiryNeverChangesExistingCookies() {
         var response=new MockHttpServletResponse();response.addHeader("Set-Cookie","unrelated=keep");
         assertThatThrownBy(()->new SessionCookieResponse(response,cookies(false,Clock.fixed(NOW,ZoneOffset.UTC)),ID,NOW))
