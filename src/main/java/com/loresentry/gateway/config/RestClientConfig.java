@@ -20,6 +20,11 @@ public class RestClientConfig {
     }
 
     @Bean
+    public RestClient chatApiRestClient(RestClient.Builder builder, UpstreamProperties properties) {
+        return builder.baseUrl(properties.aiChat().baseUrl()).build();
+    }
+
+    @Bean
     public RestClient graphRagRestClient(RestClient.Builder builder, UpstreamProperties properties) {
         return UpstreamClient.restClient(builder, properties.graphRag().baseUrl());
     }

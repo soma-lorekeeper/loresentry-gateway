@@ -16,12 +16,15 @@ GitOps·ACL·클러스터 적용과 운영 검증이 끝났다고 판단하지 �
 | `BFF_SESSION_REDIS_USERNAME`, `BFF_SESSION_REDIS_PASSWORD` | 별도 BFF 계정·Secret |
 | `BFF_SESSION_REDIS_TLS` | endpoint에 맞춰 명시하고 CA 신뢰 검증 |
 | 브라우저·서비스 주소 | local/prod Origin·고정 로그인 결과 주소·내부 서비스 주소 |
+| `LORESENTRY_CHAT_ALLOWED_USERS` | AI 챗을 쓸 사용자 UUID를 쉼표로 나열하거나 `*`(모두). 비우거나 없으면 아무도 쓰지 못한다. 형식이 틀린 항목은 시작을 막는다 |
 
 `SessionRedisProperties`가 설정을 바인딩하고 `SessionRedisConfiguration`이 시작 시
 호스트·포트·전용 계정·비밀번호를 검증한다. 기본 Redis 계정 `default`는 거절한다.
 비활동 제한 14일은 Auth와 BFF에 같은 값으로 적용한다. Auth에는 별도 DB·Redis·Google
 설정을 주입하고 Google secret을 BFF에 공유하지 않는다. 비밀값은 Git·로그·검증 출력에 넣지 않는다.
 운영 Service 포트는 80, 대상 컨테이너 포트는 8000이며 환경에 맞는 실제 연결로 확인한다.
+AI 챗 답 스트림을 끝까지 보내도록 종료 단계마다 150초(`spring.lifecycle.timeout-per-shutdown-phase`)를 기다린다.
+Pod의 `terminationGracePeriodSeconds`는 이보다 길게 둔다.
 
 ## Redis ACL과 연결
 
