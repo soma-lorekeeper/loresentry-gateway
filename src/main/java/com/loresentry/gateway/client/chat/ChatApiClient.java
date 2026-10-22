@@ -51,7 +51,7 @@ public class ChatApiClient {
         return switch (code) {
             case "INVALID_REQUEST", "CHAT_TITLE_REQUIRED", "CHAT_QUESTION_REQUIRED" -> 400;
             case "CHAT_SESSION_NOT_FOUND", "PROJECT_NOT_FOUND" -> 404;
-            case "CHAT_NOT_LAST_QUESTION", "CHAT_ANSWER_IN_PROGRESS" -> 409;
+            case "CHAT_NOT_LAST_QUESTION", "CHAT_ANSWER_IN_PROGRESS", "CHAT_ANOTHER_ANSWER_IN_PROGRESS" -> 409;
             case "CHAT_CONTEXT_TOO_LARGE" -> 422;
             case "CHAT_DAILY_LIMIT_REACHED" -> 429;
             case "CHAT_MODEL_UNAVAILABLE", "CONTENT_UNAVAILABLE" -> 503;

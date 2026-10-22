@@ -133,7 +133,7 @@ class ChatStreamingTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"409,CHAT_ANSWER_IN_PROGRESS", "429,CHAT_DAILY_LIMIT_REACHED"})
+    @CsvSource({"409,CHAT_ANSWER_IN_PROGRESS", "409,CHAT_ANOTHER_ANSWER_IN_PROGRESS", "429,CHAT_DAILY_LIMIT_REACHED"})
     void upstreamRefusalBecomesAJsonErrorWithTheRenewedCookie(int status, String code) throws Exception {
         UPSTREAM.expect(exchange -> exchange.respond(status, "application/json",
             "{\"code\":\"" + code + "\",\"message\":\"private\",\"next_action\":\"NONE\"}"));
