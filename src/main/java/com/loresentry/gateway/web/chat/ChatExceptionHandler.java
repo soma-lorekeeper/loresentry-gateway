@@ -40,7 +40,9 @@ public class ChatExceptionHandler {
             case "CHAT_QUESTION_REQUIRED" -> "A question or a quote is required.";
             case "CHAT_NOT_LAST_QUESTION" -> "Only the last question can be replaced.";
             case "CHAT_ANSWER_IN_PROGRESS" -> "An answer is already being generated.";
+            case "CHAT_ANOTHER_ANSWER_IN_PROGRESS" -> "An answer is being generated in another conversation.";
             case "CHAT_CONTEXT_TOO_LARGE" -> "The project is too large for AI chat.";
+            case "CHAT_DAILY_LIMIT_REACHED" -> "Today's chat usage is used up.";
             case "CHAT_MODEL_UNAVAILABLE" -> "The AI model is unavailable. Try again later.";
             case "CONTENT_UNAVAILABLE" -> "Content service is unavailable.";
             case "AI_CHAT_UNAVAILABLE" -> "AI chat service is unavailable.";

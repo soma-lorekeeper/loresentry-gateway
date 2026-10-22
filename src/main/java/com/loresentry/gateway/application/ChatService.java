@@ -24,6 +24,7 @@ public class ChatService {
     public ChatData.SearchHits search(UUID userId, UUID projectId, String query) { enabled(userId); return client.search(userId, projectId, query); }
     public ChatData.Session renameSession(UUID userId, UUID sessionId, ChatData.Rename body) { enabled(userId); return client.renameSession(userId, sessionId, body); }
     public void deleteSession(UUID userId, UUID sessionId) { enabled(userId); client.deleteSession(userId, sessionId); }
+    public ChatData.Usage usage(UUID userId) { enabled(userId); return client.usage(userId); }
     public ChatData.Messages messages(UUID userId, UUID sessionId) { enabled(userId); return client.messages(userId, sessionId); }
     public ChatStream send(UUID userId, UUID sessionId, ChatData.SendInput body) { enabled(userId); return client.send(userId, sessionId, body, profile(userId)); }
     public void cancel(UUID userId, UUID sessionId) { enabled(userId); client.cancel(userId, sessionId); }

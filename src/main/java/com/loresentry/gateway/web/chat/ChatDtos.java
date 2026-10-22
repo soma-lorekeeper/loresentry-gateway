@@ -66,6 +66,10 @@ public final class ChatDtos {
         public static Messages from(ChatData.Messages value) { return new Messages(value.messages().stream().map(Message::from).toList(), value.generating()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Usage(int used, int limit, @JsonProperty("resets_at") OffsetDateTime resetsAt) {
+        public static Usage from(ChatData.Usage value) { return new Usage(value.used(), value.limit(), value.resetsAt()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Rename(String title) {
         public ChatData.Rename internal() { return new ChatData.Rename(title); }
     }

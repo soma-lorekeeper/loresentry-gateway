@@ -32,7 +32,7 @@ class ChatStreamTransportTest {
     static final ChatData.Profile PROFILE = new ChatData.Profile("ko", "유리 작가 & Co+");
     static final String PHASE = "event: phase\ndata: {\"phase\":\"gathering\"}\n\n";
     static final String PING = ": ping\n\n";
-    static final String DONE = "event: done\ndata: {\"question\":{},\"answer\":{}}\n\n";
+    static final String DONE = "event: done\ndata: {\"question\":{},\"answer\":{},\"usage\":{\"used\":4,\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}}\n\n";
 
     static final class Browser extends OutputStream {
         private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -130,6 +130,9 @@ class ChatStreamTransportTest {
     @CsvSource({"409,application/json,CHAT_ANSWER_IN_PROGRESS,409,CHAT_ANSWER_IN_PROGRESS,NONE",
         "409,application/json,CHAT_NOT_LAST_QUESTION,409,CHAT_NOT_LAST_QUESTION,NONE",
         "422,application/json,CHAT_CONTEXT_TOO_LARGE,422,CHAT_CONTEXT_TOO_LARGE,NONE",
+        "429,application/json,CHAT_DAILY_LIMIT_REACHED,429,CHAT_DAILY_LIMIT_REACHED,NONE",
+        "409,application/json,CHAT_ANOTHER_ANSWER_IN_PROGRESS,409,CHAT_ANOTHER_ANSWER_IN_PROGRESS,NONE",
+        "409,application/json,CHAT_DAILY_LIMIT_REACHED,502,UPSTREAM_INVALID_RESPONSE,NONE",
         "404,application/json,CHAT_SESSION_NOT_FOUND,404,CHAT_SESSION_NOT_FOUND,NONE",
         "400,application/json,CHAT_QUESTION_REQUIRED,400,CHAT_QUESTION_REQUIRED,NONE",
         "503,application/json,CHAT_MODEL_UNAVAILABLE,503,CHAT_MODEL_UNAVAILABLE,RETRY_LATER",
