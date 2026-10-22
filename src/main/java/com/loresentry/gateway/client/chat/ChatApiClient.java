@@ -53,6 +53,7 @@ public class ChatApiClient {
             case "CHAT_SESSION_NOT_FOUND", "PROJECT_NOT_FOUND" -> 404;
             case "CHAT_NOT_LAST_QUESTION", "CHAT_ANSWER_IN_PROGRESS" -> 409;
             case "CHAT_CONTEXT_TOO_LARGE" -> 422;
+            case "CHAT_DAILY_LIMIT_REACHED" -> 429;
             case "CHAT_MODEL_UNAVAILABLE", "CONTENT_UNAVAILABLE" -> 503;
             default -> 0;
         };
@@ -121,6 +122,9 @@ public class ChatApiClient {
     }
     public void deleteSession(UUID userId, UUID sessionId) {
         call(HttpMethod.DELETE, "/chat/sessions/{sessionId}", Map.of("sessionId", sessionId), userId, null, null, Void.class, 204);
+    }
+    public ChatData.Usage usage(UUID userId) {
+        return call(HttpMethod.GET, "/chat/usage", Map.of(), userId, null, null, ChatData.Usage.class, 200);
     }
     public ChatData.Messages messages(UUID userId, UUID sessionId) {
         return call(HttpMethod.GET, "/chat/sessions/{sessionId}/messages", Map.of("sessionId", sessionId), userId, null, null, ChatData.Messages.class, 200);

@@ -45,6 +45,10 @@ public class ChatController {
         service.deleteSession(userId, sessionId);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
+    @GetMapping("/chat/usage")
+    public ResponseEntity<ChatDtos.Usage> usage(@CurrentUser UUID userId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ChatDtos.Usage.from(service.usage(userId)));
+    }
     @GetMapping("/chat/sessions/{sessionId}/messages")
     public ResponseEntity<ChatDtos.Messages> messages(@CurrentUser UUID userId, @PathVariable UUID sessionId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ChatDtos.Messages.from(service.messages(userId, sessionId)));

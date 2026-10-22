@@ -116,6 +116,14 @@ class ChatApiClientTest {
         server.verify();
     }
 
+    @Test void readsTodaysUsageWithOnlyTheVerifiedUser() {
+        server.expect(requestTo("http://chat.test/chat/usage")).andExpect(method(HttpMethod.GET))
+            .andExpect(header("X-User-Id", USER.toString())).andExpect(headerDoesNotExist("X-User-Locale")).andExpect(headerDoesNotExist("X-User-Display-Name"))
+            .andRespond(withSuccess("{\"used\":3,\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}", MediaType.APPLICATION_JSON));
+        assertThat(client.usage(USER)).isEqualTo(new ChatData.Usage(3, 20, java.time.OffsetDateTime.parse("2026-10-22T15:00:00Z")));
+        server.verify();
+    }
+
     @Test void deletesCancelsAndCleansUpWithNoContent() {
         server.expect(requestTo("http://chat.test/chat/sessions/" + SESSION)).andExpect(method(HttpMethod.DELETE))
             .andExpect(header("X-User-Id", USER.toString())).andRespond(withNoContent());
@@ -137,6 +145,7 @@ class ChatApiClientTest {
         "400,CHAT_TITLE_REQUIRED,400,CHAT_TITLE_REQUIRED,NONE", "400,CHAT_QUESTION_REQUIRED,400,CHAT_QUESTION_REQUIRED,NONE",
         "400,INVALID_REQUEST,400,INVALID_REQUEST,NONE", "409,CHAT_NOT_LAST_QUESTION,409,CHAT_NOT_LAST_QUESTION,NONE",
         "409,CHAT_ANSWER_IN_PROGRESS,409,CHAT_ANSWER_IN_PROGRESS,NONE", "422,CHAT_CONTEXT_TOO_LARGE,422,CHAT_CONTEXT_TOO_LARGE,NONE",
+        "429,CHAT_DAILY_LIMIT_REACHED,429,CHAT_DAILY_LIMIT_REACHED,NONE", "400,CHAT_DAILY_LIMIT_REACHED,502,UPSTREAM_INVALID_RESPONSE,NONE",
         "503,CHAT_MODEL_UNAVAILABLE,503,CHAT_MODEL_UNAVAILABLE,RETRY_LATER", "503,CONTENT_UNAVAILABLE,503,CONTENT_UNAVAILABLE,RETRY_LATER",
         "500,INTERNAL_ERROR,502,UPSTREAM_INVALID_RESPONSE,NONE", "403,CHAT_NOT_ENABLED,502,UPSTREAM_INVALID_RESPONSE,NONE",
         "400,CHAT_SESSION_NOT_FOUND,502,UPSTREAM_INVALID_RESPONSE,NONE", "503,AI_CHAT_UNAVAILABLE,502,UPSTREAM_INVALID_RESPONSE,NONE",
@@ -205,6 +214,18 @@ class ChatApiClientTest {
     void rejectsMalformedAvailability(String payload) {
         server.expect(requestTo("http://chat.test/projects/" + PROJECT + "/chat/availability")).andRespond(withSuccess(payload, MediaType.APPLICATION_JSON));
         assertThatThrownBy(() -> client.availability(USER, PROJECT)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"used\":-1,\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}",
+        "{\"used\":3,\"limit\":-1,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}", "{\"used\":3,\"limit\":20}",
+        "{\"used\":3,\"limit\":20,\"resets_at\":null}", "{\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}",
+        "{\"used\":\"3\",\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}", "{\"used\":3.5,\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}",
+        "{\"used\":3,\"limit\":20,\"resets_at\":\"tomorrow\"}", "null"})
+    void rejectsMalformedUsage(String payload) {
+        server.expect(requestTo("http://chat.test/chat/usage")).andRespond(withSuccess(payload, MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> client.usage(USER)).hasMessage("UPSTREAM_INVALID_RESPONSE");
         server.verify();
     }
 

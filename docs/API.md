@@ -203,11 +203,14 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 | `GET /chat/sessions/{sid}/messages` | — | `200`, `messages`·`generating` |
 | `POST /chat/sessions/{sid}/messages` | `content`·`intent`·`quote`·`focus_file_id`·`replaces`·`client_message_id` | `200 text/event-stream` |
 | `POST /chat/sessions/{sid}/cancel` | — | `204` |
+| `GET /chat/usage` | — | `200`, `used`·`limit`·`resets_at` |
 
 - 허용 목록(`LORESENTRY_CHAT_ALLOWED_USERS`) 밖의 사용자는 모든 경로에서 `403 CHAT_NOT_ENABLED`(`NONE`)를 받는다.
   본문·경로 형식이 틀린 요청은 그보다 먼저 400·404로 거절한다.
 - 질문 보내기는 `Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-store`, `X-Accel-Buffering: no`로
   ai-chat의 SSE를 그대로 흘린다. 스트림을 열기 전의 실패는 `Accept`와 관계없이 JSON 오류다.
+- 오늘 사용량은 `used`·`limit`(0이면 무제한)과 다음 초기화 시각 `resets_at`(UTC)이다. 한도를 넘긴 질문은
+  스트림을 열기 전에 `429 CHAT_DAILY_LIMIT_REACHED`(`NONE`)로 거절되고, `done` 이벤트의 `usage`는 해석하지 않고 그대로 흘린다.
 - 형식이 틀린 본문은 `400 INVALID_REQUEST`, UUID가 아닌 프로젝트·세션 ID는 `404 PROJECT_NOT_FOUND`·`CHAT_SESSION_NOT_FOUND`다.
 - ai-chat 오류의 통과 규칙과 `AI_CHAT_UNAVAILABLE`·`UPSTREAM_INVALID_RESPONSE` 변환은 [AI 챗 호출](API_CALLS.md#ai-챗-호출)을 따른다.
 

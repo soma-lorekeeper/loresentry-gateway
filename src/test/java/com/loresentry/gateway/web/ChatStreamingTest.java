@@ -25,6 +25,8 @@ import com.loresentry.gateway.security.OpaqueSessionVerifier;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -130,17 +132,18 @@ class ChatStreamingTest {
         assertThat(json.readTree(upstream.body())).isEqualTo(json.readTree(BODY));
     }
 
-    @Test
-    void upstreamRefusalBecomesAJsonErrorWithTheRenewedCookie() throws Exception {
-        UPSTREAM.expect(exchange -> exchange.respond(409, "application/json",
-            "{\"code\":\"CHAT_ANSWER_IN_PROGRESS\",\"message\":\"private\",\"next_action\":\"NONE\"}"));
+    @ParameterizedTest
+    @CsvSource({"409,CHAT_ANSWER_IN_PROGRESS", "429,CHAT_DAILY_LIMIT_REACHED"})
+    void upstreamRefusalBecomesAJsonErrorWithTheRenewedCookie(int status, String code) throws Exception {
+        UPSTREAM.expect(exchange -> exchange.respond(status, "application/json",
+            "{\"code\":\"" + code + "\",\"message\":\"private\",\"next_action\":\"NONE\"}"));
         var response = send();
-        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(response.statusCode()).isEqualTo(status);
         assertThat(MediaType.parseMediaType(response.headers().firstValue("Content-Type").orElseThrow()).isCompatibleWith(MediaType.APPLICATION_JSON)).isTrue();
         assertThat(response.headers().allValues("Set-Cookie")).singleElement().satisfies(cookie -> assertThat(cookie).startsWith("ls_session=" + SESSION + ";"));
         try (var body = response.body()) {
             var error = JsonMapper.builder().build().readTree(body.readAllBytes());
-            assertThat(error.get("code").asString()).isEqualTo("CHAT_ANSWER_IN_PROGRESS");
+            assertThat(error.get("code").asString()).isEqualTo(code);
             assertThat(error.get("next_action").asString()).isEqualTo("NONE");
             assertThat(error.get("message").asString()).doesNotContain("private");
         }

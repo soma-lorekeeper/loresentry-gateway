@@ -40,6 +40,7 @@ final class ChatValidation {
                 items(v.citations());
             }
             case Messages v -> { items(v.messages()); required(v.generating()); }
+            case Usage v -> { required(v.used(), v.limit(), v.resetsAt()); if (v.used() < 0 || v.limit() < 0) throw new IllegalArgumentException("Invalid usage"); }
             default -> throw new IllegalArgumentException("Unsupported ai-chat response");
         }
         return value;

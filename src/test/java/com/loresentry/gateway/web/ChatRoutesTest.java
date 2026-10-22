@@ -57,7 +57,7 @@ class ChatRoutesTest {
             + "\"doc_type\":\"manuscript\",\"text\":\"어둠 너머\"},\"focus_file_id\":\"" + FILE + "\",\"replaces\":null,\"client_message_id\":\"" + CLIENT_MESSAGE + "\"}";
     static final ChatData.SendInput SEND_INPUT = new ChatData.SendInput("이 장면은?", "explain",
             new ChatData.Quote(FILE, "12화", "manuscript", "어둠 너머"), FILE, null, CLIENT_MESSAGE);
-    static final String EVENTS = "event: phase\ndata: {\"phase\":\"gathering\"}\n\n: ping\n\nevent: done\ndata: {}\n\n";
+    static final String EVENTS = "event: phase\ndata: {\"phase\":\"gathering\"}\n\n: ping\n\nevent: done\ndata: {\"usage\":{\"used\":1,\"limit\":20,\"resets_at\":\"2026-10-22T15:00:00.000Z\"}}\n\n";
 
     @Autowired MockMvc mvc;
     @MockitoBean OpaqueSessionVerifier verifier;
@@ -105,7 +105,7 @@ class ChatRoutesTest {
     @ParameterizedTest
     @ValueSource(strings = {"GET /projects/{p}/chat/availability", "GET /projects/{p}/chat/sessions", "POST /projects/{p}/chat/sessions",
         "GET /projects/{p}/chat/search?q=x", "PATCH /chat/sessions/{s}", "DELETE /chat/sessions/{s}", "GET /chat/sessions/{s}/messages",
-        "POST /chat/sessions/{s}/messages", "POST /chat/sessions/{s}/cancel"})
+        "POST /chat/sessions/{s}/messages", "POST /chat/sessions/{s}/cancel", "GET /chat/usage"})
     void everyRouteTurnsAwayUsersOutsideTheAllowlist(String route) throws Exception {
         mvc.perform(as(OUTSIDER_SESSION, route(route)).accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_JSON))
             .andExpect(status().isForbidden()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -125,6 +125,22 @@ class ChatRoutesTest {
             .andExpect(content().json("{\"sessions\":[{\"id\":\"" + CHAT + "\",\"project_id\":\"" + PROJECT + "\",\"title\":\"북쪽 문 장면 확인\","
                 + "\"updated_at\":\"2026-10-14T03:00:00Z\",\"preview\":\"본문이 있는 가장 최근 회차는 12화예요.\"}]}", JsonCompareMode.STRICT));
         verifyNoInteractions(accounts);
+    }
+
+    @Test void usageUsesTheBrowserShape() throws Exception {
+        when(client.usage(WRITER)).thenReturn(new ChatData.Usage(3, 0, OffsetDateTime.parse("2026-10-22T15:00:00Z")));
+        mvc.perform(as(WRITER_SESSION, get("/chat/usage"))).andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(content().json("{\"used\":3,\"limit\":0,\"resets_at\":\"2026-10-22T15:00:00Z\"}", JsonCompareMode.STRICT));
+        verify(client).usage(WRITER);
+        verifyNoInteractions(accounts);
+    }
+
+    @Test void usageFailuresUseTheCommonErrorBody() throws Exception {
+        when(client.usage(WRITER)).thenThrow(ChatCallFailure.invalid());
+        mvc.perform(as(WRITER_SESSION, get("/chat/usage"))).andExpect(status().isBadGateway())
+            .andExpect(jsonPath("$.code").value("UPSTREAM_INVALID_RESPONSE")).andExpect(jsonPath("$.next_action").value("NONE"))
+            .andExpect(header().string("Cache-Control", "no-store"));
     }
 
     @Test void sessionCreationIsCreatedWithTheProfile() throws Exception {
@@ -206,8 +222,18 @@ class ChatRoutesTest {
             .andExpect(header().string("Cache-Control", "no-store")).andExpect(header().doesNotExist("X-Accel-Buffering"));
     }
 
+    @Test void dailyLimitOnSendIsTooManyRequestsJson() throws Exception {
+        when(client.send(eq(WRITER), eq(CHAT), any(), any())).thenThrow(new ChatCallFailure(429, "CHAT_DAILY_LIMIT_REACHED", "NONE"));
+        mvc.perform(as(WRITER_SESSION, post("/chat/sessions/" + CHAT + "/messages")).accept(MediaType.TEXT_EVENT_STREAM)
+                .contentType(MediaType.APPLICATION_JSON).content(SEND_BODY))
+            .andExpect(status().isTooManyRequests()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andExpect(jsonPath("$.code").value("CHAT_DAILY_LIMIT_REACHED")).andExpect(jsonPath("$.next_action").value("NONE"))
+            .andExpect(jsonPath("$.message").value("Today's chat usage is used up.")).andExpect(jsonPath("$.length()").value(3))
+            .andExpect(header().string("Cache-Control", "no-store")).andExpect(header().doesNotExist("X-Accel-Buffering"));
+    }
+
     @ParameterizedTest
-    @CsvSource({"503,AI_CHAT_UNAVAILABLE,RETRY_LATER", "502,UPSTREAM_INVALID_RESPONSE,NONE", "503,CHAT_MODEL_UNAVAILABLE,RETRY_LATER",
+    @CsvSource({"503,AI_CHAT_UNAVAILABLE,RETRY_LATER", "502,UPSTREAM_INVALID_RESPONSE,NONE", "503,CHAT_MODEL_UNAVAILABLE,RETRY_LATER", "429,CHAT_DAILY_LIMIT_REACHED,NONE",
         "422,CHAT_CONTEXT_TOO_LARGE,NONE", "404,PROJECT_NOT_FOUND,NONE", "400,CHAT_TITLE_REQUIRED,NONE"})
     void chatFailuresUseTheCommonErrorBody(int status, String code, String action) throws Exception {
         when(client.sessions(WRITER, PROJECT)).thenThrow(new ChatCallFailure(status, code, action));
@@ -244,8 +270,10 @@ class ChatRoutesTest {
         verifyNoInteractions(client, accounts);
     }
 
-    @Test void readsRequireASession() throws Exception {
-        mvc.perform(get("/projects/" + PROJECT + "/chat/availability"))
+    @ParameterizedTest
+    @ValueSource(strings = {"/projects/{p}/chat/availability", "/chat/usage"})
+    void readsRequireASession(String path) throws Exception {
+        mvc.perform(get(path.replace("{p}", PROJECT.toString())))
             .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("SESSION_REQUIRED"));
         verifyNoInteractions(client, accounts);
     }
