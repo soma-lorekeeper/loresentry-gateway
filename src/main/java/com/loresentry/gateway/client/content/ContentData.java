@@ -20,7 +20,7 @@ public final class ContentData {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Episode(UUID id, String name, String rank) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Document(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, String rank, Boolean locked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("trashed_at") OffsetDateTime trashedAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
+    public record Document(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, String rank, Boolean locked, @JsonProperty("refresh_locked") Boolean refreshLocked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("trashed_at") OffsetDateTime trashedAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Tree(List<Folder> folders, List<Episode> episodes, List<Document> documents) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -35,7 +35,7 @@ public final class ContentData {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Snapshot(String title, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<Relation> relations) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Content(UUID id, @JsonProperty("project_id") UUID projectId, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<Relation> relations, Boolean locked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
+    public record Content(UUID id, @JsonProperty("project_id") UUID projectId, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<Relation> relations, Boolean locked, @JsonProperty("refresh_locked") Boolean refreshLocked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Version(UUID id, @JsonProperty("file_id") UUID fileId, String kind, String label, @JsonProperty("source_revision_no") Long sourceRevisionNo, @JsonProperty("created_at") OffsetDateTime createdAt, Snapshot snapshot) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
