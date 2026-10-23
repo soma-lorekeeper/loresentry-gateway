@@ -36,7 +36,7 @@ client는 내부 DTO를 검증·변환하고 application은 후속 처리를 결
 | `PATCH /auth/users/me` | `PATCH /auth/users/me` | 인증된 사용자 UUID와 검증한 `display_name` | 수정된 본인 계정 외부 DTO로 변환 |
 | `PUT /auth/users/me/locale` | `PUT /auth/users/me/locale` | 인증된 사용자 UUID와 `ko`·`en`으로 검증한 `{"locale"}` 본문. 검증 실패 시 호출 생략 | 수정된 본인 계정 외부 DTO로 변환 |
 | `PUT /auth/users/me/onboarding` | `PUT /auth/users/me/onboarding` | 인증된 사용자 UUID, 본문 없음 | `204`만 성공으로 처리 |
-| `POST /auth/users/me/deletion` | `GET /auth/users/me` → Content `DELETE /users/me/data` → AI 챗 `DELETE /users/me/data` → `DELETE /auth/users/me` | 인증된 사용자 UUID만 `X-User-Id`로 구성, 본문 없음 | 아래 탈퇴 호출 순서 참고 |
+| `POST /auth/users/me/deletion` | `GET /auth/users/me` → AI 챗 `DELETE /users/me/data` → `DELETE /auth/users/me` | 인증된 사용자 UUID만 `X-User-Id`로 구성, 본문 없음 | 아래 탈퇴 호출 순서 참고 |
 
 Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth API](../../loresentry-authentication/docs/API.md)다.
 콜백의 `login_request_consumed`는 오류 전달 중에도 보존하고 확인할 수 없는 값을 false로 바꾸지 않는다.
@@ -54,14 +54,16 @@ Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth AP
 | 순서 | 호출 | 성공 | 실패 처리 |
 |---|---|---|---|
 | 1 | Auth `GET /auth/users/me` | `200` 본인 계정. 이메일 비교 | 알려진 401·404는 유지, 장애·기타 알려진 오류는 `503 ACCOUNT_DELETION_UNAVAILABLE`, 잘못된 응답은 502 |
-| 2 | Content `DELETE /users/me/data` | `204` | 잘못된 응답은 502, 나머지는 `503 ACCOUNT_DELETION_UNAVAILABLE` |
-| 3 | AI 챗 `DELETE /users/me/data` | `204` | 잘못된 응답은 502, 나머지는 `503 ACCOUNT_DELETION_UNAVAILABLE` |
-| 4 | Auth `DELETE /auth/users/me` | `204` 또는 `404 USER_NOT_FOUND` | 알려진 401은 유지, 장애·기타 알려진 오류는 503, 잘못된 응답은 502 |
+| 2 | AI 챗 `DELETE /users/me/data` | `204` | 잘못된 응답은 502, 나머지는 `503 ACCOUNT_DELETION_UNAVAILABLE` |
+| 3 | Auth `DELETE /auth/users/me` | `204` 또는 `404 USER_NOT_FOUND` | 알려진 401은 유지, 장애·기타 알려진 오류는 503, 잘못된 응답은 502 |
 
-이메일이 일치하지 않으면 2단계부터 호출하지 않는다. Content·AI 챗 삭제는 반복해도 같은 결과이고 Auth
+이메일이 일치하지 않으면 2단계부터 호출하지 않는다. AI 챗 삭제는 반복해도 같은 결과이고 Auth
 삭제는 이미 없는 계정을 404로 알려 주므로, 결과를 모르는 실패 뒤에도 브라우저 재요청으로
 완료할 수 있다. BFF는 자동 재시도하지 않는다. Auth가 세션을 폐기한 뒤 응답이 유실되면
 재요청은 세션 필터에서 `401 SESSION_INVALID`가 된다.
+
+탈퇴 중에 BFF는 Content를 호출하지 않는다. Auth가 계정을 삭제한 뒤 발행하는 `auth.user.deleted.v1`을
+Content가 받아 작업 데이터를 삭제한다.
 
 ### 약관 동의 호출
 
@@ -83,11 +85,10 @@ Auth 호출 전에 거절한다. 동의 대기 Redis를 직접 조회하지 않�
 
 ## Content 호출
 
-[제공 Content API 목록](CONTENT_API.md#api-목록)의 40개 경로는 **각각 같은 메서드·경로의
+[제공 Content API 목록](CONTENT_API.md#api-목록)의 45개 경로는 **각각 같은 메서드·경로의
 Content API를 호출한다.** 각 경로의 요청을 외부 DTO에서 내부 DTO로 변환하고 인증된
 사용자 UUID를 전달한다. namespace 하위의 임의 경로를 중계하지 않는다.
 실제 호출 목록은 [ContentApiClient](../src/main/java/com/loresentry/gateway/client/content/ContentApiClient.java)에 있다.
-Content `DELETE /users/me/data`는 브라우저 경로가 아니며 [회원 탈퇴](#회원-탈퇴-호출)에서만 호출한다.
 `DELETE /projects/{id}`가 `204`로 끝나면 이어서 AI 챗 데이터를 [정리](#ai-챗-호출)한다.
 Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API](CONTENT_API.md)는 브라우저에 제공하는 계약이다.
 
@@ -103,6 +104,7 @@ Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API]
 | 생성 Location | 반환된 프로젝트 ID로 상대 `/projects/{id}` 구성. 내부 주소를 복사하지 않음 |
 | 피드백 | `POST /feedback`의 category·message·page·client만 내부 DTO로 전달. 길이·종류 판단과 시간당 횟수 제한은 Content가 수행 |
 | 충돌 | `DOCUMENT_CONFLICT`의 current·base를 외부 DTO로 변환. 추가 GET으로 재구성하지 않음 |
+| 최신화 | `POST /projects/{id}/graph-refresh`는 본문 없이 호출하고 `200`·`202`를 모두 성공으로 받음. 최신화 오류의 current·drafts·documents·problems를 code에 맞춰 검증해 외부 DTO로 변환 |
 | 실패 | 제공 Content API의 오류 변환 규칙 적용. 응답이 유실된 변경 요청을 미실행으로 단정하지 않음 |
 
 ## AI 챗 호출
@@ -119,7 +121,7 @@ Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API]
 | 요청 본문 | 정의된 DTO의 타입만 검사해 그대로 전달. 질문·이름의 규칙은 ai-chat이 판단 |
 | 성공 | 필수 필드와 `status`·`role`·`intent`·근거 `kind` 값, 사용량의 음수 여부를 검사해 외부 DTO로 변환 |
 | 오류 | 아래 code·상태 조합만 통과시키고 message는 BFF 고정 문구. 그 밖의 조합·JSON 아님은 `502 UPSTREAM_INVALID_RESPONSE`, 연결 실패·시간 초과는 `503 AI_CHAT_UNAVAILABLE`(`RETRY_LATER`) |
-| 정리 | 탈퇴 3단계의 `DELETE /users/me/data`. 프로젝트 영구 삭제 뒤의 `DELETE /projects/{id}/chat/data`는 실패해도 경고만 남기고 `204` |
+| 정리 | 탈퇴 2단계의 `DELETE /users/me/data`. 프로젝트 영구 삭제 뒤의 `DELETE /projects/{id}/chat/data`는 실패해도 경고만 남기고 `204` |
 
 | HTTP | code | next_action |
 |---|---|---|
