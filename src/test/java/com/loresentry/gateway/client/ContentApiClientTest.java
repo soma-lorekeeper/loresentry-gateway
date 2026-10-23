@@ -342,7 +342,7 @@ class ContentApiClientTest {
         f.server().expect(requestTo("http://content.test/files/"+doc+"/content")).andRespond(json(409,
             "{\"code\":\"DOCUMENT_CONFLICT\",\"message\":\"m\",\"next_action\":\"NONE\",\"current\":{\"id\":\""+doc+"\",\"project_id\":\""+PROJECT+"\","
             +"\"title\":\"리아\",\"folder_code\":\"CHARACTER\",\"episode_id\":null,\"body\":{\"schema_version\":1,\"doc\":{}},\"legacy_body_md\":null,"
-            +"\"properties\":[],\"relations\":[],\"locked\":false,\"char_count\":0,\"revision_no\":9,\"updated_at\":\"2026-10-20T00:00:00Z\"},\"base\":null}"));
+            +"\"properties\":[],\"relations\":[],\"locked\":false,\"refresh_locked\":false,\"char_count\":0,\"revision_no\":9,\"updated_at\":\"2026-10-20T00:00:00Z\"},\"base\":null}"));
         var failure=catchThrowableOfType(ContentCallFailure.class,()->f.client().saveContent(UUID.randomUUID(),doc,
             new ContentData.Snapshot("리아",null,"",java.util.List.of(),java.util.List.of()),null));
         assertThat(failure.code()).isEqualTo("DOCUMENT_CONFLICT");assertThat(failure.current().revisionNo()).isEqualTo(9L);

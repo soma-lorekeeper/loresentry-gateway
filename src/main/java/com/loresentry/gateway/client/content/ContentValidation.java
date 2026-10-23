@@ -28,7 +28,7 @@ final class ContentValidation {
             case Projects v -> items(v.projects());
             case Folder v -> required(v.code(),v.name(),v.position());
             case Episode v -> required(v.id(),v.name(),v.rank());
-            case Document v -> { required(v.id(),v.title(),v.folderCode(),v.rank(),v.locked(),v.charCount(),v.revisionNo(),v.updatedAt()); nonnegative(v.charCount(),v.revisionNo()); }
+            case Document v -> { required(v.id(),v.title(),v.folderCode(),v.rank(),v.locked(),v.refreshLocked(),v.charCount(),v.revisionNo(),v.updatedAt()); nonnegative(v.charCount(),v.revisionNo()); }
             case Tree v -> { items(v.folders());items(v.episodes());items(v.documents()); }
             case TrashEntry v -> required(v.id(),v.title(),v.folderCode(),v.trashedAt());
             case Trash v -> items(v.files());
@@ -37,7 +37,7 @@ final class ContentValidation {
             case Relation v -> required(v.relationKey(),v.targetDocumentId());
             // 본문은 body 나 legacy_body_md 중 하나다. 변환 전 문서는 Markdown 만 온다.
             case Snapshot v -> { required(v.title());body(v.body(),v.legacyBodyMd());items(v.properties());items(v.relations()); }
-            case Content v -> { required(v.id(),v.projectId(),v.title(),v.folderCode(),v.locked(),v.charCount(),v.revisionNo(),v.updatedAt());body(v.body(),v.legacyBodyMd());items(v.properties());items(v.relations());nonnegative(v.charCount(),v.revisionNo()); }
+            case Content v -> { required(v.id(),v.projectId(),v.title(),v.folderCode(),v.locked(),v.refreshLocked(),v.charCount(),v.revisionNo(),v.updatedAt());body(v.body(),v.legacyBodyMd());items(v.properties());items(v.relations());nonnegative(v.charCount(),v.revisionNo()); }
             case Version v -> { required(v.id(),v.fileId(),v.kind(),v.sourceRevisionNo(),v.createdAt());validate(v.snapshot()); }
             case Versions v -> items(v.versions());
             case Snippet v -> required(v.before(),v.match(),v.after());

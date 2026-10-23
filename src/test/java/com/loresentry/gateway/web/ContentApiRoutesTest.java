@@ -86,7 +86,7 @@ class ContentApiRoutesTest {
     @Test void acceptsTheSaveRequestTheBrowserActuallySends() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
         given(service.saveContent(eq(USER), eq(ID), any(), any())).willReturn(new ContentData.Content(
-            ID, ID, "Title", "CHARACTER", null, BODY, null, List.of(), List.of(), false, 4, 8L, now));
+            ID, ID, "Title", "CHARACTER", null, BODY, null, List.of(), List.of(), false, false, 4, 8L, now));
 
         mvc.perform(put("/files/"+ID+"/content").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER)
                 .header("If-Match","\"7\"").header("X-Save-Id",ID).contentType(MediaType.APPLICATION_JSON)
@@ -99,15 +99,27 @@ class ContentApiRoutesTest {
             .andExpect(status().isOk());
     }
 
+    /** 최신화가 잠근 문서는 파일 트리에서도 그 표시를 그대로 넘긴다. 화면은 이것으로 이유를 알린다. */
+    @Test void relaysTheRefreshLockOnTreeDocuments() throws Exception {
+        var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
+        given(service.tree(eq(USER), eq(ID), any())).willReturn(new ContentData.Tree(List.of(), List.of(),
+            List.of(new ContentData.Document(ID, "Chapter", "MANUSCRIPT", null, "a0", true, true, 4, 8L, null, now))));
+        mvc.perform(get("/projects/"+ID+"/files").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.documents[0].locked").value(true))
+            .andExpect(jsonPath("$.documents[0].refresh_locked").value(true));
+    }
+
     @Test void keepsSaveRevisionAndIdempotencyHeaders() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
         given(service.saveContent(eq(USER), eq(ID), any(), any())).willReturn(new ContentData.Content(
-            ID, ID, "Title", "MANUSCRIPT", null, BODY, null, List.of(), List.of(), false, 4, 8L, now));
+            ID, ID, "Title", "MANUSCRIPT", null, BODY, null, List.of(), List.of(), true, true, 4, 8L, now));
         mvc.perform(put("/files/"+ID+"/content").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER)
                 .header("If-Match","\"7\"").header("X-Save-Id",ID).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"title\":\"Title\",\"body\":{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":[]}},\"properties\":[],\"relations\":[]}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.revision_no").value(8))
-            .andExpect(jsonPath("$.episode_id").value(org.hamcrest.Matchers.nullValue()));
+            .andExpect(jsonPath("$.episode_id").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.locked").value(true)).andExpect(jsonPath("$.refresh_locked").value(true));
         verify(service).saveContent(eq(USER),eq(ID),any(),eq(new Conditions("\"7\"",ID.toString(),null)));
     }
     @Test void rejectsAmbiguousHeadersBeforeCallingApplication() throws Exception {
@@ -149,7 +161,7 @@ class ContentApiRoutesTest {
     }
     @Test void mapsSafeBusinessErrorAndPreservesConflictSnapshot() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
-        var current = new ContentData.Content(ID,ID,"Latest","MANUSCRIPT",null,BODY,null,List.of(),List.of(),false,4,9L,now);
+        var current = new ContentData.Content(ID,ID,"Latest","MANUSCRIPT",null,BODY,null,List.of(),List.of(),false,false,4,9L,now);
         given(service.saveContent(any(),any(),any(),any())).willThrow(
             new com.loresentry.gateway.client.content.ContentCallFailure(409,"DOCUMENT_CONFLICT",current,null));
         mvc.perform(put("/files/"+ID+"/content").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER).contentType(MediaType.APPLICATION_JSON).content("{}"))
