@@ -7,7 +7,6 @@ import com.loresentry.gateway.client.auth.AuthCallFailure;
 import com.loresentry.gateway.client.chat.ChatApiClient;
 import com.loresentry.gateway.client.chat.ChatCallFailure;
 import com.loresentry.gateway.client.content.ContentApiClient;
-import com.loresentry.gateway.client.content.ContentCallFailure;
 import com.loresentry.gateway.client.content.ContentData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +25,6 @@ public class AccountDeletionService {
         try {email=auth.account(user).email();}catch(AuthCallFailure failure){throw failure(failure);}
         if(email==null||!normalize(email).equals(normalize(confirmationEmail)))
             throw new AuthOperationFailure(400,"ACCOUNT_CONFIRMATION_MISMATCH","NONE");
-        try {content.deleteUserData(user);}
-        catch(ContentCallFailure failure) {
-            if("UPSTREAM_INVALID_RESPONSE".equals(failure.code())) throw invalid();
-            throw unavailable();
-        }
         try {chat.deleteUserData(user);}
         catch(ChatCallFailure failure) {
             if("UPSTREAM_INVALID_RESPONSE".equals(failure.code())) throw invalid();

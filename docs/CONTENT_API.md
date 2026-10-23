@@ -57,6 +57,11 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | POST /projects/{id}/images | file_name?, content_type, size_bytes | 201 ImageTicket, Location |
 | POST /projects/{id}/images/{iid}/complete | — | 200 Image |
 | GET /projects/{id}/images/{iid} | — | 200 Image |
+| POST /projects/{id}/graph-refresh | — | 202 RefreshStart(`GENERATING`), 200 RefreshStart(`NO_CHANGES`) |
+| GET /projects/{id}/graph-refresh | — | 200 RefreshSummary — 가장 최근 최신화 |
+| GET /projects/{id}/graph-refresh/{rid} | — | 200 RefreshDetail |
+| PATCH /projects/{id}/graph-refresh/{rid}/drafts/{did} | draft_revision, left_snapshot, right_snapshot | 200 SavedDraft |
+| POST /projects/{id}/graph-refresh/{rid}/confirm | — | 200 RefreshConfirmed |
 | POST /feedback | category, message, page?, client? | 201 `{id, created_at}`, Location 없음 |
 
 - **샘플 프로젝트는 본문 없이 요청한다.** 예제 원고·설정 문서를 채우는 일과 이름 중복 시 번호를
@@ -66,6 +71,9 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 - **피드백은 Content DB에 저장한다.** category는 `BUG`·`IDEA`·`OTHER`, message는 공백 제거 후 1~2000자다.
   page는 보낸 화면 경로(200자 이하), client는 user agent다. 검증과 시간당 20건 제한은 Content가 판단한다.
 - **작업공간 레이아웃은 BFF 도 해석하지 않는다.** Content 처럼 불투명한 JSON 으로 통과시킨다.
+- **그래프 최신화는 Content가 판단한다.** 보낼 문서 고르기·문서 잠금·작업본 정규화·확정은 Content가 수행한다.
+  BFF는 요청 결과의 status가 `GENERATING`이면 202, `NO_CHANGES`이면 200으로 답한다.
+  작업본 저장의 relation_key는 Content가 대상 분류로 다시 정하므로 생략할 수 있다.
 
 ## 명시적 API와 데이터 경계
 
@@ -76,11 +84,11 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 계층별 DTO·데이터 경계는 [서버 구조](ARCHITECTURE.md#요청과-데이터의-경계)를 따른다.
 
 JSON 요청은 정의된 필드와 타입만 허용한다. 알 수 없는 필드·잘못된 타입·잘못된 JSON은
-400 INVALID_REQUEST/NONE으로 처리한다. 이름 길이·중복·소유권·휴지통·문서 잠금·버전 경쟁은
-Content에서 판단한다. PATCH name/description의 null은 현행 Content와 같이 변경 없음이며,
-설명을 비우려면 빈 문자열을 사용한다. label 요청 본문은 버전 생성에서만 생략할 수 있다.
+400 INVALID_REQUEST/NONE으로 처리한다. 최신화 작업본 저장의 스냅샷·관계도 같다.
+이름 길이·중복·소유권·휴지통·문서 잠금·버전 경쟁은 Content에서 판단한다.
+PATCH name/description의 null은 현행 Content와 같이 변경 없음이며, 설명을 비우려면 빈 문자열을 사용한다. label 요청 본문은 버전 생성에서만 생략할 수 있다.
 
-경로 UUID 형식 오류는 현재 Content가 사용하는 404 PROJECT_NOT_FOUND/NONE을 유지한다.
+경로 UUID 형식 오류는 현재 Content가 사용하는 404 PROJECT_NOT_FOUND/NONE을 유지한다. 최신화의 rid·did도 같다.
 검색 q는 원래 문자열의 의미를 보존해 한 번만 인코딩한다. 샘플의 locale은 허용 값만 전달한다.
 임의 쿼리를 통째로 전달하지 않는다.
 
@@ -108,7 +116,7 @@ CORS의 허용·노출 헤더와 CSRF 검사 순서는 [브라우저 보안](BRO
 API 목록의 상태 코드·DTO·nullable 필드를 유지한다. null 필드를 임의로 생략하지 않는다.
 프로젝트 생성과 샘플 프로젝트 생성은 201과 상대 Location, 파일·에피소드 생성·버전 생성·피드백 생성은 201이다.
 휴지통 이동·영구 삭제·에피소드 삭제·버전 삭제는 204이며 본문이 없다.
-그 밖의 표에 정의된 결과는 200이다.
+최신화 요청은 문서를 보냈으면 202, 바뀐 문서가 없으면 200이다. 그 밖의 표에 정의된 결과는 200이다.
 
 프로젝트 last_file은 null 또는 최근 수정된 활성 문서의 id/title이며 외부 DTO로 변환한다.
 파일 생성은 요청 kind에 따라 문서와 에피소드 내부 DTO를 구분한다. 트리 응답은
@@ -130,6 +138,20 @@ folders·episodes·documents의 정규화된 목록으로 유지한다.
 - Content: id, project_id, title, folder_code, episode_id, body_md, properties, relations, locked, char_count, revision_no, updated_at.
 - Version: id, file_id, kind, label, source_revision_no, created_at, snapshot.
 - Hit: file_id, title, folder_code, episode_name, snippet(`before,match,after` 또는 null), updated_at.
+- RefreshStart: request_id(`NO_CHANGES`면 null), status(`GENERATING`·`NO_CHANGES`),
+  files(`{file_id, revision_no}` 목록. 최신화가 끝날 때까지 잠기는 문서이며 `NO_CHANGES`면 빈 목록).
+- RefreshSummary: request_id, status(`GENERATING`·`READY`·`NO_CHANGE`·`FAILED`·`APPLIED`), started_at,
+  ready_at, completed_at, error(`{code, message}` 또는 null. message는 null일 수 있음), draft_counts(`{total, matched, new}`).
+- RefreshDetail: RefreshSummary의 필드와 drafts(Draft 목록).
+- Draft: id, kind(`EDIT`·`NEW`), draft_revision, matched, updated_at,
+  document(EDIT의 `{id, title, folder_code, revision_no}`, NEW면 null), candidate(NEW의 `{candidate_id, folder_code, name}`, EDIT면 null),
+  base_version_id, base_revision_no, base_snapshot(Snapshot 또는 null), base_mismatch, left_revision_no,
+  left_snapshot, right_snapshot(DraftSnapshot. NEW는 null일 수 있음).
+- DraftSnapshot: Snapshot과 같고 relations만 `{relation_key, target_document_id, target_candidate_id, description}` 목록이다.
+  대상은 기존 문서 UUID와 새 문서 제안 id(`new:...`) 중 하나만 채워진다.
+- SavedDraft: id, draft_revision, matched, updated_at, left_snapshot, right_snapshot. Content가 정규화한 두 쪽이다.
+- RefreshConfirmed: request_id, status(`APPLIED`), created(`{draft_id, candidate_id, file_id}` 목록),
+  updated(`{draft_id, file_id, revision_no}` 목록), unchanged(작업본 UUID 목록).
 
 ## 오류 변환
 
@@ -139,17 +161,34 @@ message는 BFF가 정의한 고정 문구를 사용하며 내부 원문·SQL·�
 | HTTP | code | next_action |
 |---|---|---|
 | 400 | INVALID_REQUEST, INVALID_PROJECT_NAME, INVALID_PROJECT_DESCRIPTION, INVALID_FILE_TITLE, INVALID_FILE_LOCATION, INVALID_RELATION_TARGET, INVALID_MEMO, INVALID_UPLOAD_REQUEST, INVALID_FEEDBACK | NONE |
-| 404 | PROJECT_NOT_FOUND, FILE_NOT_FOUND, VERSION_NOT_FOUND, NOT_FOUND, MEMO_NOT_FOUND, IMAGE_NOT_FOUND | NONE |
-| 409 | PROJECT_NAME_TAKEN, PROJECT_NOT_TRASHED, FILE_TITLE_TAKEN, FILE_NOT_TRASHED, DOCUMENT_LOCKED, OBJECT_NOT_UPLOADED | NONE |
+| 404 | PROJECT_NOT_FOUND, FILE_NOT_FOUND, VERSION_NOT_FOUND, NOT_FOUND, MEMO_NOT_FOUND, IMAGE_NOT_FOUND, REFRESH_NOT_FOUND, REFRESH_DRAFT_NOT_FOUND | NONE |
+| 409 | PROJECT_NAME_TAKEN, PROJECT_NOT_TRASHED, FILE_TITLE_TAKEN, FILE_NOT_TRASHED, DOCUMENT_LOCKED, OBJECT_NOT_UPLOADED, DOCUMENT_REFRESH_LOCKED, REFRESH_REVIEW_PENDING, REFRESH_NOT_READY | NONE |
 | 409 | DOCUMENT_CONFLICT | NONE |
+| 409 | REFRESH_DRAFT_CONFLICT, REFRESH_DRAFTS_UNMATCHED, REFRESH_DOCUMENTS_CHANGED, REFRESH_DRAFTS_INVALID(상세 값 포함) | NONE |
+| 409 | REFRESH_IN_PROGRESS | RETRY_LATER |
 | 429 | FEEDBACK_RATE_LIMITED | RETRY_LATER |
 | 500 | INTERNAL_ERROR(알려진 Content 계약) | NONE |
+| 503 | REFRESH_UNAVAILABLE(최신화 입력을 올리지 못함. 아무것도 기록하지 않음) | RETRY_LATER |
 | 503 | CONTENT_UNAVAILABLE(연결 실패·읽기 시간 초과) | RETRY_LATER |
 | 502 | UPSTREAM_INVALID_RESPONSE(알 수 없는 오류·상태 불일치·잘못된 본문·내부 사용자 컨텍스트 오류) | NONE |
 
 DOCUMENT_CONFLICT에는 current와 base를 명시적 DTO로 변환해 포함한다. current는 문서 Content,
 base는 Snapshot 또는 null이다. 추가 GET으로 이를 재구성하지 않는다. 잘못된 충돌 데이터는
 일반 409로 축소하거나 성공으로 전달하지 않고 UPSTREAM_INVALID_RESPONSE로 처리한다.
+
+최신화 오류 네 가지는 code·message·next_action 옆에 Content와 같은 이름의 상세 값을 하나 더 싣는다.
+
+| code | 상세 값 |
+|---|---|
+| REFRESH_DRAFT_CONFLICT | current: `{draft_revision, matched, left_snapshot, right_snapshot}`. 다른 탭·기기가 먼저 저장한 작업본 |
+| REFRESH_DRAFTS_UNMATCHED | drafts: 아직 두 쪽을 맞추지 않은 작업본 UUID 목록 |
+| REFRESH_DOCUMENTS_CHANGED | documents: 작업본을 뜬 뒤 바뀌었거나 열 수 없는 문서의 `{draft_id, file_id}` 목록 |
+| REFRESH_DRAFTS_INVALID | problems: `{code, ...}` 목록. RELATION_CONFLICT(one·other), REJECTED_CANDIDATE(target), INVALID_RELATION_TARGET(target), BODY_REQUIRED(draft_id) |
+
+problem은 code가 있는 문자열 값 객체로만 확인하고 code별 칸은 해석하지 않고 옮긴다.
+상세 값이 없거나 모양이 틀리면 UPSTREAM_INVALID_RESPONSE다. 그 밖의 최신화 오류는 일반 오류와 같이 세 칸이다.
+DOCUMENT_REFRESH_LOCKED는 최신화 경로가 아니라 `PUT /files/{id}/lock`에서 온다. 최신화가 잠근 문서는
+그 최신화가 끝날 때까지 잠그거나 풀 수 없다.
 
 Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으므로 브라우저 재로그인
 오류로 바꾸지 않는다. 알 수 없는 status/code/next_action 조합도 외부로 그대로 전달하지 않는다.
@@ -158,6 +197,6 @@ Content의 USER_CONTEXT_REQUIRED는 BFF의 사용자 전달 결함일 수 있으
 
 ## 검증 기준
 
-40개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
+45개 경로·메서드의 입력과 성공·업무 오류, 204·201, nullable 필드, 충돌 current/base,
 문서 저장 헤더와 URI 인코딩을 검증한다. 임의 하위 경로와 HTTP 메서드·추가 요청 필드,
 내부 민감 필드 노출·잘못된 응답·통신 실패 및 하위 전송 계층의 자동 재시도 부재를 확인한다.

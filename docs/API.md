@@ -10,7 +10,7 @@
 
 단일 세션 ID를 사용하는 현재 BFF API 계약이다. 약관 동의도 아래 API 계약에 포함한다.
 이 문서는 제공 API의 진입점이며 인증·본인 계정 API를 상세히 정의한다.
-Content의 40개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
+Content의 45개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
 AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api)에 정리한다.
 공개 `GET /health`는 프로세스 상태를 확인한다. 실행 안내는 [프로젝트 README](../README.md)를 따른다.
 
@@ -159,19 +159,20 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 
 ## 회원 탈퇴
 
-`POST /auth/users/me/deletion`은 확인용 이메일을 받아 본인 계정과 모든 작업 데이터를
-즉시 삭제한다. 유예 기간과 복구 API는 없다. 본문은 `{"confirmation_email": "<string>"}`
+`POST /auth/users/me/deletion`은 확인용 이메일을 받아 본인 계정과 AI 챗 대화를
+즉시 삭제한다. 작업 데이터는 Content가 계정 삭제 이벤트를 받아 이어서 삭제한다. 유예 기간과 복구 API는 없다. 본문은 `{"confirmation_email": "<string>"}`
 하나이며 다른 필드·null·다른 타입은 `400 INVALID_REQUEST`다.
 
 1. Auth의 본인 계정을 조회해 입력 이메일과 비교한다. 앞뒤 공백을 제거하고 대소문자를 구분하지 않는다.
    다르거나 계정에 이메일이 없으면 아무것도 삭제하지 않는다.
-2. Content에 본인 작업 데이터 전체 삭제를 요청한다. 반복 호출해도 같은 결과다.
-3. AI 챗에 본인의 대화 전체 삭제를 요청한다. 반복 호출해도 같은 결과다.
-4. Auth에 계정 삭제를 요청한다. Auth가 로그인 세션·동의 대기를 폐기한 뒤 계정·Google 연결·동의 기록을 삭제한다.
+2. AI 챗에 본인의 대화 전체 삭제를 요청한다. 반복 호출해도 같은 결과다.
+3. Auth에 계정 삭제를 요청한다. Auth가 로그인 세션·동의 대기를 폐기한 뒤 계정·Google 연결·동의 기록을 삭제한다.
    계정이 이미 없다는 `404 USER_NOT_FOUND`는 성공으로 처리한다.
-5. 성공하면 로그아웃과 같은 세션 쿠키·이전 쿠키 삭제 헤더를 반환하고 활동 연장 쿠키는 발급하지 않는다.
+   Content의 작업 데이터는 BFF가 호출하지 않는다. Auth가 계정 삭제 후 발행하는 `auth.user.deleted.v1`을
+   Content가 받아 삭제한다.
+4. 성공하면 로그아웃과 같은 세션 쿠키·이전 쿠키 삭제 헤더를 반환하고 활동 연장 쿠키는 발급하지 않는다.
 
-각 단계는 재시도해도 안전하다. Content 삭제 뒤 Auth 삭제가 실패하면 계정은 남고 작업 데이터만
+각 단계는 재시도해도 안전하다. AI 챗 삭제 뒤 Auth 삭제가 실패하면 계정은 남고 대화만
 비어 있을 수 있으며, 같은 요청을 다시 보내면 나머지를 완료한다. 실패 응답은 세션 쿠키를
 삭제하지 않고 일반 보호 요청처럼 수명을 갱신한다. 삭제 뒤 이전 쿠키로 보낸 요청은
 `401 SESSION_INVALID`다.
@@ -182,7 +183,7 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 | 400 | `ACCOUNT_CONFIRMATION_MISMATCH` | 입력 이메일이 계정 이메일과 다름. 삭제하지 않음 | `NONE` |
 | 401 | `USER_CONTEXT_REQUIRED` | Auth가 사용자 전달 오류 반환 | `RELOGIN` |
 | 404 | `USER_NOT_FOUND` | 확인 단계에서 계정이 없음 | `RELOGIN` |
-| 503 | `ACCOUNT_DELETION_UNAVAILABLE` | Auth·Content·AI 챗 장애·통신 실패·알려진 내부 오류. 재시도 안전 | `RETRY_LATER` |
+| 503 | `ACCOUNT_DELETION_UNAVAILABLE` | Auth·AI 챗 장애·통신 실패·알려진 내부 오류. 재시도 안전 | `RETRY_LATER` |
 | 502 | `UPSTREAM_INVALID_RESPONSE` | 내부 응답 형식·계정 ID 검증 실패 | `NONE` |
 
 세션·CSRF 실패는 [보호 API 인증 실패](#보호-api-인증-실패)를 따른다. 응답은 `Cache-Control: no-store`다.

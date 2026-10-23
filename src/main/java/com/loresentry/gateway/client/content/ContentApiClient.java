@@ -1,6 +1,8 @@
 package com.loresentry.gateway.client.content;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.Objects;
 import org.springframework.stereotype.Component;
@@ -28,8 +30,13 @@ public class ContentApiClient {
                         tools.jackson.databind.cfg.CoercionInputShape.Float, tools.jackson.databind.cfg.CoercionInputShape.Boolean))
                     config.setCoercion(shape, tools.jackson.databind.cfg.CoercionAction.Fail);
             }).build();
+    /**
+     * Content 오류 본문. code·message·next_action 옆에 code 마다 상세 값이 붙는다.
+     * current 는 DOCUMENT_CONFLICT(문서)와 REFRESH_DRAFT_CONFLICT(작업본)의 모양이 달라 code 를 본 뒤 변환한다.
+     */
     private record Error(String code, String message, @JsonProperty("next_action") String nextAction,
-                         ContentData.Content current, ContentData.Snapshot base) {}
+                         tools.jackson.databind.JsonNode current, ContentData.Snapshot base, List<UUID> drafts,
+                         List<ContentData.ChangedDocument> documents, List<Map<String, String>> problems) {}
     private static int errorStatus(String code) {
         if (code == null) return 0;
         return switch (code) {
@@ -37,22 +44,38 @@ public class ContentApiClient {
                     "INVALID_FILE_LOCATION", "INVALID_RELATION_TARGET", "INVALID_MEMO",
                     "INVALID_UPLOAD_REQUEST", "INVALID_FEEDBACK" -> 400;
             case "PROJECT_NOT_FOUND", "FILE_NOT_FOUND", "VERSION_NOT_FOUND", "NOT_FOUND",
-                    "MEMO_NOT_FOUND", "IMAGE_NOT_FOUND" -> 404;
+                    "MEMO_NOT_FOUND", "IMAGE_NOT_FOUND", "REFRESH_NOT_FOUND", "REFRESH_DRAFT_NOT_FOUND" -> 404;
             case "PROJECT_NAME_TAKEN", "PROJECT_NOT_TRASHED", "FILE_TITLE_TAKEN", "FILE_NOT_TRASHED",
-                    "DOCUMENT_LOCKED", "DOCUMENT_CONFLICT", "OBJECT_NOT_UPLOADED" -> 409;
+                    "DOCUMENT_LOCKED", "DOCUMENT_CONFLICT", "OBJECT_NOT_UPLOADED",
+                    // 최신화가 문서를 잠갔거나, 진행·검토 중이거나, 작업본을 저장·확정할 수 없는 상태다.
+                    "DOCUMENT_REFRESH_LOCKED", "REFRESH_IN_PROGRESS", "REFRESH_REVIEW_PENDING", "REFRESH_NOT_READY",
+                    "REFRESH_DRAFT_CONFLICT", "REFRESH_DRAFTS_UNMATCHED", "REFRESH_DOCUMENTS_CHANGED",
+                    "REFRESH_DRAFTS_INVALID" -> 409;
             case "FEEDBACK_RATE_LIMITED" -> 429;
             case "INTERNAL_ERROR" -> 500;
+            // 최신화 입력을 올리지 못했다. 아무것도 기록하지 않았으므로 다시 요청할 수 있다.
+            case "REFRESH_UNAVAILABLE" -> 503;
             default -> 0;
         };
     }
+    /** Content 가 보내는 next_action. 잠시 뒤 다시 하면 되는 오류만 RETRY_LATER 다. */
     private static String errorAction(String code) {
-        return "FEEDBACK_RATE_LIMITED".equals(code) ? "RETRY_LATER" : "NONE";
+        if (code == null) return "NONE";
+        return switch (code) {
+            case "FEEDBACK_RATE_LIMITED", "REFRESH_IN_PROGRESS", "REFRESH_UNAVAILABLE" -> "RETRY_LATER";
+            default -> "NONE";
+        };
     }
     public ContentApiClient(RestClient contentApiRestClient) { this.client = contentApiRestClient; }
     public record Conditions(String ifMatch, String saveId, String ifNoneMatch) {}
 
     private <T> T call(String method, String path, Map<String, ?> variables, UUID userId,
                        Object body, Class<T> type, int expected, Conditions conditions) {
+        return call(method, path, variables, userId, body, type, Set.of(expected), conditions);
+    }
+    /** 성공 상태가 둘 이상인 호출(최신화 요청의 200·202)을 위해 기대 상태를 집합으로 받는다. */
+    private <T> T call(String method, String path, Map<String, ?> variables, UUID userId,
+                       Object body, Class<T> type, Set<Integer> expected, Conditions conditions) {
         try {
             var request = client.method(HttpMethod.valueOf(method)).uri(path, variables)
                     .header("X-User-Id", Objects.requireNonNull(userId).toString());
@@ -64,21 +87,21 @@ public class ContentApiClient {
             if (body != null) request.contentType(MediaType.APPLICATION_JSON).body(body);
             return request.exchange((outgoing, response) -> {
                 int status = response.getStatusCode().value();
-                if (status == expected && type == Void.class) return null;
+                if (expected.contains(status) && type == Void.class) return null;
                 var contentType = response.getHeaders().getContentType();
                 if (contentType == null || !MediaType.APPLICATION_JSON.isCompatibleWith(contentType))
                     throw ContentCallFailure.invalid();
-                if (status == expected) return ContentValidation.validate(JSON.readValue(response.getBody(), type));
+                if (expected.contains(status)) return ContentValidation.validate(JSON.readValue(response.getBody(), type));
                 if (status < 400) throw ContentCallFailure.invalid();
                 var error = JSON.readValue(response.getBody(), Error.class);
                 if (error == null || errorStatus(error.code()) != status || !errorAction(error.code()).equals(error.nextAction())
                         || error.message() == null) throw ContentCallFailure.invalid();
                 if ("DOCUMENT_CONFLICT".equals(error.code())) {
-                    ContentValidation.validate(error.current());
+                    var current = ContentValidation.validate(JSON.treeToValue(error.current(), ContentData.Content.class));
                     if (error.base() != null) ContentValidation.validate(error.base());
-                    throw new ContentCallFailure(status, error.code(), error.current(), error.base());
+                    throw new ContentCallFailure(status, error.code(), current, error.base());
                 }
-                throw new ContentCallFailure(status, error.code(), null, null);
+                throw new ContentCallFailure(status, error.code(), details(error));
             });
         } catch (ResourceAccessException failure) {
             throw ContentCallFailure.unavailable();
@@ -91,9 +114,19 @@ public class ContentApiClient {
         }
     }
 
-    public Void deleteUserData(UUID userId) {
-        return call("DELETE", "/users/me/data", Map.of(), userId, null, Void.class, 204, null);
+    /** 최신화 오류의 상세 값을 code 에 맞춰 꺼낸다. 있어야 할 값이 없거나 모양이 틀리면 잘못된 응답이다. */
+    private static ContentCallFailure.Details details(Error error) {
+        var details = switch (error.code()) {
+            case "REFRESH_DRAFT_CONFLICT" -> new ContentCallFailure.Details(
+                    Objects.requireNonNull(JSON.treeToValue(error.current(), ContentData.DraftConflict.class)), null, null, null);
+            case "REFRESH_DRAFTS_UNMATCHED" -> new ContentCallFailure.Details(null, Objects.requireNonNull(error.drafts()), null, null);
+            case "REFRESH_DOCUMENTS_CHANGED" -> new ContentCallFailure.Details(null, null, Objects.requireNonNull(error.documents()), null);
+            case "REFRESH_DRAFTS_INVALID" -> new ContentCallFailure.Details(null, null, null, Objects.requireNonNull(error.problems()));
+            default -> null;
+        };
+        return details == null ? null : ContentValidation.validate(details);
     }
+
     public Void recordWithdrawalSurvey(UUID userId, ContentData.WithdrawalSurvey body) {
         return call("POST", "/withdrawal-surveys", Map.of(), userId, body, Void.class, 204, null);
     }
@@ -222,5 +255,21 @@ public class ContentApiClient {
     }
     public ContentData.Image getImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) {
         return call("GET", "/projects/{projectId}/images/{imageId}", Map.of("projectId", projectId, "imageId", imageId), userId, null, ContentData.Image.class, 200, conditions);
+    }
+    /** 본문 없이 요청한다. 문서를 보냈으면 202(GENERATING), 바뀐 문서가 없으면 200(NO_CHANGES)이다. */
+    public ContentData.RefreshStart startRefresh(UUID userId, UUID projectId, Conditions conditions) {
+        return call("POST", "/projects/{projectId}/graph-refresh", Map.of("projectId", projectId), userId, null, ContentData.RefreshStart.class, Set.of(200, 202), conditions);
+    }
+    public ContentData.RefreshSummary latestRefresh(UUID userId, UUID projectId, Conditions conditions) {
+        return call("GET", "/projects/{projectId}/graph-refresh", Map.of("projectId", projectId), userId, null, ContentData.RefreshSummary.class, 200, conditions);
+    }
+    public ContentData.RefreshDetail getRefresh(UUID userId, UUID projectId, UUID requestId, Conditions conditions) {
+        return call("GET", "/projects/{projectId}/graph-refresh/{requestId}", Map.of("projectId", projectId, "requestId", requestId), userId, null, ContentData.RefreshDetail.class, 200, conditions);
+    }
+    public ContentData.SavedDraft saveRefreshDraft(UUID userId, UUID projectId, UUID requestId, UUID draftId, ContentData.DraftSave body, Conditions conditions) {
+        return call("PATCH", "/projects/{projectId}/graph-refresh/{requestId}/drafts/{draftId}", Map.of("projectId", projectId, "requestId", requestId, "draftId", draftId), userId, body, ContentData.SavedDraft.class, 200, conditions);
+    }
+    public ContentData.RefreshConfirmed confirmRefresh(UUID userId, UUID projectId, UUID requestId, Conditions conditions) {
+        return call("POST", "/projects/{projectId}/graph-refresh/{requestId}/confirm", Map.of("projectId", projectId, "requestId", requestId), userId, null, ContentData.RefreshConfirmed.class, 200, conditions);
     }
 }

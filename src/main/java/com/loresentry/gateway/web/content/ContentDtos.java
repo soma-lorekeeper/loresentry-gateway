@@ -195,4 +195,85 @@ public final class ContentDtos {
     public record FeedbackCreated(UUID id, @JsonProperty("created_at") OffsetDateTime createdAt) {
         public static FeedbackCreated from(ContentData.FeedbackCreated value) { return value == null ? null : new FeedbackCreated(value.id(), value.createdAt()); }
     }
+
+    // ── 그래프 최신화. 필드 의미는 ContentData 의 같은 이름 레코드를 따른다. ──
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshFile(@JsonProperty("file_id") UUID fileId, @JsonProperty("revision_no") Long revisionNo) {
+        public static RefreshFile from(ContentData.RefreshFile v) { return v == null ? null : new RefreshFile(v.fileId(), v.revisionNo()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshStart(@JsonProperty("request_id") UUID requestId, String status, List<RefreshFile> files) {
+        public static RefreshStart from(ContentData.RefreshStart v) { return v == null ? null : new RefreshStart(v.requestId(), v.status(), v.files().stream().map(RefreshFile::from).toList()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshError(String code, String message) {
+        public static RefreshError from(ContentData.RefreshError v) { return v == null ? null : new RefreshError(v.code(), v.message()); }
+    }
+    /** JSON 의 {@code new} 는 Java 예약어라 필드 이름만 created 다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftCounts(Long total, Long matched, @JsonProperty("new") Long created) {
+        public static DraftCounts from(ContentData.DraftCounts v) { return v == null ? null : new DraftCounts(v.total(), v.matched(), v.created()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshSummary(@JsonProperty("request_id") UUID requestId, String status, @JsonProperty("started_at") OffsetDateTime startedAt, @JsonProperty("ready_at") OffsetDateTime readyAt, @JsonProperty("completed_at") OffsetDateTime completedAt, RefreshError error, @JsonProperty("draft_counts") DraftCounts draftCounts) {
+        public static RefreshSummary from(ContentData.RefreshSummary v) { return v == null ? null : new RefreshSummary(v.requestId(), v.status(), v.startedAt(), v.readyAt(), v.completedAt(), RefreshError.from(v.error()), DraftCounts.from(v.draftCounts())); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshDetail(@JsonProperty("request_id") UUID requestId, String status, @JsonProperty("started_at") OffsetDateTime startedAt, @JsonProperty("ready_at") OffsetDateTime readyAt, @JsonProperty("completed_at") OffsetDateTime completedAt, RefreshError error, @JsonProperty("draft_counts") DraftCounts draftCounts, List<RefreshDraft> drafts) {
+        public static RefreshDetail from(ContentData.RefreshDetail v) { return v == null ? null : new RefreshDetail(v.requestId(), v.status(), v.startedAt(), v.readyAt(), v.completedAt(), RefreshError.from(v.error()), DraftCounts.from(v.draftCounts()), v.drafts().stream().map(RefreshDraft::from).toList()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshDocument(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("revision_no") Long revisionNo) {
+        public static RefreshDocument from(ContentData.RefreshDocument v) { return v == null ? null : new RefreshDocument(v.id(), v.title(), v.folderCode(), v.revisionNo()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshCandidate(@JsonProperty("candidate_id") String candidateId, @JsonProperty("folder_code") String folderCode, String name) {
+        public static RefreshCandidate from(ContentData.RefreshCandidate v) { return v == null ? null : new RefreshCandidate(v.candidateId(), v.folderCode(), v.name()); }
+    }
+    /** 작업본 저장 요청에도 쓰인다. relation_key 는 Content 가 대상 분류로 다시 정하므로 보내지 않아도 된다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftRelation(@JsonProperty("relation_key") String relationKey, @JsonProperty("target_document_id") UUID targetDocumentId, @JsonProperty("target_candidate_id") String targetCandidateId, String description) {
+        public static DraftRelation from(ContentData.DraftRelation v) { return v == null ? null : new DraftRelation(v.relationKey(), v.targetDocumentId(), v.targetCandidateId(), v.description()); }
+        public ContentData.DraftRelation internal() { return new ContentData.DraftRelation(relationKey, targetDocumentId, targetCandidateId, description); }
+    }
+    /** 작업본 한 쪽. 응답과 저장 요청이 같은 모양이다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftSnapshot(String title, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<DraftRelation> relations) {
+        public static DraftSnapshot from(ContentData.DraftSnapshot v) { return v == null ? null : new DraftSnapshot(v.title(), v.body(), v.legacyBodyMd(), v.properties() == null ? null : v.properties().stream().map(TextProperty::from).toList(), v.relations() == null ? null : v.relations().stream().map(DraftRelation::from).toList()); }
+        public ContentData.DraftSnapshot internal() { return new ContentData.DraftSnapshot(title, body, legacyBodyMd, properties == null ? null : properties.stream().map(v -> v == null ? null : v.internal()).toList(), relations == null ? null : relations.stream().map(v -> v == null ? null : v.internal()).toList()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshDraft(UUID id, String kind, @JsonProperty("draft_revision") Long draftRevision, Boolean matched, @JsonProperty("updated_at") OffsetDateTime updatedAt, RefreshDocument document, RefreshCandidate candidate, @JsonProperty("base_version_id") UUID baseVersionId, @JsonProperty("base_revision_no") Long baseRevisionNo, @JsonProperty("base_snapshot") Snapshot baseSnapshot, @JsonProperty("base_mismatch") Boolean baseMismatch, @JsonProperty("left_revision_no") Long leftRevisionNo, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {
+        public static RefreshDraft from(ContentData.RefreshDraft v) { return v == null ? null : new RefreshDraft(v.id(), v.kind(), v.draftRevision(), v.matched(), v.updatedAt(), RefreshDocument.from(v.document()), RefreshCandidate.from(v.candidate()), v.baseVersionId(), v.baseRevisionNo(), Snapshot.from(v.baseSnapshot()), v.baseMismatch(), v.leftRevisionNo(), DraftSnapshot.from(v.leftSnapshot()), DraftSnapshot.from(v.rightSnapshot())); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftSave(@JsonProperty("draft_revision") Long draftRevision, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {
+        public ContentData.DraftSave internal() { return new ContentData.DraftSave(draftRevision, leftSnapshot == null ? null : leftSnapshot.internal(), rightSnapshot == null ? null : rightSnapshot.internal()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record SavedDraft(UUID id, @JsonProperty("draft_revision") Long draftRevision, Boolean matched, @JsonProperty("updated_at") OffsetDateTime updatedAt, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {
+        public static SavedDraft from(ContentData.SavedDraft v) { return v == null ? null : new SavedDraft(v.id(), v.draftRevision(), v.matched(), v.updatedAt(), DraftSnapshot.from(v.leftSnapshot()), DraftSnapshot.from(v.rightSnapshot())); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshCreated(@JsonProperty("draft_id") UUID draftId, @JsonProperty("candidate_id") String candidateId, @JsonProperty("file_id") UUID fileId) {
+        public static RefreshCreated from(ContentData.RefreshCreated v) { return v == null ? null : new RefreshCreated(v.draftId(), v.candidateId(), v.fileId()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshUpdated(@JsonProperty("draft_id") UUID draftId, @JsonProperty("file_id") UUID fileId, @JsonProperty("revision_no") Long revisionNo) {
+        public static RefreshUpdated from(ContentData.RefreshUpdated v) { return v == null ? null : new RefreshUpdated(v.draftId(), v.fileId(), v.revisionNo()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshConfirmed(@JsonProperty("request_id") UUID requestId, String status, List<RefreshCreated> created, List<RefreshUpdated> updated, List<UUID> unchanged) {
+        public static RefreshConfirmed from(ContentData.RefreshConfirmed v) { return v == null ? null : new RefreshConfirmed(v.requestId(), v.status(), v.created().stream().map(RefreshCreated::from).toList(), v.updated().stream().map(RefreshUpdated::from).toList(), v.unchanged()); }
+    }
+    /** REFRESH_DRAFT_CONFLICT 오류 본문의 current. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftConflict(@JsonProperty("draft_revision") Long draftRevision, Boolean matched, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {
+        public static DraftConflict from(ContentData.DraftConflict v) { return v == null ? null : new DraftConflict(v.draftRevision(), v.matched(), DraftSnapshot.from(v.leftSnapshot()), DraftSnapshot.from(v.rightSnapshot())); }
+    }
+    /** REFRESH_DOCUMENTS_CHANGED 오류 본문의 documents 한 줄. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ChangedDocument(@JsonProperty("draft_id") UUID draftId, @JsonProperty("file_id") UUID fileId) {
+        public static ChangedDocument from(ContentData.ChangedDocument v) { return v == null ? null : new ChangedDocument(v.draftId(), v.fileId()); }
+    }
 }

@@ -37,15 +37,27 @@
 ## 온보딩·회원 탈퇴·샘플 프로젝트
 
 BFF는 계정 응답의 `onboarding_completed`를 필수로 검사하므로 Auth의 온보딩 컬럼·응답과
-계정 삭제 API를 먼저 배포한다. Content의 `DELETE /users/me/data`·`POST /projects/sample`도 BFF보다
+계정 삭제 API를 먼저 배포한다. Content의 `POST /projects/sample`도 BFF보다
 먼저 배포한다. 이후 BFF, 마지막으로 온보딩·탈퇴 화면을 사용하는 프론트를 배포한다.
 BFF를 되돌릴 때는 새 화면을 먼저 되돌리며, Auth·Content의 추가 API는 이전 BFF와 호환된다.
+
+탈퇴한 사용자의 작업 데이터는 Content가 `auth.user.deleted.v1`을 받아 삭제하며 BFF는 Content를 호출하지 않는다.
+Content `DELETE /users/me/data`를 지운 Content(soma-lorekeeper/loresentry-content#25)보다 이 BFF를
+**먼저** 배포한다. 탈퇴 중에 그 API를 부르는 이전 BFF가 남은 채 Content가 바뀌면 탈퇴가 Content의
+`404`에 막혀 `503 ACCOUNT_DELETION_UNAVAILABLE`로 멈춘다. 같은 이유로 Content#25 배포 뒤에는
+BFF를 그 API를 부르는 버전으로 되돌리지 않는다.
 
 ## AI 챗
 
 BFF는 탈퇴 중에 ai-chat `DELETE /users/me/data`를 부르므로 이 API를 가진 ai-chat을 먼저 배포한다.
 그렇지 않으면 탈퇴가 `503`·`502`로 멈춘다. 허용 목록은 비운 채로 BFF를 배포하고, ai-chat 동작을 확인한 뒤
 `LORESENTRY_CHAT_ALLOWED_USERS`에 사용자를 넣는다. Pod 종료 유예 시간은 BFF의 종료 대기(150초)보다 길게 맞춘다.
+
+## 그래프 최신화
+
+BFF의 최신화 경로 5개(`/projects/{id}/graph-refresh` 하위)는 Content#25보다 먼저 배포해도 된다.
+Content가 배포되기 전에는 Content가 이 경로를 `404 NOT_FOUND`로 답하고 BFF가 그대로 전달하므로,
+프론트는 이를 "준비 중"으로 표시한다. 새 오류 코드는 Content#25가 보내기 시작할 때 이미 BFF가 알고 있다.
 
 ## 계정 언어와 번역 데이터
 
