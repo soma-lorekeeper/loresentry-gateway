@@ -35,8 +35,6 @@ class AccountDeletionClientTest {
             .andRespond(withSuccess("{\"id\":\""+user+"\",\"display_name\":\"Name\",\"email\":"+email+",\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
     }
     void purge() {
-        content.expect(requestTo("http://content.test/users/me/data")).andExpect(method(HttpMethod.DELETE)).andExpect(header("X-User-Id",user.toString()))
-            .andExpect(headerDoesNotExist("Cookie")).andExpect(content().string("")).andRespond(withNoContent());
         chatPurge(withNoContent());
     }
     void chatPurge(org.springframework.test.web.client.ResponseCreator response) {
@@ -62,29 +60,26 @@ class AccountDeletionClientTest {
         return catchThrowableOfType(AuthOperationFailure.class,()->service.delete(user,confirmation));
     }
 
-    @Test void confirmsThenPurgesContentThenDeletesTheAccount() {
+    @Test void confirmsThenPurgesChatThenDeletesTheAccount() {
         account("\"Writer@Example.test\"");purge();
         auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.DELETE)).andExpect(header("X-User-Id",user.toString()))
             .andExpect(content().string("")).andRespond(withNoContent());
         service.delete(user,"  writer@example.TEST ");verifyAll();
     }
-    @Test void purgesChatAfterContentAndBeforeTheAccount() {
+    @Test void purgesChatBeforeTheAccount() {
         var order=new java.util.ArrayList<String>();
         account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andExpect(method(HttpMethod.DELETE))
-            .andRespond(request->{order.add("content");return withNoContent().createResponse(request);});
         chatPurge(request->{order.add("chat");return withNoContent().createResponse(request);});
         auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.DELETE))
             .andRespond(request->{order.add("auth");return withNoContent().createResponse(request);});
         service.delete(user,"writer@example.test");verifyAll();
-        assertThat(order).containsExactly("content","chat","auth");
+        assertThat(order).containsExactly("chat","auth");
     }
     @ParameterizedTest @CsvSource({"503,CHAT_MODEL_UNAVAILABLE,RETRY_LATER,503,ACCOUNT_DELETION_UNAVAILABLE,RETRY_LATER",
         "404,PROJECT_NOT_FOUND,NONE,503,ACCOUNT_DELETION_UNAVAILABLE,RETRY_LATER",
         "500,INTERNAL_ERROR,NONE,502,UPSTREAM_INVALID_RESPONSE,NONE"})
     void chatFailureStopsBeforeTheAccountIsDeleted(int status,String code,String action,int external,String result,String next) {
         account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andExpect(method(HttpMethod.DELETE)).andRespond(withNoContent());
         chatPurge(error(status,code,action));
         var failure=failure("writer@example.test");
         assertThat(failure.status()).isEqualTo(external);assertThat(failure.code()).isEqualTo(result);assertThat(failure.nextAction()).isEqualTo(next);
@@ -92,19 +87,12 @@ class AccountDeletionClientTest {
     }
     @Test void lostChatResponseIsRetryableAndKeepsTheAccount() {
         account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andExpect(method(HttpMethod.DELETE)).andRespond(withNoContent());
         chatPurge(withException(new java.net.SocketTimeoutException("private")));
-        assertThat(failure("writer@example.test").code()).isEqualTo("ACCOUNT_DELETION_UNAVAILABLE");verifyAll();
-    }
-    @Test void contentFailureNeverReachesChat() {
-        account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andRespond(withException(new java.net.SocketTimeoutException("private")));
-        chat.expect(never(),requestTo("http://chat.test/users/me/data"));
         assertThat(failure("writer@example.test").code()).isEqualTo("ACCOUNT_DELETION_UNAVAILABLE");verifyAll();
     }
     @ParameterizedTest @ValueSource(strings={"other@example.test","","writer@example.tes"})
     void mismatchDeletesNothing(String confirmation) {
-        account("\"writer@example.test\"");content.expect(never(),requestTo("http://content.test/users/me/data"));
+        account("\"writer@example.test\"");chat.expect(never(),requestTo("http://chat.test/users/me/data"));
         var failure=failure(confirmation);
         assertThat(failure.status()).isEqualTo(400);assertThat(failure.code()).isEqualTo("ACCOUNT_CONFIRMATION_MISMATCH");assertThat(failure.nextAction()).isEqualTo("NONE");
         verifyAll();
@@ -117,25 +105,6 @@ class AccountDeletionClientTest {
         account("\"writer@example.test\"");purge();
         auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.DELETE)).andRespond(error(404,"USER_NOT_FOUND","RELOGIN"));
         service.delete(user,"writer@example.test");verifyAll();
-    }
-    @ParameterizedTest @CsvSource({"500,INTERNAL_ERROR,NONE","400,INVALID_REQUEST,NONE"})
-    void contentFailureKeepsTheAccountAndIsRetryable(int status,String code,String action) {
-        account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andRespond(error(status,code,action));
-        var failure=failure("writer@example.test");
-        assertThat(failure.status()).isEqualTo(503);assertThat(failure.code()).isEqualTo("ACCOUNT_DELETION_UNAVAILABLE");assertThat(failure.nextAction()).isEqualTo("RETRY_LATER");
-        verifyAll();
-    }
-    @Test void lostContentResponseIsRetryable() {
-        account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andRespond(withException(new java.net.SocketTimeoutException("private")));
-        assertThat(failure("writer@example.test").code()).isEqualTo("ACCOUNT_DELETION_UNAVAILABLE");verifyAll();
-    }
-    @Test void malformedContentResponseIs502() {
-        account("\"writer@example.test\"");
-        content.expect(requestTo("http://content.test/users/me/data")).andRespond(withSuccess("{}",MediaType.APPLICATION_JSON));
-        var failure=failure("writer@example.test");
-        assertThat(failure.status()).isEqualTo(502);assertThat(failure.code()).isEqualTo("UPSTREAM_INVALID_RESPONSE");verifyAll();
     }
     @ParameterizedTest @CsvSource({"503,ACCOUNT_UNAVAILABLE,RETRY_LATER","500,INTERNAL_ERROR,NONE"})
     void authDeleteFailureAfterPurgeIsRetryable(int status,String code,String action) {
@@ -161,14 +130,14 @@ class AccountDeletionClientTest {
         "418,TEAPOT,NONE,502,UPSTREAM_INVALID_RESPONSE,NONE"})
     void confirmationLookupFailureDeletesNothing(int status,String code,String action,int external,String result,String next) {
         auth.expect(requestTo("http://auth.test/auth/users/me")).andExpect(method(HttpMethod.GET)).andRespond(error(status,code,action));
-        content.expect(never(),requestTo("http://content.test/users/me/data"));
+        chat.expect(never(),requestTo("http://chat.test/users/me/data"));
         var failure=failure("writer@example.test");
         assertThat(failure.status()).isEqualTo(external);assertThat(failure.code()).isEqualTo(result);assertThat(failure.nextAction()).isEqualTo(next);
         verifyAll();
     }
     @Test void confirmationForAnotherUserIsRejectedAsInvalid() {
         auth.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"display_name\":\"Other\",\"email\":\"writer@example.test\",\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
-        content.expect(never(),requestTo("http://content.test/users/me/data"));
+        chat.expect(never(),requestTo("http://chat.test/users/me/data"));
         assertThat(failure("writer@example.test").code()).isEqualTo("UPSTREAM_INVALID_RESPONSE");verifyAll();
     }
 
