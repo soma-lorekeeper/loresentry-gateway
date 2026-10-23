@@ -226,4 +226,31 @@ public class ContentApiController {
         var result = service.getImage(userId, projectId, imageId, new Conditions(null, null, single(request, "If-None-Match")));
         return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Image.from(result));
     }
+    @PostMapping("/projects/{projectId}/graph-refresh")
+    public ResponseEntity<ContentDtos.RefreshStart> startRefresh(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
+        var result = service.startRefresh(userId, projectId, new Conditions(null, null, null));
+        // Content 와 같게 문서를 보냈으면(GENERATING) 202, 바뀐 문서가 없으면(NO_CHANGES) 200 이다.
+        int status = "GENERATING".equals(result.status()) ? 202 : 200;
+        return ResponseEntity.status(status).cacheControl(CacheControl.noStore()).body(ContentDtos.RefreshStart.from(result));
+    }
+    @GetMapping("/projects/{projectId}/graph-refresh")
+    public ResponseEntity<ContentDtos.RefreshSummary> latestRefresh(@CurrentUser UUID userId, @PathVariable UUID projectId, HttpServletRequest request) {
+        var result = service.latestRefresh(userId, projectId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.RefreshSummary.from(result));
+    }
+    @GetMapping("/projects/{projectId}/graph-refresh/{requestId}")
+    public ResponseEntity<ContentDtos.RefreshDetail> getRefresh(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID requestId, HttpServletRequest request) {
+        var result = service.getRefresh(userId, projectId, requestId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.RefreshDetail.from(result));
+    }
+    @PatchMapping("/projects/{projectId}/graph-refresh/{requestId}/drafts/{draftId}")
+    public ResponseEntity<ContentDtos.SavedDraft> saveRefreshDraft(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID requestId, @PathVariable UUID draftId, @RequestBody ContentDtos.DraftSave body, HttpServletRequest request) {
+        var result = service.saveRefreshDraft(userId, projectId, requestId, draftId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.SavedDraft.from(result));
+    }
+    @PostMapping("/projects/{projectId}/graph-refresh/{requestId}/confirm")
+    public ResponseEntity<ContentDtos.RefreshConfirmed> confirmRefresh(@CurrentUser UUID userId, @PathVariable UUID projectId, @PathVariable UUID requestId, HttpServletRequest request) {
+        var result = service.confirmRefresh(userId, projectId, requestId, new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.RefreshConfirmed.from(result));
+    }
 }

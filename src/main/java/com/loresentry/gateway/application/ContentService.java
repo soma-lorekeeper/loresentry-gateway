@@ -66,4 +66,9 @@ public class ContentService {
     public ContentData.ImageTicket createImageTicket(UUID userId, UUID projectId, ContentData.ImageTicketRequest body, Conditions conditions) { return client.createImageTicket(userId, projectId, body, conditions); }
     public ContentData.Image completeImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) { return client.completeImage(userId, projectId, imageId, conditions); }
     public ContentData.Image getImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) { return client.getImage(userId, projectId, imageId, conditions); }
+    public ContentData.RefreshStart startRefresh(UUID userId, UUID projectId, Conditions conditions) { return client.startRefresh(userId, projectId, conditions); }
+    public ContentData.RefreshSummary latestRefresh(UUID userId, UUID projectId, Conditions conditions) { return client.latestRefresh(userId, projectId, conditions); }
+    public ContentData.RefreshDetail getRefresh(UUID userId, UUID projectId, UUID requestId, Conditions conditions) { return client.getRefresh(userId, projectId, requestId, conditions); }
+    public ContentData.SavedDraft saveRefreshDraft(UUID userId, UUID projectId, UUID requestId, UUID draftId, ContentData.DraftSave body, Conditions conditions) { return client.saveRefreshDraft(userId, projectId, requestId, draftId, body, conditions); }
+    public ContentData.RefreshConfirmed confirmRefresh(UUID userId, UUID projectId, UUID requestId, Conditions conditions) { return client.confirmRefresh(userId, projectId, requestId, conditions); }
 }

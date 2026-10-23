@@ -89,4 +89,63 @@ public final class ContentData {
     public record WithdrawalSurvey(List<String> reasons, String comment) {
         @Override public String toString(){return "WithdrawalSurvey[redacted]";}
     }
+
+    // ── 그래프 최신화(/projects/{id}/graph-refresh) ──
+    /** 최신화 요청 결과. 바뀐 문서가 없으면(NO_CHANGES) request_id 는 null 이고 files 는 비어 있다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshStart(@JsonProperty("request_id") UUID requestId, String status, List<RefreshFile> files) {}
+    /** 이번 요청에 실린 문서와 그 revision. 최신화가 끝날 때까지 잠긴다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshFile(@JsonProperty("file_id") UUID fileId, @JsonProperty("revision_no") Long revisionNo) {}
+    /** 실패한 최신화의 원인. message 는 null 일 수 있다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshError(String code, String message) {}
+    /** 열린 작업본 수. JSON 의 {@code new} 는 Java 예약어라 필드 이름만 created 다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftCounts(Long total, Long matched, @JsonProperty("new") Long created) {}
+    /** 최신화 하나의 상태. 화면은 GENERATING 인 동안 이것을 다시 읽는다(폴링). */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshSummary(@JsonProperty("request_id") UUID requestId, String status, @JsonProperty("started_at") OffsetDateTime startedAt, @JsonProperty("ready_at") OffsetDateTime readyAt, @JsonProperty("completed_at") OffsetDateTime completedAt, RefreshError error, @JsonProperty("draft_counts") DraftCounts draftCounts) {}
+    /** 검토 화면이 읽는 최신화 하나와 그 작업본 전부. 앞의 필드는 RefreshSummary 와 같다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshDetail(@JsonProperty("request_id") UUID requestId, String status, @JsonProperty("started_at") OffsetDateTime startedAt, @JsonProperty("ready_at") OffsetDateTime readyAt, @JsonProperty("completed_at") OffsetDateTime completedAt, RefreshError error, @JsonProperty("draft_counts") DraftCounts draftCounts, List<RefreshDraft> drafts) {}
+    /** EDIT 작업본이 고치는 기존 문서. 이름은 지금 문서의 것이다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshDocument(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("revision_no") Long revisionNo) {}
+    /** NEW 작업본이 만들 새 설정 문서 제안. candidate_id 는 {@code new:...} 모양이다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshCandidate(@JsonProperty("candidate_id") String candidateId, @JsonProperty("folder_code") String folderCode, String name) {}
+    /** 작업본의 관계 한 줄. 대상은 기존 문서(target_document_id)나 새 문서 제안(target_candidate_id) 중 하나다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftRelation(@JsonProperty("relation_key") String relationKey, @JsonProperty("target_document_id") UUID targetDocumentId, @JsonProperty("target_candidate_id") String targetCandidateId, String description) {}
+    /** 작업본 한 쪽(left·right). Snapshot 과 같은 모양이고 관계 대상만 새 문서 제안일 수 있다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftSnapshot(String title, tools.jackson.databind.JsonNode body, @JsonProperty("legacy_body_md") String legacyBodyMd, List<TextProperty> properties, List<DraftRelation> relations) {}
+    /**
+     * 검토 작업본 하나. left 는 지금 문서, right 는 AI 제안이며 둘이 같아지면 matched 다.
+     * EDIT 는 document 가, NEW 는 candidate 가 채워진다. NEW 는 left·right 가 null 일 수 있다.
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshDraft(UUID id, String kind, @JsonProperty("draft_revision") Long draftRevision, Boolean matched, @JsonProperty("updated_at") OffsetDateTime updatedAt, RefreshDocument document, RefreshCandidate candidate, @JsonProperty("base_version_id") UUID baseVersionId, @JsonProperty("base_revision_no") Long baseRevisionNo, @JsonProperty("base_snapshot") Snapshot baseSnapshot, @JsonProperty("base_mismatch") Boolean baseMismatch, @JsonProperty("left_revision_no") Long leftRevisionNo, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {}
+    /** 작업본 자동 저장 요청. draft_revision 은 마지막으로 읽은 값이다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftSave(@JsonProperty("draft_revision") Long draftRevision, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {}
+    /** 작업본 저장 결과. Content 가 정규형으로 맞춘 두 쪽을 돌려준다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record SavedDraft(UUID id, @JsonProperty("draft_revision") Long draftRevision, Boolean matched, @JsonProperty("updated_at") OffsetDateTime updatedAt, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {}
+    /** 확정으로 만든 새 설정 문서. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshCreated(@JsonProperty("draft_id") UUID draftId, @JsonProperty("candidate_id") String candidateId, @JsonProperty("file_id") UUID fileId) {}
+    /** 확정으로 내용이나 관계가 바뀐 기존 문서. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshUpdated(@JsonProperty("draft_id") UUID draftId, @JsonProperty("file_id") UUID fileId, @JsonProperty("revision_no") Long revisionNo) {}
+    /** 확정 결과. unchanged 는 바뀐 것이 없던 작업본 id 다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record RefreshConfirmed(@JsonProperty("request_id") UUID requestId, String status, List<RefreshCreated> created, List<RefreshUpdated> updated, List<UUID> unchanged) {}
+    /** REFRESH_DRAFT_CONFLICT 오류의 current. 다른 탭·기기가 먼저 저장한 작업본의 지금 모습이다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DraftConflict(@JsonProperty("draft_revision") Long draftRevision, Boolean matched, @JsonProperty("left_snapshot") DraftSnapshot leftSnapshot, @JsonProperty("right_snapshot") DraftSnapshot rightSnapshot) {}
+    /** REFRESH_DOCUMENTS_CHANGED 오류의 documents 한 줄. 작업본을 뜬 뒤 바뀌었거나 열 수 없는 문서다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ChangedDocument(@JsonProperty("draft_id") UUID draftId, @JsonProperty("file_id") UUID fileId) {}
 }
