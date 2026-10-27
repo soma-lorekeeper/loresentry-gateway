@@ -54,6 +54,9 @@ public class AuthApiClient {
     public void completeOnboarding(UUID user) {
         call(HttpMethod.PUT,"/auth/users/me/onboarding",user,null,Void.class,204,Operation.ACCOUNT);
     }
+    public void recordAcquisition(UUID user,AuthData.Acquisition acquisition) {
+        call(HttpMethod.PUT,"/auth/users/me/acquisition",user,acquisition,Void.class,204,Operation.ACCOUNT);
+    }
     public void deleteAccount(UUID user) {
         call(HttpMethod.DELETE,"/auth/users/me",user,null,Void.class,204,Operation.ACCOUNT);
     }

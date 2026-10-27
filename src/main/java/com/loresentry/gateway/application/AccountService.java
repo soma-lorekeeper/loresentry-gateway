@@ -23,6 +23,9 @@ public class AccountService {
     public void completeOnboarding(UUID user) {
         try {client.completeOnboarding(user);}catch(AuthCallFailure failure){throw failure(failure);}
     }
+    public void recordAcquisition(UUID user,AuthData.Acquisition acquisition) {
+        try {client.recordAcquisition(user,acquisition);}catch(AuthCallFailure failure){throw failure(failure);}
+    }
     private static Account result(AuthData.Account account){return new Account(account.id(),account.displayName(),account.email(),account.onboardingCompleted(),account.locale());}
     private static AuthOperationFailure failure(AuthCallFailure failure) {
         if(failure.kind()==AuthCallFailure.Kind.CONTRACT) return new AuthOperationFailure(failure.status(),failure.code(),failure.nextAction());

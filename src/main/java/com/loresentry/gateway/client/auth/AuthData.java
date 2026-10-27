@@ -33,6 +33,13 @@ public final class AuthData {
             @JsonProperty("onboarding_completed") Boolean onboardingCompleted,String locale) {}
     public record DisplayName(@JsonProperty("display_name") String displayName) {}
     public record AccountLocale(String locale) {}
+    public record Acquisition(@JsonProperty("utm_source") String utmSource,@JsonProperty("utm_medium") String utmMedium,
+            @JsonProperty("utm_campaign") String utmCampaign,@JsonProperty("utm_term") String utmTerm,@JsonProperty("utm_content") String utmContent,
+            @JsonProperty("click_id") String clickId,@JsonProperty("click_id_type") String clickIdType,
+            @JsonProperty("referrer_host") String referrerHost,@JsonProperty("landing_path") String landingPath,
+            @JsonProperty("landed_at") String landedAt) {
+        @Override public String toString(){return "Acquisition[redacted]";}
+    }
     record Error(String code,String message,@JsonProperty("next_action") String nextAction,
                  @JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "AuthError[redacted]"; }

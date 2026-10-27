@@ -35,6 +35,7 @@ AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api)에 정리한다.
 | `PATCH /auth/users/me` | CSRF 헤더·세션 쿠키와 `display_name` 본문 | `200`, 수정된 계정 |
 | `PUT /auth/users/me/locale` | CSRF 헤더·세션 쿠키와 `locale` 본문 | `200`, 수정된 계정 |
 | `PUT /auth/users/me/onboarding` | CSRF 헤더와 세션 쿠키, 본문 없음 | `204`, 본문 없음 |
+| `PUT /auth/users/me/acquisition` | CSRF 헤더·세션 쿠키와 유입 경로 본문 | `204`, 본문 없음 |
 | `POST /auth/users/me/deletion` | CSRF 헤더·세션 쿠키와 `confirmation_email` 본문 | `204`, 본문 없음. 세션 쿠키 삭제 |
 
 계정 응답은 `id`, `display_name`, `email`, `onboarding_completed`, `locale`, 수정 입력은 `display_name`만 허용한다.
@@ -146,6 +147,14 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 도움말에서 온보딩을 다시 보는 것은 프론트 화면 동작이며 이 API를 호출하지 않는다.
 오류는 아래 [계정 오류](#계정-오류와-검증)를 따른다.
 
+## 유입 경로 기록
+
+`PUT /auth/users/me/acquisition`은 신규 회원이 처음 들어온 경로를 기록한다. 본문 필드는 `utm_source`, `utm_medium`,
+`utm_campaign`, `utm_term`, `utm_content`, `click_id`, `click_id_type`, `referrer_host`, `landing_path`, `landed_at`이며
+모두 생략하거나 `null`일 수 있다. BFF는 문자열이 아닌 값·알 수 없는 필드·본문 누락만 `400 INVALID_REQUEST`로 거절하고,
+길이·형식 검증과 "처음 한 번, 온보딩 완료 전까지만" 규칙은 [Auth API](../../loresentry-authentication/docs/API.md#유입-경로-기록)에 맡긴다.
+기록하지 않은 요청도 `204`다. 오류는 아래 [계정 오류](#계정-오류와-검증)를 따른다.
+
 ## 계정 언어
 
 `PUT /auth/users/me/locale`은 본인 계정의 언어를 기록한다. 본문은 `{"locale": "ko"}` 또는
@@ -219,7 +228,7 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 
 알려진 계정 오류는 Auth 계약의 상태·code·next_action을 유지한다.
 `USER_CONTEXT_REQUIRED`는 BFF 전달 결함일 수 있으므로 일반 세션 오류로 바꾸지 않는다.
-온보딩 완료·계정 언어도 같은 규칙을 따른다. 탈퇴 오류는 [회원 탈퇴](#회원-탈퇴)의 별도 표를 따른다.
+온보딩 완료·유입 경로 기록·계정 언어도 같은 규칙을 따른다. 탈퇴 오류는 [회원 탈퇴](#회원-탈퇴)의 별도 표를 따른다.
 통신 장애는 `503 ACCOUNT_UNAVAILABLE / RETRY_LATER`, 잘못된 내부 응답은
 `502 UPSTREAM_INVALID_RESPONSE / NONE`으로 변환한다. 수정 결과 유실을 자동 재시도하지 않는다.
 
