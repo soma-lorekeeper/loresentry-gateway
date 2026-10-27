@@ -36,9 +36,9 @@ public final class ContentDtos {
         public ContentData.Episode internal() { return new ContentData.Episode(id, name, rank); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Document(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, String rank, Boolean locked, @JsonProperty("refresh_locked") Boolean refreshLocked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("trashed_at") OffsetDateTime trashedAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {
-        public static Document from(ContentData.Document value) { return value == null ? null : new Document(value.id(), value.title(), value.folderCode(), value.episodeId(), value.rank(), value.locked(), value.refreshLocked(), value.charCount(), value.revisionNo(), value.trashedAt(), value.updatedAt()); }
-        public ContentData.Document internal() { return new ContentData.Document(id, title, folderCode, episodeId, rank, locked, refreshLocked, charCount, revisionNo, trashedAt, updatedAt); }
+    public record Document(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, String rank, Boolean locked, @JsonProperty("refresh_locked") Boolean refreshLocked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("image_url") String imageUrl, @JsonProperty("trashed_at") OffsetDateTime trashedAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {
+        public static Document from(ContentData.Document value) { return value == null ? null : new Document(value.id(), value.title(), value.folderCode(), value.episodeId(), value.rank(), value.locked(), value.refreshLocked(), value.charCount(), value.revisionNo(), value.imageUrl(), value.trashedAt(), value.updatedAt()); }
+        public ContentData.Document internal() { return new ContentData.Document(id, title, folderCode, episodeId, rank, locked, refreshLocked, charCount, revisionNo, imageUrl, trashedAt, updatedAt); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Tree(List<Folder> folders, List<Episode> episodes, List<Document> documents) {
@@ -151,8 +151,8 @@ public final class ContentDtos {
         public static Favorites from(ContentData.Favorites value) { return value == null ? null : new Favorites(value.fileIds()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description) {
-        public static GraphNode from(ContentData.GraphNode v) { return v == null ? null : new GraphNode(v.id(), v.title(), v.folderCode(), v.description()); }
+    public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description, @JsonProperty("image_url") String imageUrl) {
+        public static GraphNode from(ContentData.GraphNode v) { return v == null ? null : new GraphNode(v.id(), v.title(), v.folderCode(), v.description(), v.imageUrl()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description, String origin) {
@@ -174,6 +174,10 @@ public final class ContentDtos {
     public record WorkspaceState(tools.jackson.databind.JsonNode layout) {
         public static WorkspaceState from(ContentData.WorkspaceState value) { return value == null ? null : new WorkspaceState(value.layout()); }
         public ContentData.WorkspaceState internal() { return new ContentData.WorkspaceState(layout); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DocumentImage(@JsonProperty("image_id") UUID imageId) {
+        public ContentData.DocumentImage internal() { return new ContentData.DocumentImage(imageId); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record ImageTicketRequest(@JsonProperty("file_name") String fileName, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes) {

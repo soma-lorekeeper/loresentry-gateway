@@ -198,6 +198,12 @@ public class ContentApiClient {
     public ContentData.Content saveContent(UUID userId, UUID fileId, ContentData.Snapshot body, Conditions conditions) {
         return call("PUT", "/files/{fileId}/content", Map.of("fileId", fileId), userId, body, ContentData.Content.class, 200, conditions);
     }
+    public ContentData.Document setDocumentImage(UUID userId, UUID fileId, ContentData.DocumentImage body, Conditions conditions) {
+        return call("PUT", "/files/{fileId}/image", Map.of("fileId", fileId), userId, body, ContentData.Document.class, 200, conditions);
+    }
+    public Void clearDocumentImage(UUID userId, UUID fileId, Conditions conditions) {
+        return call("DELETE", "/files/{fileId}/image", Map.of("fileId", fileId), userId, null, Void.class, 204, conditions);
+    }
     public ContentData.Content setLocked(UUID userId, UUID fileId, ContentData.Lock body, Conditions conditions) {
         return call("PUT", "/files/{fileId}/lock", Map.of("fileId", fileId), userId, body, ContentData.Content.class, 200, conditions);
     }
