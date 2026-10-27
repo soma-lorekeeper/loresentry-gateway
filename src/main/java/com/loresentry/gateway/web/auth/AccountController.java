@@ -8,6 +8,7 @@ import com.loresentry.gateway.application.AccountDeletionService;
 import com.loresentry.gateway.application.AccountService;
 import com.loresentry.gateway.application.AuthOperationFailure;
 import com.loresentry.gateway.client.SupportedLocale;
+import com.loresentry.gateway.client.auth.AuthData;
 import com.loresentry.gateway.client.content.ContentData;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -46,6 +47,12 @@ public class AccountController {
     @PutMapping("/auth/users/me/onboarding")
     public ResponseEntity<Void> completeOnboarding(@CurrentUser UUID user) {
         accounts.completeOnboarding(user);
+        return ResponseEntity.noContent().header("Cache-Control","no-store").build();
+    }
+    @PutMapping("/auth/users/me/acquisition")
+    public ResponseEntity<Void> recordAcquisition(@CurrentUser UUID user,@RequestBody AuthData.Acquisition input) {
+        if(input==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
+        accounts.recordAcquisition(user,input);
         return ResponseEntity.noContent().header("Cache-Control","no-store").build();
     }
     @PostMapping("/auth/users/me/deletion")

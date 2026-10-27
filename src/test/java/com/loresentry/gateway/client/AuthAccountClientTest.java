@@ -115,6 +115,35 @@ class AuthAccountClientTest {
         server.expect(requestTo("http://auth.test/auth/users/me/onboarding")).andRespond(withException(new java.net.SocketTimeoutException("private")));
         assertThatThrownBy(()->service.completeOnboarding(user)).hasMessage("ACCOUNT_UNAVAILABLE");server.verify();
     }
+    @Test void acquisitionPutsTheSourceForTheVerifiedUser() {
+        server.expect(requestTo("http://auth.test/auth/users/me/acquisition")).andExpect(method(HttpMethod.PUT)).andExpect(header("X-User-Id",user.toString()))
+            .andExpect(headerDoesNotExist("Cookie")).andExpect(headerDoesNotExist("Authorization"))
+            .andExpect(content().json("{\"utm_source\":\"google\",\"utm_medium\":\"cpc\",\"utm_term\":\"소설 에디터\",\"click_id\":\"Cj0K\",\"click_id_type\":\"gclid\","
+                +"\"referrer_host\":\"www.google.com\",\"landing_path\":\"/\",\"landed_at\":\"2026-10-27T01:02:03Z\"}"))
+            .andRespond(withNoContent());
+        service.recordAcquisition(user,new com.loresentry.gateway.client.auth.AuthData.Acquisition("google","cpc",null,"소설 에디터",null,
+            "Cj0K","gclid","www.google.com","/","2026-10-27T01:02:03Z"));
+        server.verify();
+    }
+    @ParameterizedTest @CsvSource({"400,INVALID_REQUEST,NONE","401,USER_CONTEXT_REQUIRED,RELOGIN","404,USER_NOT_FOUND,RELOGIN","503,ACCOUNT_UNAVAILABLE,RETRY_LATER"})
+    void acquisitionErrorsFollowTheAccountMapping(int status,String code,String action) {
+        server.expect(requestTo("http://auth.test/auth/users/me/acquisition")).andRespond(withStatus(HttpStatusCode.valueOf(status)).contentType(MediaType.APPLICATION_JSON)
+            .body("{\"code\":\""+code+"\",\"message\":\"private detail\",\"next_action\":\""+action+"\"}"));
+        assertThatThrownBy(()->service.recordAcquisition(user,empty())).isInstanceOf(com.loresentry.gateway.application.AuthOperationFailure.class).hasMessage(code)
+            .satisfies(error->assertThat(((com.loresentry.gateway.application.AuthOperationFailure)error).status()).isEqualTo(status));
+        server.verify();
+    }
+    @Test void acquisitionSuccessWithUnexpectedStatusIs502() {
+        server.expect(requestTo("http://auth.test/auth/users/me/acquisition")).andRespond(withSuccess("{}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->service.recordAcquisition(user,empty())).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();
+    }
+    @Test void acquisitionTransportFailureIsRetryLater() {
+        server.expect(requestTo("http://auth.test/auth/users/me/acquisition")).andRespond(withException(new java.net.SocketTimeoutException("private")));
+        assertThatThrownBy(()->service.recordAcquisition(user,empty())).hasMessage("ACCOUNT_UNAVAILABLE");server.verify();
+    }
+    private static com.loresentry.gateway.client.auth.AuthData.Acquisition empty() {
+        return new com.loresentry.gateway.client.auth.AuthData.Acquisition(null,null,null,null,null,null,null,null,null,null);
+    }
     @Test void responseForAnotherUserIsNotExposed() {
         server.expect(requestTo("http://auth.test/auth/users/me")).andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"display_name\":\"Other\",\"email\":null,\"onboarding_completed\":true}",MediaType.APPLICATION_JSON));
         assertThatThrownBy(()->service.get(user)).hasMessage("UPSTREAM_INVALID_RESPONSE");server.verify();

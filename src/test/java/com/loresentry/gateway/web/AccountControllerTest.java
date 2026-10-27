@@ -90,6 +90,32 @@ class AccountControllerTest {
             .andExpect(status().is(status)).andExpect(jsonPath("$.code").value(code)).andExpect(jsonPath("$.next_action").value(action))
             .andExpect(header().doesNotExist("Set-Cookie")).andExpect(header().string("Cache-Control","no-store"));
     }
+    @Test void acquisitionIsRelayedFieldByFieldAndNotCached() throws Exception {
+        mvc.perform(put("/auth/users/me/acquisition").requestAttr(SessionFilter.USER_ATTRIBUTE,user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"utm_source\":\"google\",\"utm_medium\":\"cpc\",\"utm_campaign\":\"123\",\"utm_term\":\"소설 에디터\",\"utm_content\":null,"
+                    +"\"click_id\":\"Cj0K\",\"click_id_type\":\"gclid\",\"referrer_host\":\"www.google.com\",\"landing_path\":\"/\",\"landed_at\":\"2026-10-27T01:02:03Z\"}"))
+            .andExpect(status().isNoContent()).andExpect(content().string("")).andExpect(header().string("Cache-Control","no-store"));
+        verify(service).recordAcquisition(user,new com.loresentry.gateway.client.auth.AuthData.Acquisition("google","cpc","123","소설 에디터",null,
+            "Cj0K","gclid","www.google.com","/","2026-10-27T01:02:03Z"));
+        mvc.perform(put("/auth/users/me/acquisition").requestAttr(SessionFilter.USER_ATTRIBUTE,user).contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(status().isNoContent());
+        verify(service).recordAcquisition(user,new com.loresentry.gateway.client.auth.AuthData.Acquisition(null,null,null,null,null,null,null,null,null,null));
+    }
+    @ParameterizedTest @ValueSource(strings={"","null","[]","{\"utm_source\":1}","{\"utm_source\":true}","{\"landed_at\":1730000000}","{\"gclid\":\"abc\"}",
+        "{\"utm_source\":[\"google\"]}","{\"utm_source\":\"google\"} {}"})
+    void malformedAcquisitionIsRejectedBeforeAuth(String body) throws Exception {
+        mvc.perform(put("/auth/users/me/acquisition").requestAttr(SessionFilter.USER_ATTRIBUTE,user).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isBadRequest()).andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        verifyNoInteractions(service);
+    }
+    @ParameterizedTest @org.junit.jupiter.params.provider.CsvSource({"400,INVALID_REQUEST,NONE","401,USER_CONTEXT_REQUIRED,RELOGIN","404,USER_NOT_FOUND,RELOGIN",
+        "503,ACCOUNT_UNAVAILABLE,RETRY_LATER","502,UPSTREAM_INVALID_RESPONSE,NONE"})
+    void acquisitionFailuresUseTheAccountErrorBody(int status,String code,String action) throws Exception {
+        doThrow(new AuthOperationFailure(status,code,action)).when(service).recordAcquisition(eq(user),any());
+        mvc.perform(put("/auth/users/me/acquisition").requestAttr(SessionFilter.USER_ATTRIBUTE,user).contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(status().is(status)).andExpect(jsonPath("$.code").value(code)).andExpect(jsonPath("$.next_action").value(action))
+            .andExpect(header().doesNotExist("Set-Cookie")).andExpect(header().string("Cache-Control","no-store"));
+    }
     @Test void unavailableDoesNotModifyCookiesOrRequestRefresh() throws Exception {
         when(service.get(user)).thenThrow(new AuthOperationFailure(503,"ACCOUNT_UNAVAILABLE","RETRY_LATER"));
         mvc.perform(get("/auth/users/me").requestAttr(SessionFilter.USER_ATTRIBUTE,user))

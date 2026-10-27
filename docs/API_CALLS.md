@@ -36,6 +36,7 @@ client는 내부 DTO를 검증·변환하고 application은 후속 처리를 결
 | `PATCH /auth/users/me` | `PATCH /auth/users/me` | 인증된 사용자 UUID와 검증한 `display_name` | 수정된 본인 계정 외부 DTO로 변환 |
 | `PUT /auth/users/me/locale` | `PUT /auth/users/me/locale` | 인증된 사용자 UUID와 `ko`·`en`으로 검증한 `{"locale"}` 본문. 검증 실패 시 호출 생략 | 수정된 본인 계정 외부 DTO로 변환 |
 | `PUT /auth/users/me/onboarding` | `PUT /auth/users/me/onboarding` | 인증된 사용자 UUID, 본문 없음 | `204`만 성공으로 처리 |
+| `PUT /auth/users/me/acquisition` | `PUT /auth/users/me/acquisition` | 인증된 사용자 UUID와 받은 유입 경로 필드 그대로 | `204`만 성공으로 처리 |
 | `POST /auth/users/me/deletion` | `GET /auth/users/me` → AI 챗 `DELETE /users/me/data` → `DELETE /auth/users/me` | 인증된 사용자 UUID만 `X-User-Id`로 구성, 본문 없음 | 아래 탈퇴 호출 순서 참고 |
 
 Auth가 받는 필수 필드·반환 필드·오류 코드의 기준은 [Auth API](../../loresentry-authentication/docs/API.md)다.
