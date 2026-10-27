@@ -20,7 +20,8 @@ public final class ContentData {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Episode(UUID id, String name, String rank) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Document(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, String rank, Boolean locked, @JsonProperty("refresh_locked") Boolean refreshLocked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("trashed_at") OffsetDateTime trashedAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
+    /** {@code image_url} 은 문서의 대표 이미지 주소다. 없으면 null. */
+    public record Document(UUID id, String title, @JsonProperty("folder_code") String folderCode, @JsonProperty("episode_id") UUID episodeId, String rank, Boolean locked, @JsonProperty("refresh_locked") Boolean refreshLocked, @JsonProperty("char_count") Integer charCount, @JsonProperty("revision_no") Long revisionNo, @JsonProperty("image_url") String imageUrl, @JsonProperty("trashed_at") OffsetDateTime trashedAt, @JsonProperty("updated_at") OffsetDateTime updatedAt) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Tree(List<Folder> folders, List<Episode> episodes, List<Document> documents) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -71,10 +72,13 @@ public final class ContentData {
     /** 화면이 만든 레이아웃 JSON. BFF 도 Content 처럼 이 구조를 해석하지 않는다. */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record WorkspaceState(tools.jackson.databind.JsonNode layout) {}
-    public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description) {}
+    public record GraphNode(UUID id, String title, @JsonProperty("folder_code") String folderCode, String description, @JsonProperty("image_url") String imageUrl) {}
     public record GraphEdge(UUID id, UUID source, UUID target, @JsonProperty("relation_key") String relationKey, String description, String origin) {}
     public record GraphEpisode(UUID id, String name, @JsonProperty("document_ids") List<UUID> documentIds) {}
     public record Graph(List<GraphNode> nodes, List<GraphEdge> edges, List<GraphEpisode> episodes) {}
+    /** 문서에 붙일 이미지. 먼저 올리고 complete 까지 마친 같은 프로젝트의 것이어야 한다. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DocumentImage(@JsonProperty("image_id") UUID imageId) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record ImageTicketRequest(@JsonProperty("file_name") String fileName, @JsonProperty("content_type") String contentType, @JsonProperty("size_bytes") Long sizeBytes) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)

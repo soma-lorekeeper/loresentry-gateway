@@ -40,6 +40,8 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | GET /files/{id}/content | — | 200 Content |
 | PUT /files/{id}/content | Snapshot, If-Match, X-Save-Id? | 200 Content |
 | PUT /files/{id}/lock | locked | 200 Content |
+| PUT /files/{id}/image | image_id — 업로드를 마친 같은 프로젝트의 이미지 | 200 Document |
+| DELETE /files/{id}/image | — | 204, 이미지가 없어도 204 |
 | GET /files/{id}/versions | — | 200 `{versions: Version[]}` |
 | POST /files/{id}/versions | label?, 본문 생략 가능 | 201 Version |
 | POST /files/{id}/versions/{vid}/restore | If-Match | 200 Content |
@@ -52,6 +54,7 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | GET /projects/{id}/favorites | — | 200 `{file_ids: UUID[]}` |
 | PUT /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
 | DELETE /projects/{id}/favorites/{fid} | — | 200 `{file_ids}` — 매번 전체 목록 |
+| GET /projects/{id}/graph | — | 200 Graph |
 | GET /projects/{id}/workspace-state | — | 200 `{layout}`; 처음이면 `layout: null` |
 | PUT /projects/{id}/workspace-state | layout | 204 |
 | POST /projects/{id}/images | file_name?, content_type, size_bytes | 201 ImageTicket, Location |
@@ -130,7 +133,8 @@ folders·episodes·documents의 정규화된 목록으로 유지한다.
 - Image: image_id, project_id, file_name, key, content_type, size_bytes, status(`PENDING`·`COMMITTED`),
   public_url(`COMMITTED` 에서만), created_at, committed_at.
 - Project: id, name, description, last_worked_at, trashed_at, created_at, last_file. last_file은 null 또는 최근 수정된 활성 문서의 `{id, title}`이다.
-- Document: id, title, folder_code, episode_id, rank, locked, refresh_locked, char_count, revision_no, trashed_at, updated_at.
+- Document: id, title, folder_code, episode_id, rank, locked, refresh_locked, char_count, revision_no, image_url, trashed_at, updated_at.
+- `image_url`은 문서의 대표 이미지 주소이고 없으면 null이다. 이미지는 문서 내용이 아니라서 바꿔도 revision_no가 오르지 않고 버전에 남지 않는다. 바꾸거나 떼면 이전 이미지는 지워진다.
 - Episode: id, name, rank. 생성 요청의 title이 응답에서는 name이다.
 - 트리: folders는 code/name/position, episodes는 Episode 목록, documents는 Document 목록이다. 트리 조립은 프론트 책임이다.
 - TrashEntry: id, title, folder_code, episode_name, trashed_at.
@@ -138,6 +142,7 @@ folders·episodes·documents의 정규화된 목록으로 유지한다.
 - Content: id, project_id, title, folder_code, episode_id, body_md, properties, relations, locked, refresh_locked, char_count, revision_no, updated_at.
 - `locked`는 편집이 막혔는지(사용자 잠금 또는 그래프 최신화 잠금)이고, `refresh_locked`는 그중 그래프 최신화가 잠갔는지다. 최신화 잠금은 사용자가 풀 수 없어 화면이 이유를 따로 알린다.
 - Version: id, file_id, kind, label, source_revision_no, created_at, snapshot.
+- Graph: nodes(`{id, title, folder_code, description, image_url}` 목록), edges(`{id, source, target, relation_key, description, origin}` 목록), episodes(`{id, name, document_ids}` 목록).
 - Hit: file_id, title, folder_code, episode_name, snippet(`before,match,after` 또는 null), updated_at.
 - RefreshStart: request_id(`NO_CHANGES`면 null), status(`GENERATING`·`NO_CHANGES`),
   files(`{file_id, revision_no}` 목록. 최신화가 끝날 때까지 잠기는 문서이며 `NO_CHANGES`면 빈 목록).

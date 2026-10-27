@@ -47,6 +47,8 @@ public class ContentService {
     public Void deleteEpisode(UUID userId, UUID episodeId, Conditions conditions) { return client.deleteEpisode(userId, episodeId, conditions); }
     public ContentData.Content getContent(UUID userId, UUID fileId, Conditions conditions) { return client.getContent(userId, fileId, conditions); }
     public ContentData.Content saveContent(UUID userId, UUID fileId, ContentData.Snapshot body, Conditions conditions) { return client.saveContent(userId, fileId, body, conditions); }
+    public ContentData.Document setDocumentImage(UUID userId, UUID fileId, ContentData.DocumentImage body, Conditions conditions) { return client.setDocumentImage(userId, fileId, body, conditions); }
+    public Void clearDocumentImage(UUID userId, UUID fileId, Conditions conditions) { return client.clearDocumentImage(userId, fileId, conditions); }
     public ContentData.Content setLocked(UUID userId, UUID fileId, ContentData.Lock body, Conditions conditions) { return client.setLocked(userId, fileId, body, conditions); }
     public ContentData.Versions versions(UUID userId, UUID fileId, Conditions conditions) { return client.versions(userId, fileId, conditions); }
     public ContentData.Version createVersion(UUID userId, UUID fileId, ContentData.NamedVersion body, Conditions conditions) { return client.createVersion(userId, fileId, body, conditions); }
