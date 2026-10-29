@@ -43,13 +43,13 @@ class SettingCheckApiClientTest {
             + "\"counts\":{\"open\":0,\"intended\":0,\"not_conflict\":0},\"failure_code\":null}";
     static final String CORE_FINDING_JSON = "{\"id\":\"" + FINDING + "\",\"kind\":\"SETTING\",\"core\":true,\"confidence\":\"HIGH\","
             + "\"summary\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요\",\"direction\":\"열쇠를 얻는 장면이 없어요.\","
-            + "\"quote\":\"서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.\","
+            + "\"quote\":\"서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.\",\"quote_focus\":\"천천히 문을 밀었다\","
             + "\"source\":{\"document_id\":\"" + PLACE + "\",\"title\":\"북쪽 온실\",\"doc_type\":\"place\",\"ordinal\":null,"
-            + "\"quote\":\"북쪽 문은 낡은 열쇠 없이는 열리지 않는다.\"},\"verdict\":null,\"reason\":null}";
+            + "\"quote\":\"북쪽 문은 낡은 열쇠 없이는 열리지 않는다.\",\"quote_focus\":\"낡은 열쇠 없이는 열리지 않는다\"},\"verdict\":null,\"reason\":null}";
     static final String MANUSCRIPT_FINDING_JSON = "{\"id\":\"" + FINDING + "\",\"kind\":\"MANUSCRIPT\",\"core\":false,\"confidence\":\"LOW\","
-            + "\"summary\":\"9화에서는 하린이 왼손잡이였어요\",\"direction\":\"9화의 해당 문단을 확인해 보세요.\",\"quote\":\"하린은 오른손으로 칼을 쥐었다.\","
+            + "\"summary\":\"9화에서는 하린이 왼손잡이였어요\",\"direction\":\"9화의 해당 문단을 확인해 보세요.\",\"quote\":\"하린은 오른손으로 칼을 쥐었다.\",\"quote_focus\":null,"
             + "\"source\":{\"document_id\":\"" + EARLIER + "\",\"title\":\"9화\",\"doc_type\":\"manuscript\",\"ordinal\":9,"
-            + "\"quote\":\"왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.\"},\"verdict\":\"INTENDED\",\"reason\":\"하린은 일부러 손을 바꿨어요.\"}";
+            + "\"quote\":\"왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.\",\"quote_focus\":null},\"verdict\":\"INTENDED\",\"reason\":\"하린은 일부러 손을 바꿨어요.\"}";
     static final SettingCheckData.Read READ = new SettingCheckData.Read(11, 1, 11, 21, 6);
     static final SettingCheckData.Counts COUNTS = new SettingCheckData.Counts(3, 1, 0);
     MockRestServiceServer server;
@@ -127,11 +127,23 @@ class SettingCheckApiClientTest {
         var findings = client.settingCheck(USER, RUN).findings();
         assertThat(findings).containsExactly(
             new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH", "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요",
-                "열쇠를 얻는 장면이 없어요.", "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.",
-                new SettingCheckData.Source(PLACE, "북쪽 온실", "place", null, "북쪽 문은 낡은 열쇠 없이는 열리지 않는다."), null, null),
+                "열쇠를 얻는 장면이 없어요.", "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
+                new SettingCheckData.Source(PLACE, "북쪽 온실", "place", null, "북쪽 문은 낡은 열쇠 없이는 열리지 않는다.", "낡은 열쇠 없이는 열리지 않는다"),
+                null, null),
             new SettingCheckData.Finding(FINDING, "MANUSCRIPT", false, "LOW", "9화에서는 하린이 왼손잡이였어요", "9화의 해당 문단을 확인해 보세요.",
-                "하린은 오른손으로 칼을 쥐었다.", new SettingCheckData.Source(EARLIER, "9화", "manuscript", 9, "왼손잡이인 하린은 늘 칼을 왼쪽에 찼다."),
+                "하린은 오른손으로 칼을 쥐었다.", null, new SettingCheckData.Source(EARLIER, "9화", "manuscript", 9, "왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.", null),
                 "INTENDED", "하린은 일부러 손을 바꿨어요."));
+        server.verify();
+    }
+
+    @Test void findingsWithoutQuoteFocusStillRead() {
+        var finding = CORE_FINDING_JSON.replace(",\"quote_focus\":\"천천히 문을 밀었다\"", "").replace(",\"quote_focus\":\"낡은 열쇠 없이는 열리지 않는다\"", "");
+        assertThat(finding).doesNotContain("quote_focus");
+        server.expect(requestTo("http://chat.test/setting-checks/" + RUN)).andRespond(withSuccess(withFindings(RUN_JSON, finding), MediaType.APPLICATION_JSON));
+        assertThat(client.settingCheck(USER, RUN).findings()).singleElement().satisfies(read -> {
+            assertThat(read.quoteFocus()).isNull();
+            assertThat(read.source().quoteFocus()).isNull();
+        });
         server.verify();
     }
 

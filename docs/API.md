@@ -243,8 +243,9 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
   `stage`(`READING`·`FINDING`·`JUDGING`·`null`)·`created_at`·`finished_at`·`read`·`counts`·`failure_code`다.
   `read`는 `manuscripts`·`from_ordinal`·`to_ordinal`·`settings`·`core_facts`, `counts`는 `open`·`intended`·`not_conflict`다.
   `findings`는 단건 조회에만 있고 시작·요약·목록 응답에는 키가 없다.
-- 항목은 `id`·`kind`(`SETTING`·`MANUSCRIPT`)·`core`·`confidence`(`HIGH`·`LOW`)·`summary`·`direction`·`quote`·`source`·`verdict`·`reason`,
-  `source`는 `document_id`·`title`·`doc_type`·`ordinal`·`quote`다. 값이 `null`이어도 키를 유지한다.
+- 항목은 `id`·`kind`(`SETTING`·`MANUSCRIPT`)·`core`·`confidence`(`HIGH`·`LOW`)·`summary`·`direction`·`quote`·`quote_focus`·`source`·`verdict`·`reason`,
+  `source`는 `document_id`·`title`·`doc_type`·`ordinal`·`quote`·`quote_focus`다. 값이 `null`이어도 키를 유지한다.
+  `quote_focus`는 같은 객체의 `quote` 안에서 모순을 담은 구절이며 `null`일 수 있다. ai-chat이 키를 보내지 않으면 `null`로 전달한다.
 - 점검 시작만 Auth 계정의 언어를 `X-User-Locale`로 붙인다. 이름은 보내지 않는다.
 - ai-chat의 `404 SETTING_CHECK_DOCUMENT_NOT_FOUND`(점검할 원고 없음), `409 SETTING_CHECK_IN_PROGRESS`(프로젝트에서 이미 진행 중),
   `404 SETTING_CHECK_NOT_FOUND`·`SETTING_CHECK_FINDING_NOT_FOUND`(없거나 본인 것이 아님)를 그대로 전달한다. 모두 `NONE`이다.

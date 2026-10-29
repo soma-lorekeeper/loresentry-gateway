@@ -21,17 +21,18 @@ public final class SettingCheckDtos {
         public static Counts from(SettingCheckData.Counts value) { return new Counts(value.open(), value.intended(), value.notConflict()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Source(@JsonProperty("document_id") UUID documentId, String title, @JsonProperty("doc_type") String docType, Integer ordinal, String quote) {
+    public record Source(@JsonProperty("document_id") UUID documentId, String title, @JsonProperty("doc_type") String docType, Integer ordinal, String quote,
+                         @JsonProperty("quote_focus") String quoteFocus) {
         public static Source from(SettingCheckData.Source value) {
-            return new Source(value.documentId(), value.title(), value.docType(), value.ordinal(), value.quote());
+            return new Source(value.documentId(), value.title(), value.docType(), value.ordinal(), value.quote(), value.quoteFocus());
         }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Finding(UUID id, String kind, boolean core, String confidence, String summary, String direction, String quote,
-                          Source source, String verdict, String reason) {
+                          @JsonProperty("quote_focus") String quoteFocus, Source source, String verdict, String reason) {
         public static Finding from(SettingCheckData.Finding value) {
             return new Finding(value.id(), value.kind(), value.core(), value.confidence(), value.summary(), value.direction(), value.quote(),
-                    Source.from(value.source()), value.verdict(), value.reason());
+                    value.quoteFocus(), Source.from(value.source()), value.verdict(), value.reason());
         }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)

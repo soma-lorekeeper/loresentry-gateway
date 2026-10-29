@@ -11,9 +11,10 @@ public final class SettingCheckData {
     public record Read(Integer manuscripts, @JsonProperty("from_ordinal") Integer fromOrdinal, @JsonProperty("to_ordinal") Integer toOrdinal,
                        Integer settings, @JsonProperty("core_facts") Integer coreFacts) {}
     public record Counts(Integer open, Integer intended, @JsonProperty("not_conflict") Integer notConflict) {}
-    public record Source(@JsonProperty("document_id") UUID documentId, String title, @JsonProperty("doc_type") String docType, Integer ordinal, String quote) {}
+    public record Source(@JsonProperty("document_id") UUID documentId, String title, @JsonProperty("doc_type") String docType, Integer ordinal, String quote,
+                         @JsonProperty("quote_focus") String quoteFocus) {}
     public record Finding(UUID id, String kind, Boolean core, String confidence, String summary, String direction, String quote,
-                          Source source, String verdict, String reason) {}
+                          @JsonProperty("quote_focus") String quoteFocus, Source source, String verdict, String reason) {}
     public record Run(UUID id, @JsonProperty("project_id") UUID projectId, @JsonProperty("document_id") UUID documentId,
                       @JsonProperty("document_title") String documentTitle, @JsonProperty("revision_no") Long revisionNo, String status, String stage,
                       @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("finished_at") OffsetDateTime finishedAt,
