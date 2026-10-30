@@ -110,7 +110,7 @@ Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API]
 
 ## AI 챗 호출
 
-브라우저의 [AI 챗 경로](API.md#ai-챗-api) 10개는 **각각 같은 메서드·경로의 ai-chat API를 호출한다.**
+브라우저의 [AI 챗 경로](API.md#ai-챗-api) 10개와 [설정 오류 점검 경로](API.md#설정-오류-점검) 7개는 **각각 같은 메서드·경로의 ai-chat API를 호출한다.**
 실제 호출 목록은 [ChatApiClient](../src/main/java/com/loresentry/gateway/client/chat/ChatApiClient.java)에 있고,
 계약의 기준은 [AI 챗 요구사항 §4](../../docs/AI_CHAT_REQUIREMENTS.md#4-api-계약)다.
 
@@ -118,17 +118,17 @@ Content의 제공 명세는 Content 서버가 소유하며, BFF의 [Content API]
 |---|---|
 | 허용 목록 | `loresentry.chat.allowed-users`에 없는 사용자는 Auth·ai-chat을 호출하지 않고 `403 CHAT_NOT_ENABLED`(`NONE`) |
 | 신원 | 인증된 `X-User-Id`만 설정 |
-| 프로필 | 세션 만들기·질문 보내기에서만 Auth `GET /auth/users/me`를 읽어 `X-User-Locale`(`ko`·`en`일 때만)과 `X-User-Display-Name`(UTF-8 퍼센트 인코딩)을 붙인다. Auth가 실패하면 경고만 남기고 두 헤더 없이 호출 |
+| 프로필 | 세션 만들기·질문 보내기에서만 Auth `GET /auth/users/me`를 읽어 `X-User-Locale`(`ko`·`en`일 때만)과 `X-User-Display-Name`(UTF-8 퍼센트 인코딩)을 붙인다. Auth가 실패하면 경고만 남기고 두 헤더 없이 호출. 설정 오류 점검 시작은 같은 방식으로 `X-User-Locale`만 붙인다 |
 | 요청 본문 | 정의된 DTO의 타입만 검사해 그대로 전달. 질문·이름의 규칙은 ai-chat이 판단 |
-| 성공 | 필수 필드와 `status`·`role`·`intent`·근거 `kind` 값, 사용량의 음수 여부를 검사해 외부 DTO로 변환 |
+| 성공 | 필수 필드와 `status`·`role`·`intent`·근거 `kind` 값, 사용량의 음수 여부를 검사해 외부 DTO로 변환. 점검은 `status`·`stage`, 항목은 `kind`·`confidence`·`verdict` 값과 `revision_no`·`read`·`counts`의 음수 여부를 검사하고, 단건 점검에 `findings`가 없으면 502 |
 | 오류 | 아래 code·상태 조합만 통과시키고 message는 BFF 고정 문구. 그 밖의 조합·JSON 아님은 `502 UPSTREAM_INVALID_RESPONSE`, 연결 실패·시간 초과는 `503 AI_CHAT_UNAVAILABLE`(`RETRY_LATER`) |
 | 정리 | 탈퇴 2단계의 `DELETE /users/me/data`. 프로젝트 영구 삭제 뒤의 `DELETE /projects/{id}/chat/data`는 실패해도 경고만 남기고 `204` |
 
 | HTTP | code | next_action |
 |---|---|---|
 | 400 | INVALID_REQUEST, CHAT_TITLE_REQUIRED, CHAT_QUESTION_REQUIRED | NONE |
-| 404 | CHAT_SESSION_NOT_FOUND, PROJECT_NOT_FOUND | NONE |
-| 409 | CHAT_NOT_LAST_QUESTION, CHAT_ANSWER_IN_PROGRESS, CHAT_ANOTHER_ANSWER_IN_PROGRESS | NONE |
+| 404 | CHAT_SESSION_NOT_FOUND, PROJECT_NOT_FOUND, SETTING_CHECK_NOT_FOUND, SETTING_CHECK_FINDING_NOT_FOUND, SETTING_CHECK_DOCUMENT_NOT_FOUND | NONE |
+| 409 | CHAT_NOT_LAST_QUESTION, CHAT_ANSWER_IN_PROGRESS, CHAT_ANOTHER_ANSWER_IN_PROGRESS, SETTING_CHECK_IN_PROGRESS | NONE |
 | 422 | CHAT_CONTEXT_TOO_LARGE | NONE |
 | 429 | CHAT_DAILY_LIMIT_REACHED | NONE |
 | 503 | CHAT_MODEL_UNAVAILABLE, CONTENT_UNAVAILABLE | RETRY_LATER |

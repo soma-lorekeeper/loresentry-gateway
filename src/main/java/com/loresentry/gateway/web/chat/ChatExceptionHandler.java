@@ -7,11 +7,12 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-@RestControllerAdvice(assignableTypes = ChatController.class)
+@RestControllerAdvice(assignableTypes = {ChatController.class, SettingCheckController.class})
 public class ChatExceptionHandler {
     record Error(String code, String message, @JsonProperty("next_action") String nextAction) {}
 
@@ -19,11 +20,17 @@ public class ChatExceptionHandler {
     ResponseEntity<Error> chat(ChatCallFailure failure) { return error(failure.status(), failure.code(), failure.nextAction()); }
     @ExceptionHandler(ChatNotEnabled.class)
     ResponseEntity<Error> disabled() { return error(403, "CHAT_NOT_ENABLED", "NONE"); }
-    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ExceptionHandler({HttpMessageNotReadableException.class, MissingServletRequestParameterException.class})
     ResponseEntity<Error> invalid() { return error(400, "INVALID_REQUEST", "NONE"); }
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     ResponseEntity<Error> path(MethodArgumentTypeMismatchException failure) {
-        return error(404, "sessionId".equals(failure.getName()) ? "CHAT_SESSION_NOT_FOUND" : "PROJECT_NOT_FOUND", "NONE");
+        return switch (failure.getName()) {
+            case "projectId" -> error(404, "PROJECT_NOT_FOUND", "NONE");
+            case "sessionId" -> error(404, "CHAT_SESSION_NOT_FOUND", "NONE");
+            case "runId" -> error(404, "SETTING_CHECK_NOT_FOUND", "NONE");
+            case "findingId" -> error(404, "SETTING_CHECK_FINDING_NOT_FOUND", "NONE");
+            default -> invalid();
+        };
     }
 
     private static ResponseEntity<Error> error(int status, String code, String nextAction) {
@@ -43,6 +50,10 @@ public class ChatExceptionHandler {
             case "CHAT_ANOTHER_ANSWER_IN_PROGRESS" -> "An answer is being generated in another conversation.";
             case "CHAT_CONTEXT_TOO_LARGE" -> "The project is too large for AI chat.";
             case "CHAT_DAILY_LIMIT_REACHED" -> "Today's chat usage is used up.";
+            case "SETTING_CHECK_NOT_FOUND" -> "The setting check was not found.";
+            case "SETTING_CHECK_FINDING_NOT_FOUND" -> "The setting check finding was not found.";
+            case "SETTING_CHECK_DOCUMENT_NOT_FOUND" -> "The chapter to check was not found.";
+            case "SETTING_CHECK_IN_PROGRESS" -> "A setting check is already running in this project.";
             case "CHAT_MODEL_UNAVAILABLE" -> "The AI model is unavailable. Try again later.";
             case "CONTENT_UNAVAILABLE" -> "Content service is unavailable.";
             case "AI_CHAT_UNAVAILABLE" -> "AI chat service is unavailable.";
