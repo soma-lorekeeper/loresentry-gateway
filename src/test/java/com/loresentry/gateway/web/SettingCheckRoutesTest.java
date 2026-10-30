@@ -49,10 +49,10 @@ class SettingCheckRoutesTest {
     static final UUID EARLIER = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d74");
     static final OffsetDateTime STARTED = OffsetDateTime.parse("2026-10-27T12:40:00Z"), FINISHED = OffsetDateTime.parse("2026-10-27T12:43:10Z");
     static final SettingCheckData.Finding CORE = new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH",
-            "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요", "열쇠를 얻는 장면이 없어요.", "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
+            "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.", "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
             new SettingCheckData.Source(PLACE, "북쪽 온실", "place", null, "북쪽 문은 낡은 열쇠 없이는 열리지 않는다.", "낡은 열쇠 없이는 열리지 않는다"), null, null);
     static final SettingCheckData.Finding INTENDED = new SettingCheckData.Finding(FINDING, "MANUSCRIPT", false, "LOW",
-            "9화에서는 하린이 왼손잡이였어요", "9화의 해당 문단을 확인해 보세요.", "하린은 오른손으로 칼을 쥐었다.", null,
+            "9화에서는 하린이 왼손잡이였어요. 9화의 해당 문단을 확인해 보세요.", "하린은 오른손으로 칼을 쥐었다.", null,
             new SettingCheckData.Source(EARLIER, "9화", "manuscript", 9, "왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.", null), "INTENDED", "하린은 일부러 손을 바꿨어요.");
     static final SettingCheckData.Run DONE = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, "DONE", null, STARTED, FINISHED,
             new SettingCheckData.Read(11, 1, 11, 21, 6), new SettingCheckData.Counts(3, 1, 0), null, null);
@@ -69,12 +69,12 @@ class SettingCheckRoutesTest {
             + "\"read\":{\"manuscripts\":0,\"from_ordinal\":null,\"to_ordinal\":null,\"settings\":0,\"core_facts\":0},"
             + "\"counts\":{\"open\":0,\"intended\":0,\"not_conflict\":0},\"failure_code\":null}";
     static final String CORE_JSON = "{\"id\":\"" + FINDING + "\",\"kind\":\"SETTING\",\"core\":true,\"confidence\":\"HIGH\","
-            + "\"summary\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요\",\"direction\":\"열쇠를 얻는 장면이 없어요.\","
+            + "\"explanation\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.\","
             + "\"quote\":\"서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.\",\"quote_focus\":\"천천히 문을 밀었다\","
             + "\"source\":{\"document_id\":\"" + PLACE + "\",\"title\":\"북쪽 온실\",\"doc_type\":\"place\",\"ordinal\":null,"
             + "\"quote\":\"북쪽 문은 낡은 열쇠 없이는 열리지 않는다.\",\"quote_focus\":\"낡은 열쇠 없이는 열리지 않는다\"},\"verdict\":null,\"reason\":null}";
     static final String INTENDED_JSON = "{\"id\":\"" + FINDING + "\",\"kind\":\"MANUSCRIPT\",\"core\":false,\"confidence\":\"LOW\","
-            + "\"summary\":\"9화에서는 하린이 왼손잡이였어요\",\"direction\":\"9화의 해당 문단을 확인해 보세요.\",\"quote\":\"하린은 오른손으로 칼을 쥐었다.\",\"quote_focus\":null,"
+            + "\"explanation\":\"9화에서는 하린이 왼손잡이였어요. 9화의 해당 문단을 확인해 보세요.\",\"quote\":\"하린은 오른손으로 칼을 쥐었다.\",\"quote_focus\":null,"
             + "\"source\":{\"document_id\":\"" + EARLIER + "\",\"title\":\"9화\",\"doc_type\":\"manuscript\",\"ordinal\":9,"
             + "\"quote\":\"왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.\",\"quote_focus\":null},\"verdict\":\"INTENDED\",\"reason\":\"하린은 일부러 손을 바꿨어요.\"}";
     static final String START_BODY = "{\"document_id\":\"" + CHAPTER + "\"}";
@@ -120,7 +120,7 @@ class SettingCheckRoutesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"POST /projects/{p}/setting-checks", "GET /projects/{p}/setting-checks/summary", "GET /projects/{p}/setting-checks?document_id={d}",
-        "GET /setting-checks/{r}", "POST /setting-checks/{r}/cancel", "PUT /setting-check-findings/{f}/verdict", "DELETE /setting-check-findings/{f}/verdict"})
+        "GET /projects/{p}/setting-checks/verdicts", "GET /setting-checks/{r}", "POST /setting-checks/{r}/cancel", "PUT /setting-check-findings/{f}/verdict", "DELETE /setting-check-findings/{f}/verdict"})
     void everyRouteTurnsAwayUsersOutsideTheAllowlist(String route) throws Exception {
         mvc.perform(as(OUTSIDER_SESSION, route(route)))
             .andExpect(status().isForbidden()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -186,6 +186,20 @@ class SettingCheckRoutesTest {
         verifyNoInteractions(accounts);
     }
 
+    @Test void verdictLedgerCarriesEachFindingWithItsChapter() throws Exception {
+        var decided = OffsetDateTime.parse("2026-10-27T12:50:00Z");
+        when(client.settingCheckVerdicts(WRITER, PROJECT)).thenReturn(
+            new SettingCheckData.Decisions(List.of(new SettingCheckData.Decision(CHAPTER, "12화 · 균열의 밤", decided, INTENDED))),
+            new SettingCheckData.Decisions(List.of()));
+        mvc.perform(as(WRITER_SESSION, get("/projects/" + PROJECT + "/setting-checks/verdicts"))).andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(content().json("{\"verdicts\":[{\"document_id\":\"" + CHAPTER + "\",\"document_title\":\"12화 · 균열의 밤\","
+                + "\"decided_at\":\"2026-10-27T12:50:00Z\",\"finding\":" + INTENDED_JSON + "}]}", JsonCompareMode.STRICT));
+        mvc.perform(as(WRITER_SESSION, get("/projects/" + PROJECT + "/setting-checks/verdicts"))).andExpect(status().isOk())
+            .andExpect(content().json("{\"verdicts\":[]}", JsonCompareMode.STRICT));
+        verifyNoInteractions(accounts);
+    }
+
     @Test void cancelHasNoContent() throws Exception {
         mvc.perform(as(WRITER_SESSION, post("/setting-checks/" + RUN + "/cancel"))).andExpect(status().isNoContent())
             .andExpect(content().string("")).andExpect(header().string("Cache-Control", "no-store"));
@@ -196,7 +210,7 @@ class SettingCheckRoutesTest {
     @Test void verdictsAreSetAndClearedOnTheFinding() throws Exception {
         when(client.setSettingCheckVerdict(WRITER, FINDING, new SettingCheckData.Verdict("INTENDED", "하린은 일부러 손을 바꿨어요."))).thenReturn(INTENDED);
         when(client.setSettingCheckVerdict(WRITER, FINDING, new SettingCheckData.Verdict("NOT_CONFLICT", null)))
-            .thenReturn(new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH", CORE.summary(), CORE.direction(), CORE.quote(), CORE.quoteFocus(), CORE.source(), "NOT_CONFLICT", null));
+            .thenReturn(new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH", CORE.explanation(), CORE.quote(), CORE.quoteFocus(), CORE.source(), "NOT_CONFLICT", null));
         when(client.clearSettingCheckVerdict(WRITER, FINDING)).thenReturn(CORE);
         mvc.perform(as(WRITER_SESSION, put("/setting-check-findings/" + FINDING + "/verdict")).contentType(MediaType.APPLICATION_JSON).content(VERDICT_BODY))
             .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
@@ -283,7 +297,8 @@ class SettingCheckRoutesTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/projects/{p}/setting-checks/summary", "/projects/{p}/setting-checks?document_id={d}", "/setting-checks/{r}"})
+    @ValueSource(strings = {"/projects/{p}/setting-checks/summary", "/projects/{p}/setting-checks?document_id={d}", "/projects/{p}/setting-checks/verdicts",
+        "/setting-checks/{r}"})
     void readsRequireASession(String path) throws Exception {
         mvc.perform(get(path.replace("{p}", PROJECT.toString()).replace("{d}", CHAPTER.toString()).replace("{r}", RUN.toString())))
             .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("SESSION_REQUIRED"));

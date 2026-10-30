@@ -42,14 +42,16 @@ class SettingCheckApiClientTest {
             + "\"read\":{\"manuscripts\":0,\"from_ordinal\":null,\"to_ordinal\":null,\"settings\":0,\"core_facts\":0},"
             + "\"counts\":{\"open\":0,\"intended\":0,\"not_conflict\":0},\"failure_code\":null}";
     static final String CORE_FINDING_JSON = "{\"id\":\"" + FINDING + "\",\"kind\":\"SETTING\",\"core\":true,\"confidence\":\"HIGH\","
-            + "\"summary\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요\",\"direction\":\"열쇠를 얻는 장면이 없어요.\","
+            + "\"explanation\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.\","
             + "\"quote\":\"서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.\",\"quote_focus\":\"천천히 문을 밀었다\","
             + "\"source\":{\"document_id\":\"" + PLACE + "\",\"title\":\"북쪽 온실\",\"doc_type\":\"place\",\"ordinal\":null,"
             + "\"quote\":\"북쪽 문은 낡은 열쇠 없이는 열리지 않는다.\",\"quote_focus\":\"낡은 열쇠 없이는 열리지 않는다\"},\"verdict\":null,\"reason\":null}";
     static final String MANUSCRIPT_FINDING_JSON = "{\"id\":\"" + FINDING + "\",\"kind\":\"MANUSCRIPT\",\"core\":false,\"confidence\":\"LOW\","
-            + "\"summary\":\"9화에서는 하린이 왼손잡이였어요\",\"direction\":\"9화의 해당 문단을 확인해 보세요.\",\"quote\":\"하린은 오른손으로 칼을 쥐었다.\",\"quote_focus\":null,"
+            + "\"explanation\":\"9화에서는 하린이 왼손잡이였어요. 9화의 해당 문단을 확인해 보세요.\",\"quote\":\"하린은 오른손으로 칼을 쥐었다.\",\"quote_focus\":null,"
             + "\"source\":{\"document_id\":\"" + EARLIER + "\",\"title\":\"9화\",\"doc_type\":\"manuscript\",\"ordinal\":9,"
             + "\"quote\":\"왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.\",\"quote_focus\":null},\"verdict\":\"INTENDED\",\"reason\":\"하린은 일부러 손을 바꿨어요.\"}";
+    static final String DECISION_JSON = "{\"document_id\":\"" + CHAPTER + "\",\"document_title\":\"12화 · 균열의 밤\","
+            + "\"decided_at\":\"2026-10-27T12:50:00Z\",\"finding\":" + MANUSCRIPT_FINDING_JSON + "}";
     static final SettingCheckData.Read READ = new SettingCheckData.Read(11, 1, 11, 21, 6);
     static final SettingCheckData.Counts COUNTS = new SettingCheckData.Counts(3, 1, 0);
     MockRestServiceServer server;
@@ -126,13 +128,49 @@ class SettingCheckApiClientTest {
             .andRespond(withSuccess(withFindings(RUN_JSON, CORE_FINDING_JSON, MANUSCRIPT_FINDING_JSON), MediaType.APPLICATION_JSON));
         var findings = client.settingCheck(USER, RUN).findings();
         assertThat(findings).containsExactly(
-            new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH", "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요",
-                "열쇠를 얻는 장면이 없어요.", "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
+            new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH", "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.",
+                "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
                 new SettingCheckData.Source(PLACE, "북쪽 온실", "place", null, "북쪽 문은 낡은 열쇠 없이는 열리지 않는다.", "낡은 열쇠 없이는 열리지 않는다"),
                 null, null),
-            new SettingCheckData.Finding(FINDING, "MANUSCRIPT", false, "LOW", "9화에서는 하린이 왼손잡이였어요", "9화의 해당 문단을 확인해 보세요.",
+            new SettingCheckData.Finding(FINDING, "MANUSCRIPT", false, "LOW", "9화에서는 하린이 왼손잡이였어요. 9화의 해당 문단을 확인해 보세요.",
                 "하린은 오른손으로 칼을 쥐었다.", null, new SettingCheckData.Source(EARLIER, "9화", "manuscript", 9, "왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.", null),
                 "INTENDED", "하린은 일부러 손을 바꿨어요."));
+        server.verify();
+    }
+
+    @Test void readsTheVerdictLedger() {
+        server.expect(requestTo("http://chat.test/projects/" + PROJECT + "/setting-checks/verdicts")).andExpect(method(HttpMethod.GET))
+            .andExpect(header("X-User-Id", USER.toString())).andExpect(headerDoesNotExist("X-User-Locale"))
+            .andRespond(withSuccess("{\"verdicts\":[" + DECISION_JSON + "]}", MediaType.APPLICATION_JSON));
+        assertThat(client.settingCheckVerdicts(USER, PROJECT).verdicts()).singleElement().satisfies(decision -> {
+            assertThat(decision.documentId()).isEqualTo(CHAPTER);
+            assertThat(decision.documentTitle()).isEqualTo("12화 · 균열의 밤");
+            assertThat(decision.decidedAt()).isEqualTo(OffsetDateTime.parse("2026-10-27T12:50:00Z"));
+            assertThat(decision.finding().verdict()).isEqualTo("INTENDED");
+            assertThat(decision.finding().explanation()).isEqualTo("9화에서는 하린이 왼손잡이였어요. 9화의 해당 문단을 확인해 보세요.");
+        });
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\"document_title\":\"12화 · 균열의 밤\",|", "\"decided_at\":\"2026-10-27T12:50:00Z\"|\"decided_at\":null",
+        "\"document_id\":\"" + "0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d71" + "\"|\"document_id\":null", "\"finding\":{|\"finding\":null,\"x\":{",
+        "\"kind\":\"MANUSCRIPT\"|\"kind\":\"PLOT\"", "\"verdict\":\"INTENDED\"|\"verdict\":\"IGNORED\""})
+    void rejectsLedgerEntriesOutsideTheContract(String replacement) {
+        var parts = replacement.split("\\|", -1);
+        var decision = DECISION_JSON.replace(parts[0], parts[1]);
+        assertThat(decision).isNotEqualTo(DECISION_JSON);
+        server.expect(requestTo("http://chat.test/projects/" + PROJECT + "/setting-checks/verdicts"))
+            .andRespond(withSuccess("{\"verdicts\":[" + decision + "]}", MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> client.settingCheckVerdicts(USER, PROJECT)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "null", "{\"verdicts\":null}", "{\"verdicts\":[null]}"})
+    void rejectsMalformedLedgers(String payload) {
+        server.expect(requestTo("http://chat.test/projects/" + PROJECT + "/setting-checks/verdicts")).andRespond(withSuccess(payload, MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> client.settingCheckVerdicts(USER, PROJECT)).hasMessage("UPSTREAM_INVALID_RESPONSE");
         server.verify();
     }
 
@@ -225,8 +263,8 @@ class SettingCheckApiClientTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"\"kind\":\"SETTING\"|\"kind\":\"PLOT\"", "\"confidence\":\"HIGH\"|\"confidence\":\"MEDIUM\"", "\"verdict\":null|\"verdict\":\"IGNORED\"",
-        "\"core\":true|\"core\":\"true\"", "\"core\":true,|", "\"summary\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요\"|\"summary\":null",
-        "\"direction\":\"열쇠를 얻는 장면이 없어요.\",|", "\"quote\":\"서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.\"|\"quote\":null",
+        "\"core\":true|\"core\":\"true\"", "\"core\":true,|", "\"explanation\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.\"|\"explanation\":null",
+        "\"explanation\":\"북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.\",|", "\"quote\":\"서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.\"|\"quote\":null",
         "\"source\":{\"document_id\"|\"source\":null,\"x\":{\"document_id\"", "\"doc_type\":\"place\",|", "\"ordinal\":null|\"ordinal\":\"1\"",
         "\"quote\":\"북쪽 문은 낡은 열쇠 없이는 열리지 않는다.\"|\"quote\":null", "\"document_id\":\"" + "0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d73" + "\"|\"document_id\":null"})
     void rejectsFindingsOutsideTheContract(String replacement) {

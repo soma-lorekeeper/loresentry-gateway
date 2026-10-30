@@ -94,6 +94,7 @@ class SettingCheckServiceClientTest {
         var service = service(allowedUsers);
         assertThatThrownBy(() -> service.start(USER, PROJECT, new SettingCheckData.Start(CHAPTER))).isInstanceOf(ChatNotEnabled.class);
         assertThatThrownBy(() -> service.summary(USER, PROJECT)).isInstanceOf(ChatNotEnabled.class);
+        assertThatThrownBy(() -> service.verdicts(USER, PROJECT)).isInstanceOf(ChatNotEnabled.class);
         assertThatThrownBy(() -> service.run(USER, RUN)).isInstanceOf(ChatNotEnabled.class);
         assertThatThrownBy(() -> service.clearVerdict(USER, RUN)).isInstanceOf(ChatNotEnabled.class);
         auth.verify(); chat.verify();

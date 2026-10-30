@@ -21,6 +21,7 @@ public class SettingCheckService {
     public SettingCheckData.Run start(UUID userId, UUID projectId, SettingCheckData.Start body) { enabled(userId); return client.startSettingCheck(userId, projectId, body, locale(userId)); }
     public SettingCheckData.Summary summary(UUID userId, UUID projectId) { enabled(userId); return client.settingCheckSummary(userId, projectId); }
     public SettingCheckData.Runs runs(UUID userId, UUID projectId, UUID documentId) { enabled(userId); return client.settingChecks(userId, projectId, documentId); }
+    public SettingCheckData.Decisions verdicts(UUID userId, UUID projectId) { enabled(userId); return client.settingCheckVerdicts(userId, projectId); }
     public SettingCheckData.Run run(UUID userId, UUID runId) { enabled(userId); return client.settingCheck(userId, runId); }
     public void cancel(UUID userId, UUID runId) { enabled(userId); client.cancelSettingCheck(userId, runId); }
     public SettingCheckData.Finding setVerdict(UUID userId, UUID findingId, SettingCheckData.Verdict body) { enabled(userId); return client.setSettingCheckVerdict(userId, findingId, body); }

@@ -142,6 +142,9 @@ public class ChatApiClient {
     public SettingCheckData.Runs settingChecks(UUID userId, UUID projectId, UUID documentId) {
         return call(HttpMethod.GET, "/projects/{projectId}/setting-checks?document_id={documentId}", Map.of("projectId", projectId, "documentId", documentId), userId, null, null, SettingCheckData.Runs.class, 200);
     }
+    public SettingCheckData.Decisions settingCheckVerdicts(UUID userId, UUID projectId) {
+        return call(HttpMethod.GET, "/projects/{projectId}/setting-checks/verdicts", Map.of("projectId", projectId), userId, null, null, SettingCheckData.Decisions.class, 200);
+    }
     public SettingCheckData.Run settingCheck(UUID userId, UUID runId) {
         var run = call(HttpMethod.GET, "/setting-checks/{runId}", Map.of("runId", runId), userId, null, null, SettingCheckData.Run.class, 200);
         if (run.findings() == null) throw ChatCallFailure.invalid();

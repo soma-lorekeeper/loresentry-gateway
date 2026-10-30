@@ -28,10 +28,10 @@ public final class SettingCheckDtos {
         }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record Finding(UUID id, String kind, boolean core, String confidence, String summary, String direction, String quote,
+    public record Finding(UUID id, String kind, boolean core, String confidence, String explanation, String quote,
                           @JsonProperty("quote_focus") String quoteFocus, Source source, String verdict, String reason) {
         public static Finding from(SettingCheckData.Finding value) {
-            return new Finding(value.id(), value.kind(), value.core(), value.confidence(), value.summary(), value.direction(), value.quote(),
+            return new Finding(value.id(), value.kind(), value.core(), value.confidence(), value.explanation(), value.quote(),
                     value.quoteFocus(), Source.from(value.source()), value.verdict(), value.reason());
         }
     }
@@ -61,6 +61,17 @@ public final class SettingCheckDtos {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Runs(List<Run> runs) {
         public static Runs from(SettingCheckData.Runs value) { return new Runs(value.runs().stream().map(Run::from).toList()); }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Decision(@JsonProperty("document_id") UUID documentId, @JsonProperty("document_title") String documentTitle,
+                           @JsonProperty("decided_at") OffsetDateTime decidedAt, Finding finding) {
+        public static Decision from(SettingCheckData.Decision value) {
+            return new Decision(value.documentId(), value.documentTitle(), value.decidedAt(), Finding.from(value.finding()));
+        }
+    }
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Decisions(List<Decision> verdicts) {
+        public static Decisions from(SettingCheckData.Decisions value) { return new Decisions(value.verdicts().stream().map(Decision::from).toList()); }
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Start(@JsonProperty("document_id") UUID documentId) {

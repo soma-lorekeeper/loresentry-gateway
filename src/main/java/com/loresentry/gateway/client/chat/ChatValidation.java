@@ -54,7 +54,7 @@ final class ChatValidation {
             case Counts v -> counts(v.open(), v.intended(), v.notConflict());
             case Source v -> required(v.documentId(), v.title(), v.docType(), v.quote());
             case Finding v -> {
-                required(v.id(), v.kind(), v.core(), v.confidence(), v.summary(), v.direction(), v.quote());
+                required(v.id(), v.kind(), v.core(), v.confidence(), v.explanation(), v.quote());
                 member(FINDING_KINDS, v.kind());
                 member(CONFIDENCES, v.confidence());
                 if (v.verdict() != null) member(VERDICTS, v.verdict());
@@ -72,6 +72,8 @@ final class ChatValidation {
             case Chapter v -> { required(v.documentId()); validate(v.latest()); }
             case Summary v -> { if (v.running() != null) validate(v.running()); items(v.chapters()); }
             case Runs v -> items(v.runs());
+            case Decision v -> { required(v.documentId(), v.documentTitle(), v.decidedAt()); validate(v.finding()); }
+            case Decisions v -> items(v.verdicts());
             default -> throw new IllegalArgumentException("Unsupported ai-chat response");
         }
         return value;

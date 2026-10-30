@@ -13,7 +13,7 @@ public final class SettingCheckData {
     public record Counts(Integer open, Integer intended, @JsonProperty("not_conflict") Integer notConflict) {}
     public record Source(@JsonProperty("document_id") UUID documentId, String title, @JsonProperty("doc_type") String docType, Integer ordinal, String quote,
                          @JsonProperty("quote_focus") String quoteFocus) {}
-    public record Finding(UUID id, String kind, Boolean core, String confidence, String summary, String direction, String quote,
+    public record Finding(UUID id, String kind, Boolean core, String confidence, String explanation, String quote,
                           @JsonProperty("quote_focus") String quoteFocus, Source source, String verdict, String reason) {}
     public record Run(UUID id, @JsonProperty("project_id") UUID projectId, @JsonProperty("document_id") UUID documentId,
                       @JsonProperty("document_title") String documentTitle, @JsonProperty("revision_no") Long revisionNo, String status, String stage,
@@ -22,6 +22,9 @@ public final class SettingCheckData {
     public record Chapter(@JsonProperty("document_id") UUID documentId, Run latest) {}
     public record Summary(Run running, List<Chapter> chapters) {}
     public record Runs(List<Run> runs) {}
+    public record Decision(@JsonProperty("document_id") UUID documentId, @JsonProperty("document_title") String documentTitle,
+                           @JsonProperty("decided_at") OffsetDateTime decidedAt, Finding finding) {}
+    public record Decisions(List<Decision> verdicts) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Start(@JsonProperty("document_id") UUID documentId) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)

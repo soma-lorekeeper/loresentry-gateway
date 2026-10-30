@@ -24,6 +24,10 @@ public class SettingCheckController {
     public ResponseEntity<SettingCheckDtos.Runs> runs(@CurrentUser UUID userId, @PathVariable UUID projectId, @RequestParam(name = "document_id") UUID documentId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SettingCheckDtos.Runs.from(service.runs(userId, projectId, documentId)));
     }
+    @GetMapping("/projects/{projectId}/setting-checks/verdicts")
+    public ResponseEntity<SettingCheckDtos.Decisions> verdicts(@CurrentUser UUID userId, @PathVariable UUID projectId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SettingCheckDtos.Decisions.from(service.verdicts(userId, projectId)));
+    }
     @GetMapping("/setting-checks/{runId}")
     public ResponseEntity<SettingCheckDtos.Run> run(@CurrentUser UUID userId, @PathVariable UUID runId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SettingCheckDtos.Run.withFindings(service.run(userId, runId)));
