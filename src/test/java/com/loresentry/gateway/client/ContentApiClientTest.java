@@ -70,6 +70,24 @@ class ContentApiClientTest {
         var dto=com.loresentry.gateway.web.content.ContentDtos.Projects.from(new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null));
         assertThat(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(dto)).isEqualTo("{\"projects\":[]}");
     }
+    /** 문서 이미지는 image_id 하나만 보내고, 돌려받은 문서의 image_url 을 그대로 옮긴다. */
+    @Test void setsAndClearsTheDocumentImage() {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        var user=UUID.randomUUID();var file=UUID.randomUUID();var image=UUID.randomUUID();
+        var url="https://media.loresentry.com/projects/p/images/i.webp";
+        mocks.getServer().expect(requestTo("http://content.test/files/"+file+"/image")).andExpect(method(org.springframework.http.HttpMethod.PUT))
+            .andExpect(header("X-User-Id",user.toString())).andExpect(content().json("{\"image_id\":\""+image+"\"}",true))
+            .andRespond(withSuccess("{\"id\":\""+file+"\",\"title\":\"레나 아르벨\",\"folder_code\":\"CHARACTER\",\"episode_id\":null,\"rank\":\"a0\","
+                + "\"locked\":false,\"refresh_locked\":false,\"char_count\":0,\"revision_no\":1,\"image_url\":\""+url+"\","
+                + "\"trashed_at\":null,\"updated_at\":\"2026-10-27T00:00:00Z\"}",MediaType.APPLICATION_JSON));
+        mocks.getServer().expect(requestTo("http://content.test/files/"+file+"/image")).andExpect(method(org.springframework.http.HttpMethod.DELETE))
+            .andExpect(header("X-User-Id",user.toString())).andRespond(withNoContent());
+        var client=new ContentApiClient(builder.build());
+        assertThat(client.setDocumentImage(user,file,new ContentData.DocumentImage(image),null).imageUrl()).isEqualTo(url);
+        client.clearDocumentImage(user,file,null);
+        mocks.getServer().verify();
+    }
     @Test void sampleProjectIsBodilessPostWithOnlyTheVerifiedUser() {
         var builder=RestClient.builder().baseUrl("http://content.test");
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);

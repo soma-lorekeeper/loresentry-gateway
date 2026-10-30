@@ -103,11 +103,45 @@ class ContentApiRoutesTest {
     @Test void relaysTheRefreshLockOnTreeDocuments() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
         given(service.tree(eq(USER), eq(ID), any())).willReturn(new ContentData.Tree(List.of(), List.of(),
-            List.of(new ContentData.Document(ID, "Chapter", "MANUSCRIPT", null, "a0", true, true, 4, 8L, null, now))));
+            List.of(new ContentData.Document(ID, "Chapter", "MANUSCRIPT", null, "a0", true, true, 4, 8L, null, null, now))));
         mvc.perform(get("/projects/"+ID+"/files").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.documents[0].locked").value(true))
             .andExpect(jsonPath("$.documents[0].refresh_locked").value(true));
+    }
+
+    /** 문서의 대표 이미지. 붙이면 파일 트리와 같은 문서 모양을, 떼면 본문 없는 204 를 준다. */
+    @Test void relaysTheDocumentImage() throws Exception {
+        var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
+        var image = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d62");
+        var url = "https://media.loresentry.com/projects/p/images/i.webp";
+        given(service.setDocumentImage(eq(USER), eq(ID), any(), any())).willReturn(
+            new ContentData.Document(ID, "레나 아르벨", "CHARACTER", null, "a0", false, false, 0, 1L, url, null, now));
+
+        mvc.perform(put("/files/"+ID+"/image").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"image_id\":\""+image+"\"}"))
+            .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.image_url").value(url));
+        verify(service).setDocumentImage(USER, ID, new ContentData.DocumentImage(image), new Conditions(null,null,null));
+
+        mvc.perform(delete("/files/"+ID+"/image").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isNoContent()).andExpect(content().string(""));
+        verify(service).clearDocumentImage(USER, ID, new Conditions(null,null,null));
+    }
+
+    /** 이미지 주소는 파일 트리와 관계도 노드에 실린다. BFF 가 필드를 빠뜨리면 화면은 아이콘만 그린다. */
+    @Test void relaysImageAddressesOnTreeDocumentsAndRelationshipMapNodes() throws Exception {
+        var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
+        var url = "https://media.loresentry.com/projects/p/images/i.webp";
+        given(service.tree(eq(USER), eq(ID), any())).willReturn(new ContentData.Tree(List.of(), List.of(),
+            List.of(new ContentData.Document(ID, "레나 아르벨", "CHARACTER", null, "a0", false, false, 0, 1L, url, null, now))));
+        given(service.graph(eq(USER), eq(ID), any())).willReturn(new ContentData.Graph(
+            List.of(new ContentData.GraphNode(ID, "레나 아르벨", "CHARACTER", "", url)), List.of(), List.of()));
+
+        mvc.perform(get("/projects/"+ID+"/files").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(jsonPath("$.documents[0].image_url").value(url));
+        mvc.perform(get("/projects/"+ID+"/graph").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(jsonPath("$.nodes[0].image_url").value(url));
     }
 
     @Test void keepsSaveRevisionAndIdempotencyHeaders() throws Exception {

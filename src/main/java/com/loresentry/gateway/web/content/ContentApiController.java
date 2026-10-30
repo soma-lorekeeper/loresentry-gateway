@@ -131,6 +131,16 @@ public class ContentApiController {
         var result = service.saveContent(userId, fileId, body == null ? null : body.internal(), new Conditions(single(request, "If-Match"), single(request, "X-Save-Id"), null));
         return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Content.from(result));
     }
+    @PutMapping("/files/{fileId}/image")
+    public ResponseEntity<ContentDtos.Document> setDocumentImage(@CurrentUser UUID userId, @PathVariable UUID fileId, @RequestBody ContentDtos.DocumentImage body, HttpServletRequest request) {
+        var result = service.setDocumentImage(userId, fileId, body == null ? null : body.internal(), new Conditions(null, null, null));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Document.from(result));
+    }
+    @DeleteMapping("/files/{fileId}/image")
+    public ResponseEntity<Void> clearDocumentImage(@CurrentUser UUID userId, @PathVariable UUID fileId, HttpServletRequest request) {
+        service.clearDocumentImage(userId, fileId, new Conditions(null, null, null));
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
     @PutMapping("/files/{fileId}/lock")
     public ResponseEntity<ContentDtos.Content> setLocked(@CurrentUser UUID userId, @PathVariable UUID fileId, @RequestBody ContentDtos.Lock body, HttpServletRequest request) {
         var result = service.setLocked(userId, fileId, body == null ? null : body.internal(), new Conditions(null, null, null));
