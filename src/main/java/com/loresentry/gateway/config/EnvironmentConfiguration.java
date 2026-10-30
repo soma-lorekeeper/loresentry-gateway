@@ -12,12 +12,13 @@ public class EnvironmentConfiguration {
     @Bean
     Object verifiedEnvironment(Environment environment, BrowserProperties browser, UpstreamProperties upstream) {
         var profiles = Arrays.asList(environment.getActiveProfiles());
-        boolean local = profiles.contains("local"), prod = profiles.contains("prod");
-        if (local == prod) throw new IllegalStateException("Activate exactly one of local or prod");
-        String frontend = local ? "http://localhost:3000" : "https://loresentry.com";
-        String api = local ? "http://localhost:8000" : "https://api.loresentry.com";
+        boolean local = profiles.contains("local"), dev = profiles.contains("dev"), prod = profiles.contains("prod");
+        if ((local ? 1 : 0) + (dev ? 1 : 0) + (prod ? 1 : 0) != 1)
+            throw new IllegalStateException("Activate exactly one of local, dev or prod");
+        String frontend = local ? "http://localhost:3000" : dev ? "https://dev.loresentry.com" : "https://loresentry.com";
+        String api = local ? "http://localhost:8000" : dev ? "https://api-dev.loresentry.com" : "https://api.loresentry.com";
         if (!frontend.equals(browser.frontendOrigin()) || !api.equals(browser.publicOrigin())
-                || !(frontend+"/login").equals(browser.loginRedirect()) || browser.secureCookies() != prod)
+                || !(frontend+"/login").equals(browser.loginRedirect()) || browser.secureCookies() == local)
             throw new IllegalStateException("Browser settings do not match the active environment");
         for(var service: java.util.List.of(upstream.authentication(),upstream.content(),upstream.graphRag(),upstream.aiChat())) {
             var uri=URI.create(service.baseUrl());
