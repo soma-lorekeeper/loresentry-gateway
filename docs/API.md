@@ -11,7 +11,7 @@
 단일 세션 ID를 사용하는 현재 BFF API 계약이다. 약관 동의도 아래 API 계약에 포함한다.
 이 문서는 제공 API의 진입점이며 인증·본인 계정 API를 상세히 정의한다.
 Content의 45개 경로·요청·응답은 제공 계약의 세부 문서인 [Content API](CONTENT_API.md)를 따른다.
-AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api)에 정리한다.
+AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api), 설정 오류 점검 경로는 [설정 오류 점검](#설정-오류-점검)에 정리한다.
 공개 `GET /health`는 프로세스 상태를 확인한다. 실행 안내는 [프로젝트 README](../README.md)를 따른다.
 
 ## 공통 계약
@@ -223,6 +223,38 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
   스트림을 열기 전에 `429 CHAT_DAILY_LIMIT_REACHED`(`NONE`)로 거절되고, `done` 이벤트의 `usage`는 해석하지 않고 그대로 흘린다.
 - 형식이 틀린 본문은 `400 INVALID_REQUEST`, UUID가 아닌 프로젝트·세션 ID는 `404 PROJECT_NOT_FOUND`·`CHAT_SESSION_NOT_FOUND`다.
 - ai-chat 오류의 통과 규칙과 `AI_CHAT_UNAVAILABLE`·`UPSTREAM_INVALID_RESPONSE` 변환은 [AI 챗 호출](API_CALLS.md#ai-챗-호출)을 따른다.
+
+### 설정 오류 점검
+
+원고 한 회차를 앞 회차·설정 문서와 비교한 점검 기록이다. 설계는 [설정 오류 점검](../../docs/frontend/setting-error-check.md)을 본다.
+경로는 ai-chat과 같고, 허용 목록·CSRF·`no-store`·오류 변환은 위 AI 챗 규칙을 그대로 따른다.
+
+| 제공 API | 브라우저 입력 | 성공 결과 |
+|---|---|---|
+| `POST /projects/{id}/setting-checks` | `document_id` | `202`, 점검(`RUNNING`) |
+| `GET /projects/{id}/setting-checks/summary` | — | `200`, `running`(점검·`null`)·`chapters`(`document_id`·`latest`) |
+| `GET /projects/{id}/setting-checks` | `document_id` 쿼리(필수) | `200`, `runs`(최신순) |
+| `GET /projects/{id}/setting-checks/verdicts` | — | `200`, `verdicts`(판정 기록, 최근 판정순) |
+| `GET /setting-checks/{rid}` | — | `200`, `findings`를 포함한 점검 |
+| `POST /setting-checks/{rid}/cancel` | 본문 없음 | `204`(진행 중이 아니어도) |
+| `PUT /setting-check-findings/{fid}/verdict` | `verdict`(`INTENDED`·`NOT_CONFLICT`)·`reason` | `200`, 항목 |
+| `DELETE /setting-check-findings/{fid}/verdict` | — | `200`, `verdict`가 `null`인 항목 |
+
+- 점검은 `id`·`project_id`·`document_id`·`document_title`·`revision_no`·`status`(`RUNNING`·`DONE`·`FAILED`·`CANCELLED`)·
+  `stage`(`READING`·`FINDING`·`JUDGING`·`null`)·`created_at`·`finished_at`·`read`·`counts`·`failure_code`다.
+  `read`는 `manuscripts`·`from_ordinal`·`to_ordinal`·`settings`·`core_facts`, `counts`는 `open`·`intended`·`not_conflict`다.
+  `findings`는 단건 조회에만 있고 시작·요약·목록 응답에는 키가 없다.
+- 항목은 `id`·`kind`(`SETTING`·`MANUSCRIPT`)·`core`·`confidence`(`HIGH`·`LOW`)·`explanation`·`quote`·`quote_focus`·`source`·`verdict`·`reason`,
+  `source`는 `document_id`·`title`·`doc_type`·`ordinal`·`quote`·`quote_focus`다. 값이 `null`이어도 키를 유지한다.
+  `quote_focus`는 같은 객체의 `quote` 안에서 모순을 담은 구절이며 `null`일 수 있다. ai-chat이 키를 보내지 않으면 `null`로 전달한다.
+  `explanation`은 작가가 읽는 판단 근거(서너 문장)다.
+- 판정 기록의 한 줄은 `document_id`·`document_title`(판정한 어긋남의 회차)·`decided_at`·`finding`이다. `finding`은 그 판정이 붙은
+  가장 최근 점검의 항목이라, 그 `id`로 판정을 지우면 기록에서도 빠진다.
+- 점검 시작만 Auth 계정의 언어를 `X-User-Locale`로 붙인다. 이름은 보내지 않는다.
+- ai-chat의 `404 SETTING_CHECK_DOCUMENT_NOT_FOUND`(점검할 원고 없음), `409 SETTING_CHECK_IN_PROGRESS`(프로젝트에서 이미 진행 중),
+  `404 SETTING_CHECK_NOT_FOUND`·`SETTING_CHECK_FINDING_NOT_FOUND`(없거나 본인 것이 아님)를 그대로 전달한다. 모두 `NONE`이다.
+- UUID가 아닌 점검·항목 ID는 `404 SETTING_CHECK_NOT_FOUND`·`SETTING_CHECK_FINDING_NOT_FOUND`,
+  없거나 UUID가 아닌 `document_id` 쿼리는 `400 INVALID_REQUEST`다.
 
 ## 계정 오류와 검증
 

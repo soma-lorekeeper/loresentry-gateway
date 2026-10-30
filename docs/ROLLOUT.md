@@ -53,6 +53,12 @@ BFF는 탈퇴 중에 ai-chat `DELETE /users/me/data`를 부르므로 이 API를 
 그렇지 않으면 탈퇴가 `503`·`502`로 멈춘다. 허용 목록은 비운 채로 BFF를 배포하고, ai-chat 동작을 확인한 뒤
 `LORESENTRY_CHAT_ALLOWED_USERS`에 사용자를 넣는다. Pod 종료 유예 시간은 BFF의 종료 대기(150초)보다 길게 맞춘다.
 
+## 설정 오류 점검
+
+BFF의 점검 경로 7개는 ai-chat보다 먼저 배포해도 된다. 경로가 없는 ai-chat은 `code` 없는 `404`로 답하므로
+BFF는 `502 UPSTREAM_INVALID_RESPONSE`를 돌려준다. ai-chat(V6 마이그레이션 포함)을 배포한 뒤 점검 화면을 쓰는
+프론트를 배포한다. 새 오류 코드는 ai-chat이 보내기 시작할 때 이미 BFF가 알고 있다.
+
 ## 그래프 최신화
 
 BFF의 최신화 경로 5개(`/projects/{id}/graph-refresh` 하위)는 Content#25보다 먼저 배포해도 된다.

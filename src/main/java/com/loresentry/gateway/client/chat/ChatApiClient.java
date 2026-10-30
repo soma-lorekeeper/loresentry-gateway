@@ -50,8 +50,9 @@ public class ChatApiClient {
         if (code == null) return 0;
         return switch (code) {
             case "INVALID_REQUEST", "CHAT_TITLE_REQUIRED", "CHAT_QUESTION_REQUIRED" -> 400;
-            case "CHAT_SESSION_NOT_FOUND", "PROJECT_NOT_FOUND" -> 404;
-            case "CHAT_NOT_LAST_QUESTION", "CHAT_ANSWER_IN_PROGRESS", "CHAT_ANOTHER_ANSWER_IN_PROGRESS" -> 409;
+            case "CHAT_SESSION_NOT_FOUND", "PROJECT_NOT_FOUND", "SETTING_CHECK_NOT_FOUND", "SETTING_CHECK_FINDING_NOT_FOUND",
+                 "SETTING_CHECK_DOCUMENT_NOT_FOUND" -> 404;
+            case "CHAT_NOT_LAST_QUESTION", "CHAT_ANSWER_IN_PROGRESS", "CHAT_ANOTHER_ANSWER_IN_PROGRESS", "SETTING_CHECK_IN_PROGRESS" -> 409;
             case "CHAT_CONTEXT_TOO_LARGE" -> 422;
             case "CHAT_DAILY_LIMIT_REACHED" -> 429;
             case "CHAT_MODEL_UNAVAILABLE", "CONTENT_UNAVAILABLE" -> 503;
@@ -131,6 +132,32 @@ public class ChatApiClient {
     }
     public void cancel(UUID userId, UUID sessionId) {
         call(HttpMethod.POST, "/chat/sessions/{sessionId}/cancel", Map.of("sessionId", sessionId), userId, null, null, Void.class, 204);
+    }
+    public SettingCheckData.Run startSettingCheck(UUID userId, UUID projectId, SettingCheckData.Start body, ChatData.Profile profile) {
+        return call(HttpMethod.POST, "/projects/{projectId}/setting-checks", Map.of("projectId", projectId), userId, profile, body, SettingCheckData.Run.class, 202);
+    }
+    public SettingCheckData.Summary settingCheckSummary(UUID userId, UUID projectId) {
+        return call(HttpMethod.GET, "/projects/{projectId}/setting-checks/summary", Map.of("projectId", projectId), userId, null, null, SettingCheckData.Summary.class, 200);
+    }
+    public SettingCheckData.Runs settingChecks(UUID userId, UUID projectId, UUID documentId) {
+        return call(HttpMethod.GET, "/projects/{projectId}/setting-checks?document_id={documentId}", Map.of("projectId", projectId, "documentId", documentId), userId, null, null, SettingCheckData.Runs.class, 200);
+    }
+    public SettingCheckData.Decisions settingCheckVerdicts(UUID userId, UUID projectId) {
+        return call(HttpMethod.GET, "/projects/{projectId}/setting-checks/verdicts", Map.of("projectId", projectId), userId, null, null, SettingCheckData.Decisions.class, 200);
+    }
+    public SettingCheckData.Run settingCheck(UUID userId, UUID runId) {
+        var run = call(HttpMethod.GET, "/setting-checks/{runId}", Map.of("runId", runId), userId, null, null, SettingCheckData.Run.class, 200);
+        if (run.findings() == null) throw ChatCallFailure.invalid();
+        return run;
+    }
+    public void cancelSettingCheck(UUID userId, UUID runId) {
+        call(HttpMethod.POST, "/setting-checks/{runId}/cancel", Map.of("runId", runId), userId, null, null, Void.class, 204);
+    }
+    public SettingCheckData.Finding setSettingCheckVerdict(UUID userId, UUID findingId, SettingCheckData.Verdict body) {
+        return call(HttpMethod.PUT, "/setting-check-findings/{findingId}/verdict", Map.of("findingId", findingId), userId, null, body, SettingCheckData.Finding.class, 200);
+    }
+    public SettingCheckData.Finding clearSettingCheckVerdict(UUID userId, UUID findingId) {
+        return call(HttpMethod.DELETE, "/setting-check-findings/{findingId}/verdict", Map.of("findingId", findingId), userId, null, null, SettingCheckData.Finding.class, 200);
     }
     public void deleteUserData(UUID userId) {
         call(HttpMethod.DELETE, "/users/me/data", Map.of(), userId, null, null, Void.class, 204);
