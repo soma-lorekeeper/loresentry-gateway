@@ -30,6 +30,24 @@ class EnvironmentConfigurationTest {
             "loresentry.browser.login-redirect=https://loresentry.com/login",
             "loresentry.browser.secure-cookies=true").run(c->assertThat(c).hasNotFailed());
     }
+    @Test void acceptsExplicitDevOnlyWithDevBrowserSettings() {
+        runner("dev").withPropertyValues("loresentry.browser.frontend-origin=https://dev.loresentry.com",
+            "loresentry.browser.public-origin=https://api-dev.loresentry.com",
+            "loresentry.browser.login-redirect=https://dev.loresentry.com/login",
+            "loresentry.browser.secure-cookies=true").run(c->assertThat(c).hasNotFailed());
+    }
+    @Test void rejectsDevWithProductionBrowserSettings() {
+        runner("dev").withPropertyValues("loresentry.browser.frontend-origin=https://loresentry.com",
+            "loresentry.browser.public-origin=https://api.loresentry.com",
+            "loresentry.browser.login-redirect=https://loresentry.com/login",
+            "loresentry.browser.secure-cookies=true").run(c->assertThat(c).hasFailed());
+    }
+    @Test void rejectsDevWithoutSecureCookies() {
+        runner("dev").withPropertyValues("loresentry.browser.frontend-origin=https://dev.loresentry.com",
+            "loresentry.browser.public-origin=https://api-dev.loresentry.com",
+            "loresentry.browser.login-redirect=https://dev.loresentry.com/login").run(c->assertThat(c).hasFailed());
+    }
+    @Test void rejectsDevAndProdTogether() { runner("dev","prod").run(c->assertThat(c).hasFailed()); }
     @Test void rejectsMixedEnvironment() { runner("prod").run(c->assertThat(c).hasFailed()); }
     @Test void rejectsUnconfiguredServiceAddress() {
         runner("local").withPropertyValues("loresentry.upstream.content.base-url=").run(c->assertThat(c).hasFailed());

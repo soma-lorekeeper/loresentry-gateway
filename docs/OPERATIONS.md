@@ -11,7 +11,7 @@ GitOps·ACL·클러스터 적용과 운영 검증이 끝났다고 판단하지 �
 
 | 설정 | 요구 |
 |---|---|
-| `SPRING_PROFILES_ACTIVE` | local 또는 prod 중 하나 |
+| `SPRING_PROFILES_ACTIVE` | local, dev, prod 중 하나. dev 는 dev 클러스터(`dev.loresentry.com`·`api-dev.loresentry.com`)용 |
 | `BFF_SESSION_REDIS_HOST`, `BFF_SESSION_REDIS_PORT` | Auth와 같은 쓰기 담당 endpoint |
 | `BFF_SESSION_REDIS_USERNAME`, `BFF_SESSION_REDIS_PASSWORD` | 별도 BFF 계정·Secret |
 | `BFF_SESSION_REDIS_TLS` | endpoint에 맞춰 명시하고 CA 신뢰 검증 |
