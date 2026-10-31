@@ -18,6 +18,13 @@ class AuthTermsClientTest {
         var builder=RestClient.builder().baseUrl("http://auth.test");var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
         server=mocks.getServer();client=new AuthApiClient(builder.build());
     }
+    @Test void registrationClaimUsesOnlyConsentCredentialAndValidatesResponse(){
+        server.expect(requestTo("http://auth.test/auth/analytics/registration/consent"))
+                .andExpect(method(HttpMethod.POST)).andExpect(header("X-Consent-Request-Id",ID))
+                .andExpect(headerDoesNotExist("X-User-Id")).andExpect(headerDoesNotExist("Cookie"))
+                .andRespond(withSuccess("{\"registered\":true}",MediaType.APPLICATION_JSON));
+        assertThat(client.claimRegistrationForConsent(ID)).isTrue();server.verify();
+    }
     @Test void queryUsesConsentHeaderAndOnlyAcceptPostCarriesInternalCredentialInBody(){
         server.expect(requestTo("http://auth.test/auth/terms")).andExpect(method(HttpMethod.GET))
                 .andExpect(header("X-Consent-Request-Id",ID)).andExpect(headerDoesNotExist("Cookie")).andExpect(headerDoesNotExist("X-User-Id"))

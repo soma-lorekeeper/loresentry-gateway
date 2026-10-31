@@ -11,6 +11,9 @@ public class AccountService {
     public record Account(UUID id,String displayName,String email,boolean onboardingCompleted,String locale) {}
     private final AuthApiClient client;
     public AccountService(AuthApiClient client){this.client=client;}
+    public boolean claimRegistration(UUID user) {
+        try {return client.claimRegistrationForUser(user);}catch(AuthCallFailure failure){throw failure(failure);}
+    }
     public Account get(UUID user) {
         try {return result(client.account(user));}catch(AuthCallFailure failure){throw failure(failure);}
     }

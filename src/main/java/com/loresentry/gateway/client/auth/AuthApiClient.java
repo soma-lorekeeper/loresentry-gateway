@@ -42,6 +42,12 @@ public class AuthApiClient {
     public AuthData.AcceptedTerms acceptTerms(String consentId,String version) {
         return call(HttpMethod.POST,"/auth/terms/accept",null,new AuthData.AcceptTerms(consentId,version),AuthData.AcceptedTerms.class,200,Operation.TERMS);
     }
+    public boolean claimRegistrationForUser(UUID user) {
+        return call(HttpMethod.POST,"/auth/analytics/registration/user",user,new AuthData.Empty(),AuthData.RegistrationAnalytics.class,200,Operation.ACCOUNT).registered();
+    }
+    public boolean claimRegistrationForConsent(String consentId) {
+        return call(HttpMethod.POST,"/auth/analytics/registration/consent",null,new AuthData.Empty(),AuthData.RegistrationAnalytics.class,200,Operation.TERMS,consentId).registered();
+    }
     public AuthData.Account account(UUID user) {
         return ownAccount(user,call(HttpMethod.GET,"/auth/users/me",user,null,AuthData.Account.class,200,Operation.ACCOUNT));
     }
@@ -111,7 +117,9 @@ public class AuthApiClient {
         } catch(IllegalArgumentException|NullPointerException malformed) {throw AuthCallFailure.invalid(consumed);}
     }
     private static void validate(Object response) {
-        if(response instanceof AuthData.Account account) {
+        if(response instanceof AuthData.RegistrationAnalytics registration) {
+            java.util.Objects.requireNonNull(registration.registered());
+        } else if(response instanceof AuthData.Account account) {
             java.util.Objects.requireNonNull(account.id());required(account.displayName());
             java.util.Objects.requireNonNull(account.onboardingCompleted());locale(account.locale());
         } else if(response instanceof AuthData.Prepared p) {

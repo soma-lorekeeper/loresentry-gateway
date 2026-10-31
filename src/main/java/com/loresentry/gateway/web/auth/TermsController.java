@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loresentry.gateway.application.*;
 import com.loresentry.gateway.config.CookieSettings;
+import com.loresentry.gateway.client.auth.AuthData;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
@@ -21,6 +22,11 @@ public final class TermsController {
     private final CookieSettings names;
     public TermsController(TermsService terms,AuthCookies cookies,CookieSettings names){this.terms=terms;this.cookies=cookies;this.names=names;}
 
+    @PostMapping("/auth/terms/registration-analytics")
+    public ResponseEntity<AuthData.RegistrationAnalytics> registrationAnalytics(HttpServletRequest request,HttpServletResponse response) {
+        try { return ResponseEntity.ok().header("Cache-Control","no-store").body(new AuthData.RegistrationAnalytics(terms.claimRegistration(credential(request)))); }
+        catch(AuthOperationFailure failure){clearInvalid(response,failure);throw failure;}
+    }
     @GetMapping("/auth/terms")
     public ResponseEntity<Terms> query(@RequestParam(name="locale",required=false) String locale,HttpServletRequest request,HttpServletResponse response) {
         try {

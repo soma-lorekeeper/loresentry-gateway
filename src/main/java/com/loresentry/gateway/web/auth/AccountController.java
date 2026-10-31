@@ -35,6 +35,10 @@ public class AccountController {
     public AccountController(AccountService accounts,AccountDeletionService deletions,AuthCookies cookies) {
         this.accounts=accounts;this.deletions=deletions;this.cookies=cookies;
     }
+    @PostMapping("/auth/users/me/registration-analytics")
+    public ResponseEntity<AuthData.RegistrationAnalytics> registrationAnalytics(@CurrentUser UUID user) {
+        return ResponseEntity.ok().header("Cache-Control","no-store").body(new AuthData.RegistrationAnalytics(accounts.claimRegistration(user)));
+    }
     @GetMapping("/auth/users/me")
     public ResponseEntity<Account> get(@CurrentUser UUID user) {return response(accounts.get(user));}
     @PatchMapping("/auth/users/me")

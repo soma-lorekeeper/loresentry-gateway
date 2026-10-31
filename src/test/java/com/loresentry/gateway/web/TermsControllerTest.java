@@ -42,6 +42,17 @@ class TermsControllerTest {
         @Bean @Order(1) CsrfFilter csrf(){var cors=new CorsConfiguration();cors.setAllowedOrigins(List.of("http://localhost:3000"));return new CsrfFilter(cors);}
         @Bean @Order(2) SessionFilter session(OpaqueSessionVerifier verifier,CookieSettings names,AuthCookies cookies){return new SessionFilter(verifier,names,cookies);}
     }
+    @Test void registrationClaimRequiresCsrfAndConsentCookie() throws Exception {
+        when(client.claimRegistrationForConsent(ID)).thenReturn(true);
+        mvc.perform(post("/auth/terms/registration-analytics").cookie(new Cookie("ls_consent",ID)))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(client);
+        mvc.perform(post("/auth/terms/registration-analytics").header("Origin","http://localhost:3000")
+                .header("X-LS-CSRF","1").cookie(new Cookie("ls_consent",ID)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.registered").value(true))
+                .andExpect(header().string("Cache-Control","no-store"));
+        verify(client).claimRegistrationForConsent(ID);verifyNoInteractions(verifier);
+    }
     @Test void termsQuerySkipsSessionAndDoesNotRenewEitherCookie() throws Exception {
         when(client.terms(ID,null)).thenReturn(new AuthData.Terms(version,"1","Terms","Original\ntext",NOW,NOW.plusSeconds(1800),null));
         mvc.perform(get("/auth/terms").cookie(new Cookie("ls_consent",ID),new Cookie("ls_session",SESSION)))

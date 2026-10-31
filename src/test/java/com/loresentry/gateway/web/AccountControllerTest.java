@@ -33,6 +33,13 @@ class AccountControllerTest {
     }
     @Autowired MockMvc mvc;@MockitoBean AccountService service;@MockitoBean com.loresentry.gateway.application.AccountDeletionService deletions;
     UUID user=UUID.randomUUID();
+    @Test void registrationClaimUsesTheVerifiedUser() throws Exception {
+        when(service.claimRegistration(user)).thenReturn(true);
+        mvc.perform(post("/auth/users/me/registration-analytics").requestAttr(SessionFilter.USER_ATTRIBUTE,user))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.registered").value(true))
+            .andExpect(header().string("Cache-Control","no-store"));
+        verify(service).claimRegistration(user);
+    }
     @Test void getAndPatchMapExplicitAccountDto() throws Exception {
         when(service.get(user)).thenReturn(new AccountService.Account(user,"Name",null,false,null));
         when(service.update(user,"New name")).thenReturn(new AccountService.Account(user,"New name","user@example.test",true,"en"));

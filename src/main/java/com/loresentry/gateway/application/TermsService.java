@@ -11,6 +11,9 @@ public final class TermsService {
     private final AuthApiClient client;
     private final Clock clock;
     public TermsService(AuthApiClient client,Clock clock){this.client=client;this.clock=clock;}
+    public boolean claimRegistration(ConsentId id) {
+        try {return client.claimRegistrationForConsent(id.value());}catch(AuthCallFailure failure){throw mapped(failure);}
+    }
     public AuthData.Terms query(ConsentId id,String locale) {
         try {
             var result=client.terms(id.value(),locale);

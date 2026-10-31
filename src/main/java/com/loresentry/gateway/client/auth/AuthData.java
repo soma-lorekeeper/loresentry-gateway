@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public final class AuthData {
     private AuthData() {}
     public record Empty() {}
+    public record RegistrationAnalytics(Boolean registered) {}
     public record Prepared(@JsonProperty("authorization_url") String authorizationUrl,
             @JsonProperty("login_request_id") String loginRequestId,@JsonProperty("expires_at") Instant expiresAt) {
         @Override public String toString() { return "Prepared[redacted]"; }
