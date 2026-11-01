@@ -47,6 +47,7 @@ class SettingCheckRoutesTest {
     static final UUID FINDING = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d72");
     static final UUID PLACE = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d73");
     static final UUID EARLIER = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d74");
+    static final UUID VERSION = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d75");
     static final OffsetDateTime STARTED = OffsetDateTime.parse("2026-10-27T12:40:00Z"), FINISHED = OffsetDateTime.parse("2026-10-27T12:43:10Z");
     static final SettingCheckData.Finding CORE = new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH",
             "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.", "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
@@ -54,17 +55,17 @@ class SettingCheckRoutesTest {
     static final SettingCheckData.Finding INTENDED = new SettingCheckData.Finding(FINDING, "MANUSCRIPT", false, "LOW",
             "9화에서는 하린이 왼손잡이였어요. 9화의 해당 문단을 확인해 보세요.", "하린은 오른손으로 칼을 쥐었다.", null,
             new SettingCheckData.Source(EARLIER, "9화", "manuscript", 9, "왼손잡이인 하린은 늘 칼을 왼쪽에 찼다.", null), "INTENDED", "하린은 일부러 손을 바꿨어요.");
-    static final SettingCheckData.Run DONE = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, "DONE", null, STARTED, FINISHED,
+    static final SettingCheckData.Run DONE = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, VERSION, "DONE", null, STARTED, FINISHED,
             new SettingCheckData.Read(11, 1, 11, 21, 6), new SettingCheckData.Counts(3, 1, 0), null, null);
-    static final SettingCheckData.Run RUNNING = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, "RUNNING", "READING", STARTED, null,
+    static final SettingCheckData.Run RUNNING = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, VERSION, "RUNNING", "READING", STARTED, null,
             new SettingCheckData.Read(0, null, null, 0, 0), new SettingCheckData.Counts(0, 0, 0), null, null);
     static final String DONE_JSON = "{\"id\":\"" + RUN + "\",\"project_id\":\"" + PROJECT + "\",\"document_id\":\"" + CHAPTER + "\","
-            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"status\":\"DONE\",\"stage\":null,"
+            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"version_id\":\"" + VERSION + "\",\"status\":\"DONE\",\"stage\":null,"
             + "\"created_at\":\"2026-10-27T12:40:00Z\",\"finished_at\":\"2026-10-27T12:43:10Z\","
             + "\"read\":{\"manuscripts\":11,\"from_ordinal\":1,\"to_ordinal\":11,\"settings\":21,\"core_facts\":6},"
             + "\"counts\":{\"open\":3,\"intended\":1,\"not_conflict\":0},\"failure_code\":null}";
     static final String RUNNING_JSON = "{\"id\":\"" + RUN + "\",\"project_id\":\"" + PROJECT + "\",\"document_id\":\"" + CHAPTER + "\","
-            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"status\":\"RUNNING\",\"stage\":\"READING\","
+            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"version_id\":\"" + VERSION + "\",\"status\":\"RUNNING\",\"stage\":\"READING\","
             + "\"created_at\":\"2026-10-27T12:40:00Z\",\"finished_at\":null,"
             + "\"read\":{\"manuscripts\":0,\"from_ordinal\":null,\"to_ordinal\":null,\"settings\":0,\"core_facts\":0},"
             + "\"counts\":{\"open\":0,\"intended\":0,\"not_conflict\":0},\"failure_code\":null}";
@@ -161,28 +162,42 @@ class SettingCheckRoutesTest {
     }
 
     @Test void runsOfADocumentUseTheBrowserShape() throws Exception {
-        var failed = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 13L, "FAILED", null, STARTED, FINISHED,
+        var failed = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 13L, null, "FAILED", null, STARTED, FINISHED,
             new SettingCheckData.Read(11, 1, 11, 21, 6), new SettingCheckData.Counts(0, 0, 0), "CHAT_MODEL_UNAVAILABLE", List.of(CORE));
         when(client.settingChecks(WRITER, PROJECT, CHAPTER)).thenReturn(new SettingCheckData.Runs(List.of(DONE, failed)));
         mvc.perform(as(WRITER_SESSION, get("/projects/" + PROJECT + "/setting-checks").param("document_id", CHAPTER.toString()))).andExpect(status().isOk())
             .andExpect(header().string("Cache-Control", "no-store"))
-            .andExpect(content().json("{\"runs\":[" + DONE_JSON + "," + DONE_JSON.replace("\"revision_no\":14,\"status\":\"DONE\"", "\"revision_no\":13,\"status\":\"FAILED\"")
+            .andExpect(content().json("{\"runs\":[" + DONE_JSON + "," + DONE_JSON.replace("\"revision_no\":14,\"version_id\":\"" + VERSION + "\",\"status\":\"DONE\"",
+                    "\"revision_no\":13,\"version_id\":null,\"status\":\"FAILED\"")
                 .replace("\"open\":3,\"intended\":1", "\"open\":0,\"intended\":0").replace("\"failure_code\":null", "\"failure_code\":\"CHAT_MODEL_UNAVAILABLE\"") + "]}",
                 JsonCompareMode.STRICT));
         verifyNoInteractions(accounts);
     }
 
     @Test void oneRunCarriesItsFindings() throws Exception {
-        var done = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, "DONE", null, STARTED, FINISHED,
+        var done = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, VERSION, "DONE", null, STARTED, FINISHED,
             new SettingCheckData.Read(11, 1, 11, 21, 6), new SettingCheckData.Counts(3, 1, 0), null, List.of(CORE, INTENDED));
         when(client.settingCheck(WRITER, RUN)).thenReturn(done);
         mvc.perform(as(WRITER_SESSION, get("/setting-checks/" + RUN))).andExpect(status().isOk())
             .andExpect(header().string("Cache-Control", "no-store"))
             .andExpect(content().json(withFindings(DONE_JSON, CORE_JSON, INTENDED_JSON), JsonCompareMode.STRICT));
-        when(client.settingCheck(WRITER, RUN)).thenReturn(new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, "RUNNING", "READING",
+        when(client.settingCheck(WRITER, RUN)).thenReturn(new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, VERSION, "RUNNING", "READING",
             STARTED, null, new SettingCheckData.Read(0, null, null, 0, 0), new SettingCheckData.Counts(0, 0, 0), null, List.of()));
         mvc.perform(as(WRITER_SESSION, get("/setting-checks/" + RUN))).andExpect(status().isOk())
             .andExpect(content().json(withFindings(RUNNING_JSON), JsonCompareMode.STRICT));
+        verifyNoInteractions(accounts);
+    }
+
+    @Test void runsCheckedBeforeVersionsKeepANullVersion() throws Exception {
+        var unversioned = new SettingCheckData.Run(RUN, PROJECT, CHAPTER, "12화 · 균열의 밤", 14L, null, "DONE", null, STARTED, FINISHED,
+            new SettingCheckData.Read(11, 1, 11, 21, 6), new SettingCheckData.Counts(3, 1, 0), null, List.of());
+        var unversionedJson = DONE_JSON.replace("\"version_id\":\"" + VERSION + "\"", "\"version_id\":null");
+        when(client.settingCheckSummary(WRITER, PROJECT)).thenReturn(new SettingCheckData.Summary(null, List.of(new SettingCheckData.Chapter(CHAPTER, unversioned))));
+        when(client.settingCheck(WRITER, RUN)).thenReturn(unversioned);
+        mvc.perform(as(WRITER_SESSION, get("/projects/" + PROJECT + "/setting-checks/summary"))).andExpect(status().isOk())
+            .andExpect(content().json("{\"running\":null,\"chapters\":[{\"document_id\":\"" + CHAPTER + "\",\"latest\":" + unversionedJson + "}]}", JsonCompareMode.STRICT));
+        mvc.perform(as(WRITER_SESSION, get("/setting-checks/" + RUN))).andExpect(status().isOk())
+            .andExpect(content().json(withFindings(unversionedJson), JsonCompareMode.STRICT));
         verifyNoInteractions(accounts);
     }
 

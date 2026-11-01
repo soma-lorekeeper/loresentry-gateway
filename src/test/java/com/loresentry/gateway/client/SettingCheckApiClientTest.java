@@ -31,13 +31,14 @@ class SettingCheckApiClientTest {
     static final UUID FINDING = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d72");
     static final UUID PLACE = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d73");
     static final UUID EARLIER = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d74");
+    static final UUID VERSION = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d75");
     static final String RUN_JSON = "{\"id\":\"" + RUN + "\",\"project_id\":\"" + PROJECT + "\",\"document_id\":\"" + CHAPTER + "\","
-            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"status\":\"DONE\",\"stage\":null,"
+            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"version_id\":\"" + VERSION + "\",\"status\":\"DONE\",\"stage\":null,"
             + "\"created_at\":\"2026-10-27T12:40:00.000Z\",\"finished_at\":\"2026-10-27T12:43:10.000Z\","
             + "\"read\":{\"manuscripts\":11,\"from_ordinal\":1,\"to_ordinal\":11,\"settings\":21,\"core_facts\":6},"
             + "\"counts\":{\"open\":3,\"intended\":1,\"not_conflict\":0},\"failure_code\":null}";
     static final String RUNNING_JSON = "{\"id\":\"" + RUN + "\",\"project_id\":\"" + PROJECT + "\",\"document_id\":\"" + CHAPTER + "\","
-            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"status\":\"RUNNING\",\"stage\":\"READING\","
+            + "\"document_title\":\"12화 · 균열의 밤\",\"revision_no\":14,\"version_id\":\"" + VERSION + "\",\"status\":\"RUNNING\",\"stage\":\"READING\","
             + "\"created_at\":\"2026-10-27T12:40:00Z\",\"finished_at\":null,"
             + "\"read\":{\"manuscripts\":0,\"from_ordinal\":null,\"to_ordinal\":null,\"settings\":0,\"core_facts\":0},"
             + "\"counts\":{\"open\":0,\"intended\":0,\"not_conflict\":0},\"failure_code\":null}";
@@ -80,6 +81,7 @@ class SettingCheckApiClientTest {
         assertThat(run.finishedAt()).isNull();
         assertThat(run.read()).isEqualTo(new SettingCheckData.Read(0, null, null, 0, 0));
         assertThat(run.findings()).isNull();
+        assertThat(run.versionId()).isEqualTo(VERSION);
         server.verify();
     }
 
@@ -105,6 +107,7 @@ class SettingCheckApiClientTest {
             assertThat(chapter.latest().read()).isEqualTo(READ);
             assertThat(chapter.latest().counts()).isEqualTo(COUNTS);
             assertThat(chapter.latest().revisionNo()).isEqualTo(14L);
+            assertThat(chapter.latest().versionId()).isEqualTo(VERSION);
             assertThat(chapter.latest().finishedAt()).isEqualTo(OffsetDateTime.parse("2026-10-27T12:43:10Z"));
         });
         assertThat(client.settingCheckSummary(USER, PROJECT)).isEqualTo(new SettingCheckData.Summary(null, java.util.List.of()));
@@ -115,10 +118,11 @@ class SettingCheckApiClientTest {
         server.expect(requestTo("http://chat.test/projects/" + PROJECT + "/setting-checks?document_id=" + CHAPTER)).andExpect(method(HttpMethod.GET))
             .andExpect(header("X-User-Id", USER.toString()))
             .andRespond(withSuccess("{\"runs\":[" + RUN_JSON + "," + RUNNING_JSON.replace("\"RUNNING\",\"stage\":\"READING\"", "\"FAILED\",\"stage\":null")
-                .replace("\"failure_code\":null", "\"failure_code\":\"CHAT_MODEL_UNAVAILABLE\"") + "]}", MediaType.APPLICATION_JSON));
+                .replace("\"version_id\":\"" + VERSION + "\"", "\"version_id\":null").replace("\"failure_code\":null", "\"failure_code\":\"CHAT_MODEL_UNAVAILABLE\"") + "]}", MediaType.APPLICATION_JSON));
         var runs = client.settingChecks(USER, PROJECT, CHAPTER).runs();
         assertThat(runs).extracting(SettingCheckData.Run::status).containsExactly("DONE", "FAILED");
         assertThat(runs.get(1).failureCode()).isEqualTo("CHAT_MODEL_UNAVAILABLE");
+        assertThat(runs).extracting(SettingCheckData.Run::versionId).containsExactly(VERSION, null);
         server.verify();
     }
 
@@ -126,8 +130,9 @@ class SettingCheckApiClientTest {
         server.expect(requestTo("http://chat.test/setting-checks/" + RUN)).andExpect(method(HttpMethod.GET))
             .andExpect(header("X-User-Id", USER.toString()))
             .andRespond(withSuccess(withFindings(RUN_JSON, CORE_FINDING_JSON, MANUSCRIPT_FINDING_JSON), MediaType.APPLICATION_JSON));
-        var findings = client.settingCheck(USER, RUN).findings();
-        assertThat(findings).containsExactly(
+        var run = client.settingCheck(USER, RUN);
+        assertThat(run.versionId()).isEqualTo(VERSION);
+        assertThat(run.findings()).containsExactly(
             new SettingCheckData.Finding(FINDING, "SETTING", true, "HIGH", "북쪽 문은 낡은 열쇠로만 열리는데, 서윤이 열쇠 없이 문을 밀어요. 열쇠를 얻는 장면이 없어요.",
                 "서윤은 등불을 바닥에 내려놓고 천천히 문을 밀었다.", "천천히 문을 밀었다",
                 new SettingCheckData.Source(PLACE, "북쪽 온실", "place", null, "북쪽 문은 낡은 열쇠 없이는 열리지 않는다.", "낡은 열쇠 없이는 열리지 않는다"),
@@ -182,6 +187,17 @@ class SettingCheckApiClientTest {
             assertThat(read.quoteFocus()).isNull();
             assertThat(read.source().quoteFocus()).isNull();
         });
+        server.verify();
+    }
+
+    @Test void runsFromBeforeVersionsStillRead() {
+        var run = RUN_JSON.replace("\"version_id\":\"" + VERSION + "\",", "");
+        assertThat(run).doesNotContain("version_id");
+        server.expect(requestTo("http://chat.test/setting-checks/" + RUN)).andRespond(withSuccess(withFindings(run), MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://chat.test/setting-checks/" + RUN))
+            .andRespond(withSuccess(withFindings(RUN_JSON.replace("\"version_id\":\"" + VERSION + "\"", "\"version_id\":null")), MediaType.APPLICATION_JSON));
+        assertThat(client.settingCheck(USER, RUN).versionId()).isNull();
+        assertThat(client.settingCheck(USER, RUN).versionId()).isNull();
         server.verify();
     }
 
@@ -250,7 +266,8 @@ class SettingCheckApiClientTest {
         "\"read\":{\"manuscripts\":11,\"from_ordinal\":1,\"to_ordinal\":11,\"settings\":21,\"core_facts\":6}|\"read\":null",
         "\"manuscripts\":11,|", "\"core_facts\":6|\"core_facts\":-1", "\"from_ordinal\":1|\"from_ordinal\":1.5",
         "\"counts\":{\"open\":3,\"intended\":1,\"not_conflict\":0}|\"counts\":{\"open\":3,\"intended\":1}", "\"open\":3|\"open\":-3",
-        "\"project_id\":\"" + "0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d61" + "\"|\"project_id\":\"x\"", "\"failure_code\":null|\"failure_code\":1"})
+        "\"project_id\":\"" + "0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d61" + "\"|\"project_id\":\"x\"", "\"failure_code\":null|\"failure_code\":1",
+        "\"version_id\":\"" + "0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d75" + "\"|\"version_id\":\"x\"", "\"version_id\":\"" + "0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d75" + "\"|\"version_id\":1"})
     void rejectsRunsOutsideTheContract(String replacement) {
         var parts = replacement.split("\\|", -1);
         var run = RUN_JSON.replace(parts[0], parts[1]);

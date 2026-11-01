@@ -210,6 +210,9 @@ public class ContentApiClient {
     public ContentData.Versions versions(UUID userId, UUID fileId, Conditions conditions) {
         return call("GET", "/files/{fileId}/versions", Map.of("fileId", fileId), userId, null, ContentData.Versions.class, 200, conditions);
     }
+    public ContentData.Version version(UUID userId, UUID fileId, UUID versionId, Conditions conditions) {
+        return call("GET", "/files/{fileId}/versions/{versionId}", Map.of("fileId", fileId, "versionId", versionId), userId, null, ContentData.Version.class, 200, conditions);
+    }
     public ContentData.Version createVersion(UUID userId, UUID fileId, ContentData.NamedVersion body, Conditions conditions) {
         return call("POST", "/files/{fileId}/versions", Map.of("fileId", fileId), userId, body, ContentData.Version.class, 201, conditions);
     }

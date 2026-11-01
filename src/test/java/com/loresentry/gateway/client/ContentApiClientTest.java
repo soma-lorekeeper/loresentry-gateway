@@ -88,6 +88,43 @@ class ContentApiClientTest {
         client.clearDocumentImage(user,file,null);
         mocks.getServer().verify();
     }
+    static final String VERSION_JSON = "{\"id\":\"%s\",\"file_id\":\"%s\",\"kind\":\"SETTING_CHECK\",\"label\":null,\"source_revision_no\":14,"
+        +"\"created_at\":\"2026-11-01T00:00:00Z\",\"snapshot\":{\"title\":\"12화\",\"body\":{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":[]}},"
+        +"\"legacy_body_md\":null,\"properties\":[],\"relations\":[]}}";
+    @Test void readsOneVersionWithItsSnapshotAndKind() {
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        var user=UUID.randomUUID();var file=UUID.randomUUID();var version=UUID.randomUUID();
+        mocks.getServer().expect(requestTo("http://content.test/files/"+file+"/versions/"+version)).andExpect(method(org.springframework.http.HttpMethod.GET))
+            .andExpect(header("X-User-Id",user.toString())).andExpect(headerDoesNotExist("Cookie")).andExpect(content().string(""))
+            .andRespond(withSuccess(VERSION_JSON.formatted(version,file),MediaType.APPLICATION_JSON));
+        mocks.getServer().expect(requestTo("http://content.test/files/"+file+"/versions/"+version))
+            .andRespond(withStatus(org.springframework.http.HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"code\":\"VERSION_NOT_FOUND\",\"message\":\"private detail\",\"next_action\":\"NONE\"}"));
+        var service=new ContentService(new ContentApiClient(builder.build()), null);
+        var read=service.version(user,file,version,new Conditions(null,null,null));
+        assertThat(read.id()).isEqualTo(version);assertThat(read.fileId()).isEqualTo(file);assertThat(read.kind()).isEqualTo("SETTING_CHECK");
+        assertThat(read.label()).isNull();assertThat(read.sourceRevisionNo()).isEqualTo(14L);
+        assertThat(read.snapshot().title()).isEqualTo("12화");assertThat(read.snapshot().body().get("schema_version").asInt()).isEqualTo(1);
+        var failure=catchThrowableOfType(ContentCallFailure.class,()->service.version(user,file,version,new Conditions(null,null,null)));
+        assertThat(failure.status()).isEqualTo(404);assertThat(failure.code()).isEqualTo("VERSION_NOT_FOUND");
+        mocks.getServer().verify();
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"\"kind\":\"SETTING_CHECK\",|","\"source_revision_no\":14|\"source_revision_no\":null",
+        "\"created_at\":\"2026-11-01T00:00:00Z\"|\"created_at\":null","\"snapshot\":{\"title\":\"12화\"|\"snapshot\":null,\"x\":{\"title\":\"12화\"",
+        "\"title\":\"12화\",|"})
+    void rejectsAVersionOutsideTheContract(String replacement) {
+        var parts=replacement.split("\\|",-1);
+        var builder=RestClient.builder().baseUrl("http://content.test");
+        var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
+        var file=UUID.randomUUID();var version=UUID.randomUUID();
+        var payload=VERSION_JSON.formatted(version,file).replace(parts[0],parts[1]);
+        assertThat(payload).isNotEqualTo(VERSION_JSON.formatted(version,file));
+        mocks.getServer().expect(requestTo("http://content.test/files/"+file+"/versions/"+version)).andRespond(withSuccess(payload,MediaType.APPLICATION_JSON));
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).version(UUID.randomUUID(),file,version,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        mocks.getServer().verify();
+    }
     @Test void sampleProjectIsBodilessPostWithOnlyTheVerifiedUser() {
         var builder=RestClient.builder().baseUrl("http://content.test");
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);

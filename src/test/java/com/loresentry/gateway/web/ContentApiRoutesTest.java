@@ -144,6 +144,34 @@ class ContentApiRoutesTest {
             .andExpect(jsonPath("$.nodes[0].image_url").value(url));
     }
 
+    @Test void readsOneVersionInTheShapeOfTheVersionList() throws Exception {
+        var now = OffsetDateTime.parse("2026-11-01T00:00:00Z");
+        var version = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d62");
+        given(service.version(eq(USER), eq(ID), eq(version), any())).willReturn(new ContentData.Version(version, ID, "SETTING_CHECK", null, 14L, now,
+            new ContentData.Snapshot("12화", BODY, null, List.of(new ContentData.TextProperty("summary", "균열의 밤")), List.of())));
+        mvc.perform(get("/files/"+ID+"/versions/"+version).requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER)
+                .header("If-None-Match","\"etag\""))
+            .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(content().json("{\"id\":\""+version+"\",\"file_id\":\""+ID+"\",\"kind\":\"SETTING_CHECK\",\"label\":null,\"source_revision_no\":14,"
+                + "\"created_at\":\"2026-11-01T00:00:00Z\",\"snapshot\":{\"title\":\"12화\",\"body\":{\"schema_version\":1,\"doc\":{\"type\":\"doc\",\"content\":[]}},"
+                + "\"legacy_body_md\":null,\"properties\":[{\"key\":\"summary\",\"value\":\"균열의 밤\"}],\"relations\":[]}}",
+                org.springframework.test.json.JsonCompareMode.STRICT));
+        verify(service).version(USER, ID, version, new Conditions(null,null,"\"etag\""));
+    }
+    @Test void missingVersionKeepsItsNotFoundCode() throws Exception {
+        var version = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d62");
+        given(service.version(eq(USER), eq(ID), eq(version), any())).willThrow(
+            new com.loresentry.gateway.client.content.ContentCallFailure(404, "VERSION_NOT_FOUND", null, null));
+        mvc.perform(get("/files/"+ID+"/versions/"+version).requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("VERSION_NOT_FOUND"))
+            .andExpect(jsonPath("$.next_action").value("NONE")).andExpect(jsonPath("$.length()").value(3))
+            .andExpect(header().string("Cache-Control", "no-store"));
+        mvc.perform(get("/files/"+ID+"/versions/not-a-uuid").requestAttr(com.loresentry.gateway.security.SessionFilter.USER_ATTRIBUTE, USER))
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"));
+        verify(service).version(USER, ID, version, new Conditions(null,null,null));
+        verifyNoMoreInteractions(service);
+    }
+
     @Test void keepsSaveRevisionAndIdempotencyHeaders() throws Exception {
         var now = OffsetDateTime.parse("2026-09-24T00:00:00Z");
         given(service.saveContent(eq(USER), eq(ID), any(), any())).willReturn(new ContentData.Content(

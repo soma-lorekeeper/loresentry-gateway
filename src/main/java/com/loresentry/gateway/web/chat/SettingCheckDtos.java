@@ -37,14 +37,15 @@ public final class SettingCheckDtos {
     }
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Run(UUID id, @JsonProperty("project_id") UUID projectId, @JsonProperty("document_id") UUID documentId,
-                      @JsonProperty("document_title") String documentTitle, @JsonProperty("revision_no") long revisionNo, String status, String stage,
+                      @JsonProperty("document_title") String documentTitle, @JsonProperty("revision_no") long revisionNo,
+                      @JsonProperty("version_id") UUID versionId, String status, String stage,
                       @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("finished_at") OffsetDateTime finishedAt,
                       Read read, Counts counts, @JsonProperty("failure_code") String failureCode,
                       @JsonInclude(JsonInclude.Include.NON_NULL) List<Finding> findings) {
         public static Run from(SettingCheckData.Run value) { return of(value, null); }
         public static Run withFindings(SettingCheckData.Run value) { return of(value, value.findings().stream().map(Finding::from).toList()); }
         private static Run of(SettingCheckData.Run value, List<Finding> findings) {
-            return new Run(value.id(), value.projectId(), value.documentId(), value.documentTitle(), value.revisionNo(), value.status(), value.stage(),
+            return new Run(value.id(), value.projectId(), value.documentId(), value.documentTitle(), value.revisionNo(), value.versionId(), value.status(), value.stage(),
                     value.createdAt(), value.finishedAt(), Read.from(value.read()), Counts.from(value.counts()), value.failureCode(), findings);
         }
     }

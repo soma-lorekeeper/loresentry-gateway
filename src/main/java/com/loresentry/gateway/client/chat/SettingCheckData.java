@@ -16,7 +16,8 @@ public final class SettingCheckData {
     public record Finding(UUID id, String kind, Boolean core, String confidence, String explanation, String quote,
                           @JsonProperty("quote_focus") String quoteFocus, Source source, String verdict, String reason) {}
     public record Run(UUID id, @JsonProperty("project_id") UUID projectId, @JsonProperty("document_id") UUID documentId,
-                      @JsonProperty("document_title") String documentTitle, @JsonProperty("revision_no") Long revisionNo, String status, String stage,
+                      @JsonProperty("document_title") String documentTitle, @JsonProperty("revision_no") Long revisionNo,
+                      @JsonProperty("version_id") UUID versionId, String status, String stage,
                       @JsonProperty("created_at") OffsetDateTime createdAt, @JsonProperty("finished_at") OffsetDateTime finishedAt,
                       Read read, Counts counts, @JsonProperty("failure_code") String failureCode, List<Finding> findings) {}
     public record Chapter(@JsonProperty("document_id") UUID documentId, Run latest) {}

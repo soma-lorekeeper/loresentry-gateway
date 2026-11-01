@@ -51,6 +51,7 @@ public class ContentService {
     public Void clearDocumentImage(UUID userId, UUID fileId, Conditions conditions) { return client.clearDocumentImage(userId, fileId, conditions); }
     public ContentData.Content setLocked(UUID userId, UUID fileId, ContentData.Lock body, Conditions conditions) { return client.setLocked(userId, fileId, body, conditions); }
     public ContentData.Versions versions(UUID userId, UUID fileId, Conditions conditions) { return client.versions(userId, fileId, conditions); }
+    public ContentData.Version version(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { return client.version(userId, fileId, versionId, conditions); }
     public ContentData.Version createVersion(UUID userId, UUID fileId, ContentData.NamedVersion body, Conditions conditions) { return client.createVersion(userId, fileId, body, conditions); }
     public ContentData.Content restoreVersion(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { return client.restoreVersion(userId, fileId, versionId, conditions); }
     public Void deleteVersion(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { return client.deleteVersion(userId, fileId, versionId, conditions); }
