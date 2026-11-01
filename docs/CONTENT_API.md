@@ -43,6 +43,7 @@ Content의 도메인 규칙과 프론트의 화면 모델을 변경하지 않는
 | PUT /files/{id}/image | image_id — 업로드를 마친 같은 프로젝트의 이미지 | 200 Document |
 | DELETE /files/{id}/image | — | 204, 이미지가 없어도 204 |
 | GET /files/{id}/versions | — | 200 `{versions: Version[]}` |
+| GET /files/{id}/versions/{vid} | — | 200 Version |
 | POST /files/{id}/versions | label?, 본문 생략 가능 | 201 Version |
 | POST /files/{id}/versions/{vid}/restore | If-Match | 200 Content |
 | DELETE /files/{id}/versions/{vid} | — | 204 |
@@ -141,7 +142,8 @@ folders·episodes·documents의 정규화된 목록으로 유지한다.
 - Snapshot: title, body_md, properties(`{key,value}` 목록), relations(`{relation_key,target_document_id}` 목록).
 - Content: id, project_id, title, folder_code, episode_id, body_md, properties, relations, locked, refresh_locked, char_count, revision_no, updated_at.
 - `locked`는 편집이 막혔는지(사용자 잠금 또는 그래프 최신화 잠금)이고, `refresh_locked`는 그중 그래프 최신화가 잠갔는지다. 최신화 잠금은 사용자가 풀 수 없어 화면이 이유를 따로 알린다.
-- Version: id, file_id, kind, label, source_revision_no, created_at, snapshot.
+- Version: id, file_id, kind, label, source_revision_no, created_at, snapshot. kind는 Content가 정하며 BFF는 값을 제한하지 않는다.
+  설정 오류 점검이 남긴 버전은 `SETTING_CHECK`이고, 점검의 `version_id`로 `GET /files/{id}/versions/{vid}`를 호출해 연다.
 - Graph: nodes(`{id, title, folder_code, description, image_url}` 목록), edges(`{id, source, target, relation_key, description, origin}` 목록), episodes(`{id, name, document_ids}` 목록).
 - Hit: file_id, title, folder_code, episode_name, snippet(`before,match,after` 또는 null), updated_at.
 - RefreshStart: request_id(`NO_CHANGES`면 null), status(`GENERATING`·`NO_CHANGES`),

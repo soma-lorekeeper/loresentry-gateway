@@ -151,6 +151,11 @@ public class ContentApiController {
         var result = service.versions(userId, fileId, new Conditions(null, null, single(request, "If-None-Match")));
         return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Versions.from(result));
     }
+    @GetMapping("/files/{fileId}/versions/{versionId}")
+    public ResponseEntity<ContentDtos.Version> version(@CurrentUser UUID userId, @PathVariable UUID fileId, @PathVariable UUID versionId, HttpServletRequest request) {
+        var result = service.version(userId, fileId, versionId, new Conditions(null, null, single(request, "If-None-Match")));
+        return ResponseEntity.status(200).cacheControl(CacheControl.noStore()).body(ContentDtos.Version.from(result));
+    }
     @PostMapping("/files/{fileId}/versions")
     public ResponseEntity<ContentDtos.Version> createVersion(@CurrentUser UUID userId, @PathVariable UUID fileId, @RequestBody(required = false) ContentDtos.NamedVersion body, HttpServletRequest request) {
         var result = service.createVersion(userId, fileId, body == null ? null : body.internal(), new Conditions(null, null, null));

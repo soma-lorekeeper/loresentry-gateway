@@ -240,10 +240,12 @@ CSRF를 통과하면 세션 쿠키 삭제 헤더를 발급하고 폐기 확인 �
 | `PUT /setting-check-findings/{fid}/verdict` | `verdict`(`INTENDED`·`NOT_CONFLICT`)·`reason` | `200`, 항목 |
 | `DELETE /setting-check-findings/{fid}/verdict` | — | `200`, `verdict`가 `null`인 항목 |
 
-- 점검은 `id`·`project_id`·`document_id`·`document_title`·`revision_no`·`status`(`RUNNING`·`DONE`·`FAILED`·`CANCELLED`)·
+- 점검은 `id`·`project_id`·`document_id`·`document_title`·`revision_no`·`version_id`·`status`(`RUNNING`·`DONE`·`FAILED`·`CANCELLED`)·
   `stage`(`READING`·`FINDING`·`JUDGING`·`null`)·`created_at`·`finished_at`·`read`·`counts`·`failure_code`다.
   `read`는 `manuscripts`·`from_ordinal`·`to_ordinal`·`settings`·`core_facts`, `counts`는 `open`·`intended`·`not_conflict`다.
   `findings`는 단건 조회에만 있고 시작·요약·목록 응답에는 키가 없다.
+- `version_id`는 점검이 읽은 원고 버전이며 `GET /files/{document_id}/versions/{version_id}`로 그 원고를 연다.
+  버전을 남기기 전의 점검은 `null`이며, ai-chat이 키를 보내지 않아도 `null`로 전달한다.
 - 항목은 `id`·`kind`(`SETTING`·`MANUSCRIPT`)·`core`·`confidence`(`HIGH`·`LOW`)·`explanation`·`quote`·`quote_focus`·`source`·`verdict`·`reason`,
   `source`는 `document_id`·`title`·`doc_type`·`ordinal`·`quote`·`quote_focus`다. 값이 `null`이어도 키를 유지한다.
   `quote_focus`는 같은 객체의 `quote` 안에서 모순을 담은 구절이며 `null`일 수 있다. ai-chat이 키를 보내지 않으면 `null`로 전달한다.
