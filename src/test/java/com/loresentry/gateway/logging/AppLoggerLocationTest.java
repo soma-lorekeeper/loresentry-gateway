@@ -38,6 +38,8 @@ class AppLoggerLocationTest {
     static final class SampleRepository {
         // 람다·익명 클래스 안에서 찍어도 바깥 클래스의 레이어가 나와야 한다
         void read() { Supplier<String> read = () -> { AppLogger.current().info("sample read"); return "x"; }; read.get(); }
+        // 람다 안의 람다도 감싼 메서드 이름(stream)이 나와야 한다
+        void stream() { Runnable outer = () -> { Runnable inner = () -> AppLogger.current().info("sample stream"); inner.run(); }; outer.run(); }
     }
 
     @Test
@@ -51,6 +53,16 @@ class AppLoggerLocationTest {
         assertThat(pairs()).containsEntry("log.layer", "client");
         new SampleRepository().read();
         assertThat(pairs()).containsEntry("log.layer", "repository");
+    }
+
+    @Test
+    void lambdasReportTheEnclosingMethod() {
+        // javac가 만든 lambda$read$0이 아니라 람다를 감싼 메서드 이름이 log.origin.function에 들어간다
+        new SampleRepository().read();
+        assertThat(pairs()).containsEntry("log.origin.function", "read").containsEntry("log.layer", "repository");
+        new SampleRepository().stream();
+        assertThat(pairs()).containsEntry("log.origin.function", "stream");
+        assertThat(events.list.getLast().getLoggerName()).endsWith("AppLoggerLocationTest$SampleRepository");
     }
 
     @Test

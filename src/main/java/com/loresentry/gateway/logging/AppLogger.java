@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import io.micrometer.context.ContextRegistry;
 import io.micrometer.context.ThreadLocalAccessor;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,12 @@ public final class AppLogger {
     /** 바인딩이 없을 때(기동, 프레임워크 콜백) 쓰는 객체. trace는 그때 열려 있는 span이 있으면 그 값을 쓴다. */
     private static final AppLogger DETACHED = new AppLogger(null, null, null, List.of(), null, List.of());
     private static final StackWalker WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+    /**
+     * javac가 람다 본문으로 만드는 메서드 이름: lambda$<람다를 감싼 메서드>$<번호>(예: lambda$send$3).
+     * 람다 안에서 찍은 줄의 log.origin.function에는 가운데의 감싼 메서드 이름을 넣는다. 람다 안의 람다도 javac가 같은 모양으로 만든다.
+     * 생성자 안 람다는 new, static 초기화 블록 안 람다는 static이 나온다.
+     */
+    private static final Pattern LAMBDA_METHOD = Pattern.compile("lambda\\$(.+)\\$\\d+");
     /** 클래스 이름 끝 → log.layer. 위에서부터 맞춰 본다(LOG_SCHEMA.md 5절 표와 같다). */
     private static final List<Map.Entry<String, String>> LAYER_SUFFIXES = List.of(
             Map.entry("Controller", "controller"), Map.entry("Service", "service"), Map.entry("Repository", "repository"),
@@ -201,7 +209,11 @@ public final class AppLogger {
             LoggingEventBuilder event = logger.atLevel(level).setMessage(message);
             if (caller != null) {
                 String[] location = LOCATION.get(caller.getDeclaringClass());
-                event = event.addKeyValue("log.origin.function", caller.getMethodName())
+                // 람다 본문이면 javac가 붙인 이름 대신 람다를 감싼 메서드 이름을 쓴다
+                String function = caller.getMethodName();
+                Matcher lambda = LAMBDA_METHOD.matcher(function);
+                if (lambda.matches()) function = lambda.group(1);
+                event = event.addKeyValue("log.origin.function", function)
                         .addKeyValue("log.layer", location[0]).addKeyValue("log.package", location[1]);
             }
             for (String tag : tags) event = event.addMarker(MarkerFactory.getMarker(tag));
