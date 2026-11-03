@@ -173,6 +173,7 @@ public class ChatApiClient {
             request.setHeader("X-User-Id", Objects.requireNonNull(userId).toString());
             request.setHeader("Accept", "text/event-stream, application/json");
             profile(profile, request::setHeader);
+            stream.trace(request::setHeader);
             request.setEntity(new ByteArrayEntity(JSON.writeValueAsBytes(body), ContentType.APPLICATION_JSON));
         } catch (JacksonException | IllegalArgumentException | NullPointerException failure) {
             throw ChatCallFailure.invalid();

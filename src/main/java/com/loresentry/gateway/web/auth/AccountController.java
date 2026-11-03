@@ -10,12 +10,19 @@ import com.loresentry.gateway.application.AuthOperationFailure;
 import com.loresentry.gateway.client.SupportedLocale;
 import com.loresentry.gateway.client.auth.AuthData;
 import com.loresentry.gateway.client.content.ContentData;
+import com.loresentry.gateway.logging.AppLogger;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import com.loresentry.gateway.security.CurrentUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 로그인한 사용자 자신의 계정(조회·이름·언어·온보딩·유입 경로·탈퇴)을 다루는 컨트롤러.
+ *
+ * <p>각 핸들러의 첫 줄은 진입 로그다. 대상은 늘 자기 계정이라 SessionFilter가 붙이는 user.id 말고 남길 ID가 없다.
+ * 표시 이름, 이메일, 언어, 유입 경로, 탈퇴 확인 이메일·설문은 개인정보라 남기지 않는다.
+ */
 @RestController
 public class AccountController {
     public record Update(@JsonProperty("display_name") String displayName) {}
@@ -36,27 +43,31 @@ public class AccountController {
         this.accounts=accounts;this.deletions=deletions;this.cookies=cookies;
     }
     @GetMapping("/auth/users/me")
-    public ResponseEntity<Account> get(@CurrentUser UUID user) {return response(accounts.get(user));}
+    public ResponseEntity<Account> get(@CurrentUser UUID user) {AppLogger.current().info("account get requested");return response(accounts.get(user));}
     @PatchMapping("/auth/users/me")
-    public ResponseEntity<Account> update(@CurrentUser UUID user,@RequestBody Update input) {return response(accounts.update(user,input.displayName()));}
+    public ResponseEntity<Account> update(@CurrentUser UUID user,@RequestBody Update input) {AppLogger.current().info("account update requested");return response(accounts.update(user,input.displayName()));}
     @PutMapping("/auth/users/me/locale")
     public ResponseEntity<Account> updateLocale(@CurrentUser UUID user,@RequestBody LocaleUpdate input) {
+        AppLogger.current().info("account locale update requested");
         if(input==null||!SupportedLocale.valid(input.locale())) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         return response(accounts.updateLocale(user,input.locale()));
     }
     @PutMapping("/auth/users/me/onboarding")
     public ResponseEntity<Void> completeOnboarding(@CurrentUser UUID user) {
+        AppLogger.current().info("account onboarding complete requested");
         accounts.completeOnboarding(user);
         return ResponseEntity.noContent().header("Cache-Control","no-store").build();
     }
     @PutMapping("/auth/users/me/acquisition")
     public ResponseEntity<Void> recordAcquisition(@CurrentUser UUID user,@RequestBody AuthData.Acquisition input) {
+        AppLogger.current().info("account acquisition record requested");
         if(input==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         accounts.recordAcquisition(user,input);
         return ResponseEntity.noContent().header("Cache-Control","no-store").build();
     }
     @PostMapping("/auth/users/me/deletion")
     public ResponseEntity<Void> delete(@CurrentUser UUID user,@RequestBody Deletion input,HttpServletRequest request,HttpServletResponse response) {
+        AppLogger.current().info("account delete requested");
         if(input==null||input.confirmationEmail()==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         var survey=input.survey()==null?null:new ContentData.WithdrawalSurvey(input.survey().reasons(),input.survey().comment());
         deletions.delete(user,input.confirmationEmail(),survey);

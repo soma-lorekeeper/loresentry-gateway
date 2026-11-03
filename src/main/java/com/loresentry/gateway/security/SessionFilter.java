@@ -1,6 +1,7 @@
 package com.loresentry.gateway.security;
 
 import com.loresentry.gateway.config.CookieSettings;
+import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.web.auth.AuthCookies;
 import com.loresentry.gateway.web.auth.SessionCookieResponse;
 import jakarta.servlet.*;
@@ -50,7 +51,8 @@ public final class SessionFilter extends OncePerRequestFilter {
             @Override public Cookie[] getCookies(){return null;}
         };
         sanitized.setAttribute(USER_ATTRIBUTE,user);
-        try { chain.doFilter(sanitized,renewed); }
+        // 세션을 확인한 뒤부터는 이 요청의 모든 로그 줄에 user.id가 붙는다
+        try (var bound=AppLogger.bind(AppLogger.current().withUser(user))) { chain.doFilter(sanitized,renewed); }
         finally { renewed.finish(); }
     }
 }

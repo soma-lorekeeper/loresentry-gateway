@@ -1,8 +1,11 @@
 package com.loresentry.gateway.web.chat;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loresentry.gateway.application.ChatNotEnabled;
 import com.loresentry.gateway.client.chat.ChatCallFailure;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -12,12 +15,23 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+/**
+ * AI 채팅·설정 검사 요청의 실패를 브라우저용 오류 본문으로 바꾼다.
+ *
+ * <p>실패마다 {@link #error}에서 실패 이유를 결과 줄(request completed)에 맡기고, 본문에 trace_id를 싣는다.
+ * trace_id는 문의 받은 값을 Kibana에서 바로 찾는 trace ID다. 추적이 없으면(trace 배선이 없는 테스트) null이라 본문에서 빠진다.
+ */
 @RestControllerAdvice(assignableTypes = {ChatController.class, SettingCheckController.class})
 public class ChatExceptionHandler {
-    record Error(String code, String message, @JsonProperty("next_action") String nextAction) {}
+    record Error(String code, String message, @JsonProperty("next_action") String nextAction,
+                 @JsonProperty("trace_id") @JsonInclude(JsonInclude.Include.NON_NULL) String traceId) {}
 
     @ExceptionHandler(ChatCallFailure.class)
-    ResponseEntity<Error> chat(ChatCallFailure failure) { return error(failure.status(), failure.code(), failure.nextAction()); }
+    ResponseEntity<Error> chat(ChatCallFailure failure) {
+        // 잘못된 응답·연결 실패는 gateway가 붙인 code다. 그 밖의 code는 ai-chat이 오류 본문으로 돌려준 값이라 error.code에도 남긴다
+        boolean classified = "UPSTREAM_INVALID_RESPONSE".equals(failure.code()) || "AI_CHAT_UNAVAILABLE".equals(failure.code());
+        return error(failure.status(), failure.code(), failure.nextAction(), classified ? null : failure.code());
+    }
     @ExceptionHandler(ChatNotEnabled.class)
     ResponseEntity<Error> disabled() { return error(403, "CHAT_NOT_ENABLED", "NONE"); }
     @ExceptionHandler({HttpMessageNotReadableException.class, MissingServletRequestParameterException.class})
@@ -34,8 +48,17 @@ public class ChatExceptionHandler {
     }
 
     private static ResponseEntity<Error> error(int status, String code, String nextAction) {
+        return error(status, code, nextAction, null);
+    }
+    /**
+     * 오류 본문을 만들고 처리한 실패의 이유를 결과 줄에 맡긴다. 예외 메시지는 싣지 않는다. 상태·레벨은 결과 줄이 응답에서 정한다.
+     *
+     * @param upstream ai-chat이 오류 본문으로 돌려준 code(error.code). gateway가 정한 실패면 null이라 줄에서 빠진다
+     */
+    private static ResponseEntity<Error> error(int status, String code, String nextAction, String upstream) {
+        AppLogger.current().addToOutcome(LogField.errorType(code), LogField.errorCode(upstream));
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).cacheControl(CacheControl.noStore())
-                .body(new Error(code, message(code), nextAction));
+                .body(new Error(code, message(code), nextAction, AppLogger.current().traceId()));
     }
 
     private static String message(String code) {
