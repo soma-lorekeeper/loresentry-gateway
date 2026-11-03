@@ -1,5 +1,6 @@
 package com.loresentry.gateway.client.session;
 
+import com.loresentry.gateway.logging.LogLayer;
 import com.loresentry.gateway.application.SessionId;
 import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.logging.LogField;
@@ -26,6 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
  * 이 실패는 SessionFilter에서 SESSION_UNAVAILABLE(503)이 되고, 그 결과 줄(request completed)만으로는 원인을 알 수 없기 때문이다.
  * 세션이 없거나 만료된 경우(INVALID)는 정상적인 거절이라 남기지 않는다. 세션 ID·키 값은 인증 수단이라 남기지 않는다.
  */
+// log.layer: 세션 저장소(Valkey)를 읽고 연장하므로 repository 레이어다(클래스 이름 끝 규칙에 맞지 않아 직접 지정)
+@LogLayer("repository")
 public final class OpaqueSessionReader {
     public record VerifiedSession(UUID userId, Instant expiresAt) {}
     private static final String SCRIPT = script();
