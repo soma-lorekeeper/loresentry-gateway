@@ -1,20 +1,24 @@
 package com.loresentry.gateway.web.auth;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.loresentry.gateway.client.SupportedLocale;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loresentry.gateway.application.*;
 import com.loresentry.gateway.config.CookieSettings;
 import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
+import java.util.Set;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * 첫 로그인 때 약관을 보여 주고 동의를 받는 컨트롤러. 동의 쿠키(__Host-ls_consent)로 로그인 중인 사람을 찾는다.
  *
- * <p>각 핸들러의 첫 줄은 진입 로그다. 아직 세션이 없어 user.id도 없고, 동의 요청 ID·약관 버전·locale은 남기지 않는다.
+ * <p>각 핸들러의 첫 줄은 진입 로그다. 아직 세션이 없어 user.id도 없고, 동의 요청 ID·약관 버전은 남기지 않는다.
+ * locale은 허용 목록 안의 코드만 남긴다.
  */
 @RestController
 public final class TermsController {
@@ -29,7 +33,7 @@ public final class TermsController {
 
     @GetMapping("/auth/terms")
     public ResponseEntity<Terms> query(@RequestParam(name="locale",required=false) String locale,HttpServletRequest request,HttpServletResponse response) {
-        AppLogger.current().info("terms get requested");
+        AppLogger.current().info("terms get requested",LogField.code("locale",locale,SupportedLocale.VALUES));
         try {
             var value=terms.query(credential(request),locale);
             return ResponseEntity.ok().header("Cache-Control","no-store").body(new Terms(value.termsVersionId(),value.version(),value.title(),value.content(),value.effectiveAt(),value.expiresAt(),value.locale()));

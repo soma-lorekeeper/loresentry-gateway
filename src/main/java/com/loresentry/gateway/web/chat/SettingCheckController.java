@@ -1,5 +1,6 @@
 package com.loresentry.gateway.web.chat;
 
+import com.loresentry.gateway.client.chat.SettingCheckData;
 import java.util.UUID;
 import com.loresentry.gateway.application.SettingCheckService;
 import com.loresentry.gateway.logging.AppLogger;
@@ -12,7 +13,8 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 브라우저의 설정 검사 요청을 ai-chat으로 넘기는 컨트롤러.
  *
- * <p>각 핸들러의 첫 줄은 진입 로그다. 프로젝트·문서·검사 실행·발견 항목 UUID만 남기고, 요청 본문(판정 사유 등)은 남기지 않는다.
+ * <p>각 핸들러의 첫 줄은 진입 로그다. 프로젝트·문서·검사 실행·발견 항목 UUID는 전용 필드로 남긴다. 판정(verdict)은 허용 목록 안의
+ * 코드만, 판정 사유는 LogField가 가려 길이만 남긴다.
  */
 @RestController
 public class SettingCheckController {
@@ -53,7 +55,8 @@ public class SettingCheckController {
     }
     @PutMapping("/setting-check-findings/{findingId}/verdict")
     public ResponseEntity<SettingCheckDtos.Finding> setVerdict(@CurrentUser UUID userId, @PathVariable UUID findingId, @RequestBody SettingCheckDtos.Verdict body) {
-        AppLogger.current().info("setting check verdict set requested", LogField.settingCheckFindingId(findingId));
+        AppLogger.current().info("setting check verdict set requested", LogField.settingCheckFindingId(findingId),
+                LogField.code("verdict", body == null ? null : body.verdict(), SettingCheckData.VERDICTS), LogField.param("reason", body == null ? null : body.reason()));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SettingCheckDtos.Finding.from(service.setVerdict(userId, findingId, body == null ? null : body.internal())));
     }
     @DeleteMapping("/setting-check-findings/{findingId}/verdict")

@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import com.loresentry.gateway.client.SupportedLocale;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ContentType;
@@ -107,66 +109,104 @@ public class ChatApiClient {
     }
 
     public ChatData.Availability availability(UUID userId, UUID projectId) {
+        AppLogger.current().info("ai-chat chat availability get call", LogField.projectId(projectId));
         return call(HttpMethod.GET, "/projects/{projectId}/chat/availability", Map.of("projectId", projectId), userId, null, null, ChatData.Availability.class, 200);
     }
     public ChatData.Sessions sessions(UUID userId, UUID projectId) {
+        AppLogger.current().info("ai-chat chat session list call", LogField.projectId(projectId));
         return call(HttpMethod.GET, "/projects/{projectId}/chat/sessions", Map.of("projectId", projectId), userId, null, null, ChatData.Sessions.class, 200);
     }
     public ChatData.Session createSession(UUID userId, UUID projectId, ChatData.Profile profile) {
+        // 프로필의 표시 이름은 개인정보라 남기지 않는다. locale만 허용 목록으로 거른다
+        AppLogger.current().info("ai-chat chat session create call", LogField.projectId(projectId),
+                LogField.code("locale", profile == null ? null : profile.locale(), SupportedLocale.VALUES));
         return call(HttpMethod.POST, "/projects/{projectId}/chat/sessions", Map.of("projectId", projectId), userId, profile, null, ChatData.Session.class, 201);
     }
     public ChatData.SearchHits search(UUID userId, UUID projectId, String query) {
+        AppLogger.current().info("ai-chat chat search call", LogField.projectId(projectId), LogField.param("query", query));
         return call(HttpMethod.GET, "/projects/{projectId}/chat/search?q={query}", Map.of("projectId", projectId, "query", query == null ? "" : query), userId, null, null, ChatData.SearchHits.class, 200);
     }
     public ChatData.Session renameSession(UUID userId, UUID sessionId, ChatData.Rename body) {
+        AppLogger.current().info("ai-chat chat session rename call", LogField.chatSessionId(sessionId),
+                LogField.param("title", body == null ? null : body.title()));
         return call(HttpMethod.PATCH, "/chat/sessions/{sessionId}", Map.of("sessionId", sessionId), userId, null, body, ChatData.Session.class, 200);
     }
     public void deleteSession(UUID userId, UUID sessionId) {
+        AppLogger.current().info("ai-chat chat session delete call", LogField.chatSessionId(sessionId));
         call(HttpMethod.DELETE, "/chat/sessions/{sessionId}", Map.of("sessionId", sessionId), userId, null, null, Void.class, 204);
     }
     public ChatData.Usage usage(UUID userId) {
+        AppLogger.current().info("ai-chat chat usage get call");
         return call(HttpMethod.GET, "/chat/usage", Map.of(), userId, null, null, ChatData.Usage.class, 200);
     }
     public ChatData.Messages messages(UUID userId, UUID sessionId) {
+        AppLogger.current().info("ai-chat chat message list call", LogField.chatSessionId(sessionId));
         return call(HttpMethod.GET, "/chat/sessions/{sessionId}/messages", Map.of("sessionId", sessionId), userId, null, null, ChatData.Messages.class, 200);
     }
     public void cancel(UUID userId, UUID sessionId) {
+        AppLogger.current().info("ai-chat chat answer cancel call", LogField.chatSessionId(sessionId));
         call(HttpMethod.POST, "/chat/sessions/{sessionId}/cancel", Map.of("sessionId", sessionId), userId, null, null, Void.class, 204);
     }
     public SettingCheckData.Run startSettingCheck(UUID userId, UUID projectId, SettingCheckData.Start body, ChatData.Profile profile) {
+        // 검사할 문서는 이번 검사의 대상이라 전용 필드(document_id)로 남긴다. 표시 이름은 남기지 않는다
+        AppLogger.current().info("ai-chat setting check start call", LogField.projectId(projectId),
+                LogField.documentId(body == null ? null : body.documentId()),
+                LogField.code("locale", profile == null ? null : profile.locale(), SupportedLocale.VALUES));
         return call(HttpMethod.POST, "/projects/{projectId}/setting-checks", Map.of("projectId", projectId), userId, profile, body, SettingCheckData.Run.class, 202);
     }
     public SettingCheckData.Summary settingCheckSummary(UUID userId, UUID projectId) {
+        AppLogger.current().info("ai-chat setting check summary get call", LogField.projectId(projectId));
         return call(HttpMethod.GET, "/projects/{projectId}/setting-checks/summary", Map.of("projectId", projectId), userId, null, null, SettingCheckData.Summary.class, 200);
     }
     public SettingCheckData.Runs settingChecks(UUID userId, UUID projectId, UUID documentId) {
+        AppLogger.current().info("ai-chat setting check list call", LogField.projectId(projectId), LogField.documentId(documentId));
         return call(HttpMethod.GET, "/projects/{projectId}/setting-checks?document_id={documentId}", Map.of("projectId", projectId, "documentId", documentId), userId, null, null, SettingCheckData.Runs.class, 200);
     }
     public SettingCheckData.Decisions settingCheckVerdicts(UUID userId, UUID projectId) {
+        AppLogger.current().info("ai-chat setting check verdict list call", LogField.projectId(projectId));
         return call(HttpMethod.GET, "/projects/{projectId}/setting-checks/verdicts", Map.of("projectId", projectId), userId, null, null, SettingCheckData.Decisions.class, 200);
     }
     public SettingCheckData.Run settingCheck(UUID userId, UUID runId) {
+        AppLogger.current().info("ai-chat setting check get call", LogField.settingCheckRunId(runId));
         var run = call(HttpMethod.GET, "/setting-checks/{runId}", Map.of("runId", runId), userId, null, null, SettingCheckData.Run.class, 200);
         if (run.findings() == null) throw ChatCallFailure.invalid();
         return run;
     }
     public void cancelSettingCheck(UUID userId, UUID runId) {
+        AppLogger.current().info("ai-chat setting check cancel call", LogField.settingCheckRunId(runId));
         call(HttpMethod.POST, "/setting-checks/{runId}/cancel", Map.of("runId", runId), userId, null, null, Void.class, 204);
     }
     public SettingCheckData.Finding setSettingCheckVerdict(UUID userId, UUID findingId, SettingCheckData.Verdict body) {
+        // 판정은 정해 둔 낱말이라 그대로, 사유는 사용자가 쓴 글이라 길이만 남긴다
+        AppLogger.current().info("ai-chat setting check verdict set call", LogField.settingCheckFindingId(findingId),
+                LogField.code("verdict", body == null ? null : body.verdict(), SettingCheckData.VERDICTS),
+                LogField.param("reason", body == null ? null : body.reason()));
         return call(HttpMethod.PUT, "/setting-check-findings/{findingId}/verdict", Map.of("findingId", findingId), userId, null, body, SettingCheckData.Finding.class, 200);
     }
     public SettingCheckData.Finding clearSettingCheckVerdict(UUID userId, UUID findingId) {
+        AppLogger.current().info("ai-chat setting check verdict clear call", LogField.settingCheckFindingId(findingId));
         return call(HttpMethod.DELETE, "/setting-check-findings/{findingId}/verdict", Map.of("findingId", findingId), userId, null, null, SettingCheckData.Finding.class, 200);
     }
     public void deleteUserData(UUID userId) {
+        AppLogger.current().info("ai-chat user data delete call");
         call(HttpMethod.DELETE, "/users/me/data", Map.of(), userId, null, null, Void.class, 204);
     }
     public void deleteProjectData(UUID userId, UUID projectId) {
+        AppLogger.current().info("ai-chat project data delete call", LogField.projectId(projectId));
         call(HttpMethod.DELETE, "/projects/{projectId}/chat/data", Map.of("projectId", projectId), userId, null, null, Void.class, 204);
     }
 
     public ChatStream send(UUID userId, UUID sessionId, ChatData.SendInput body, ChatData.Profile profile) {
+        // 질문·인용문은 길이만 남긴다. 보고 있던 문서·인용한 문서·다시 묻는 질문은 참조만 하므로 역할을 붙인 param이다
+        AppLogger.current().info("ai-chat chat message send call", LogField.chatSessionId(sessionId),
+                LogField.param("content", body == null ? null : body.content()),
+                LogField.code("intent", body == null ? null : body.intent(), ChatData.INTENTS),
+                LogField.param("focus_file_id", body == null ? null : body.focusFileId()),
+                LogField.param("quote_file_id", body == null || body.quote() == null ? null : body.quote().fileId()),
+                LogField.param("quote_text", body == null || body.quote() == null ? null : body.quote().text()),
+                LogField.param("replaced_message_id", body == null ? null : body.replaces()),
+                LogField.param("client_message_id", body == null ? null : body.clientMessageId()),
+                LogField.code("locale", profile == null ? null : profile.locale(), SupportedLocale.VALUES));
         HttpPost request;
         try {
             request = new HttpPost(stream.uri("/chat/sessions/{sessionId}/messages", Map.of("sessionId", Objects.requireNonNull(sessionId))));

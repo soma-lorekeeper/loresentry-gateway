@@ -1,6 +1,7 @@
 package com.loresentry.gateway.application;
 
 import com.loresentry.gateway.client.auth.*;
+import com.loresentry.gateway.client.SupportedLocale;
 import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.logging.LogField;
 import java.time.Clock;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Service;
 /**
  * 첫 로그인의 약관 조회·동의. 동의하면 auth가 세션을 발급한다.
  *
- * <p>실패와 동의 완료를 한 줄씩 남긴다. 동의 요청 ID·약관 버전·세션 ID는 남기지 않는다.
+ * <p>실패와 동의 완료를 한 줄씩 남긴다. 동의 요청 ID·약관 버전·세션 ID는 남기지 않는다. locale은 허용 목록 안의 코드만 남긴다.
  */
 @Service
 public final class TermsService {
@@ -19,12 +20,14 @@ public final class TermsService {
     private final Clock clock;
     public TermsService(AuthApiClient client,Clock clock){this.client=client;this.clock=clock;}
     public AuthData.Terms query(ConsentId id,String locale) {
+        AppLogger.current().info("terms get",LogField.code("locale",locale,SupportedLocale.VALUES));
         try {
             var result=client.terms(id.value(),locale);
             validExpiry(result.expiresAt());return result;
         } catch(AuthCallFailure failure){AppLogger.current().warn("terms lookup failed",LogField.errorType(failure.code()));throw mapped(failure);}
     }
     public LoginService.Session accept(ConsentId id,String version) {
+        AppLogger.current().info("terms accept");
         try {
             if(!UUID.fromString(version).toString().equals(version))throw new IllegalArgumentException();
         } catch(RuntimeException invalid){

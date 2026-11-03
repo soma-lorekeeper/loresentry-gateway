@@ -43,6 +43,8 @@ public final class OpaqueSessionReader {
     }
 
     public VerifiedSession verifyAndExtend(SessionId id) {
+        // 세션 ID와 그 hash는 인증 수단이라 남기지 않는다
+        AppLogger.current().info("session store check");
         long started = System.nanoTime();
         long deadline = started + TimeUnit.MILLISECONDS.toNanos(500);
         // 실패 로그에 남길 단계. 연결 → 세션 키 GET → 원자적 재확인·연장(EVAL) → 결과 검사 순서다

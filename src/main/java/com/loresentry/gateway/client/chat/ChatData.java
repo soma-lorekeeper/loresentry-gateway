@@ -2,6 +2,7 @@ package com.loresentry.gateway.client.chat;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -10,6 +11,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 public final class ChatData {
     private ChatData() {}
+    /** 질문 의도. ChatValidation이 응답을 검사하고, 진입 로그가 intent 값을 거르는 데 쓴다(LogField.code). */
+    public static final Set<String> INTENTS = Set.of("ask", "explain", "related", "flow");
     public record Profile(String locale, String displayName) {
         @Override public String toString() { return "Profile[redacted]"; }
     }

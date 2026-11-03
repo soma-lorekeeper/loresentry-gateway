@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.logging.LogLayer;
+import com.loresentry.gateway.logging.SkipEntryLog;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -25,7 +26,8 @@ import com.tngtech.archunit.library.GeneralCodingRules;
  * <ul>
  *   <li>로그는 AppLogger로만 찍는다. logging 패키지 밖의 코드는 로깅 라이브러리와 표준 출력을 직접 쓰지 못한다.</li>
  *   <li>레이어 클래스의 모든 public 메서드는 AppLogger의 info·warn·error를 직접 부른다. 그래서 trace 하나를 시간 순으로 놓으면
- *       controller → service → client 흐름이 줄 단위로 보인다. 한 줄로 넘기는 메서드도 빠지지 않는다.</li>
+ *       controller → service → client 흐름이 줄 단위로 보인다. 한 줄로 넘기는 메서드도 빠지지 않는다.
+ *       여러 번 불리는 getter처럼 이유를 적은 {@link SkipEntryLog}가 붙은 메서드만 뺀다.</li>
  * </ul>
  */
 @AnalyzeClasses(packages = "com.loresentry.gateway", importOptions = ImportOption.DoNotIncludeTests.class)
@@ -51,6 +53,7 @@ class LoggingArchitectureTest {
     static final ArchRule everyLayerMethodLogs = methods()
             .that().arePublic().and().areNotStatic()
             .and().areDeclaredInClassesThat(layerClasses())
+            .and().areNotAnnotatedWith(SkipEntryLog.class)
             .should(callAppLogger())
             .because("레이어 클래스의 모든 public 메서드는 첫 줄에 진입 로그를 남긴다(LOG_SCHEMA.md 5절)");
 

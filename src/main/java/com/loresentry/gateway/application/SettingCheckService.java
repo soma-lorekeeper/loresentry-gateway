@@ -17,14 +17,23 @@ public class SettingCheckService {
     public SettingCheckService(ChatApiClient client, AccountService accounts, ChatAllowlist allowlist) {
         this.client = client; this.accounts = accounts; this.allowlist = allowlist;
     }
-    public SettingCheckData.Run start(UUID userId, UUID projectId, SettingCheckData.Start body) { enabled(userId); return client.startSettingCheck(userId, projectId, body, locale(userId)); }
-    public SettingCheckData.Summary summary(UUID userId, UUID projectId) { enabled(userId); return client.settingCheckSummary(userId, projectId); }
-    public SettingCheckData.Runs runs(UUID userId, UUID projectId, UUID documentId) { enabled(userId); return client.settingChecks(userId, projectId, documentId); }
-    public SettingCheckData.Decisions verdicts(UUID userId, UUID projectId) { enabled(userId); return client.settingCheckVerdicts(userId, projectId); }
-    public SettingCheckData.Run run(UUID userId, UUID runId) { enabled(userId); return client.settingCheck(userId, runId); }
-    public void cancel(UUID userId, UUID runId) { enabled(userId); client.cancelSettingCheck(userId, runId); }
-    public SettingCheckData.Finding setVerdict(UUID userId, UUID findingId, SettingCheckData.Verdict body) { enabled(userId); return client.setSettingCheckVerdict(userId, findingId, body); }
-    public SettingCheckData.Finding clearVerdict(UUID userId, UUID findingId) { enabled(userId); return client.clearSettingCheckVerdict(userId, findingId); }
+    public SettingCheckData.Run start(UUID userId, UUID projectId, SettingCheckData.Start body) {
+        AppLogger.current().info("setting check start", LogField.projectId(projectId), LogField.documentId(body == null ? null : body.documentId()));
+        enabled(userId);
+        return client.startSettingCheck(userId, projectId, body, locale(userId));
+    }
+    public SettingCheckData.Summary summary(UUID userId, UUID projectId) { AppLogger.current().info("setting check summary get", LogField.projectId(projectId)); enabled(userId); return client.settingCheckSummary(userId, projectId); }
+    public SettingCheckData.Runs runs(UUID userId, UUID projectId, UUID documentId) { AppLogger.current().info("setting check list", LogField.projectId(projectId), LogField.documentId(documentId)); enabled(userId); return client.settingChecks(userId, projectId, documentId); }
+    public SettingCheckData.Decisions verdicts(UUID userId, UUID projectId) { AppLogger.current().info("setting check verdict list", LogField.projectId(projectId)); enabled(userId); return client.settingCheckVerdicts(userId, projectId); }
+    public SettingCheckData.Run run(UUID userId, UUID runId) { AppLogger.current().info("setting check get", LogField.settingCheckRunId(runId)); enabled(userId); return client.settingCheck(userId, runId); }
+    public void cancel(UUID userId, UUID runId) { AppLogger.current().info("setting check cancel", LogField.settingCheckRunId(runId)); enabled(userId); client.cancelSettingCheck(userId, runId); }
+    public SettingCheckData.Finding setVerdict(UUID userId, UUID findingId, SettingCheckData.Verdict body) {
+        AppLogger.current().info("setting check verdict set", LogField.settingCheckFindingId(findingId), LogField.code("verdict", body == null ? null : body.verdict(), SettingCheckData.VERDICTS),
+                LogField.param("reason", body == null ? null : body.reason()));
+        enabled(userId);
+        return client.setSettingCheckVerdict(userId, findingId, body);
+    }
+    public SettingCheckData.Finding clearVerdict(UUID userId, UUID findingId) { AppLogger.current().info("setting check verdict clear", LogField.settingCheckFindingId(findingId)); enabled(userId); return client.clearSettingCheckVerdict(userId, findingId); }
 
     private void enabled(UUID userId) {
         // 허용 목록(loresentry.chat.allowed-users)에 없는 사용자다. user.id는 SessionFilter가 이미 줄에 붙였다

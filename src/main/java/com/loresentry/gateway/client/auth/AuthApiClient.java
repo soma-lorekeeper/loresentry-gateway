@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.loresentry.gateway.client.SupportedLocale;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -27,37 +29,58 @@ public class AuthApiClient {
             }).build();
     public AuthApiClient(RestClient authApiRestClient){this.client=authApiRestClient;}
     public AuthData.Prepared prepare() {
+        AppLogger.current().info("auth oauth login prepare call");
         return call(HttpMethod.POST,"/auth/oauth/google/prepare",null,new AuthData.Empty(),AuthData.Prepared.class,200,Operation.PREPARE);
     }
     public AuthData.LoginSession callback(AuthData.Callback input) {
+        // 로그인 요청 ID·OAuth code·state·error는 로그인 과정의 비밀 값이라 남기지 않는다
+        AppLogger.current().info("auth oauth login callback call");
         return call(HttpMethod.POST,"/auth/oauth/google/callback",null,input,AuthData.LoginSession.class,200,Operation.CALLBACK);
     }
     public void revokeSession(String id) {
+        // 세션 ID는 인증 수단이라 남기지 않는다
+        AppLogger.current().info("auth session revoke call");
         call(HttpMethod.POST,"/auth/sessions/revoke",null,new AuthData.Session(id),Void.class,204,Operation.SESSION_REVOKE);
     }
     public AuthData.Terms terms(String consentId,String locale) {
+        // 동의 요청 ID는 로그인 과정을 이어 갈 수 있는 값이라 남기지 않는다
+        AppLogger.current().info("auth terms get call",LogField.code("locale",locale,SupportedLocale.VALUES));
         var path=SupportedLocale.valid(locale)?"/auth/terms?locale="+locale:"/auth/terms";
         return call(HttpMethod.GET,path,null,null,AuthData.Terms.class,200,Operation.TERMS,consentId);
     }
     public AuthData.AcceptedTerms acceptTerms(String consentId,String version) {
+        AppLogger.current().info("auth terms accept call",LogField.param("terms_version_id",version));
         return call(HttpMethod.POST,"/auth/terms/accept",null,new AuthData.AcceptTerms(consentId,version),AuthData.AcceptedTerms.class,200,Operation.TERMS);
     }
     public AuthData.Account account(UUID user) {
+        AppLogger.current().info("auth account get call");
         return ownAccount(user,call(HttpMethod.GET,"/auth/users/me",user,null,AuthData.Account.class,200,Operation.ACCOUNT));
     }
     public AuthData.Account updateAccount(UUID user,String displayName) {
+        // 표시 이름은 개인정보라 남기지 않는다
+        AppLogger.current().info("auth account update call");
         return ownAccount(user,call(HttpMethod.PATCH,"/auth/users/me",user,new AuthData.DisplayName(displayName),AuthData.Account.class,200,Operation.ACCOUNT));
     }
     public AuthData.Account updateLocale(UUID user,String locale) {
+        AppLogger.current().info("auth account locale update call",LogField.code("locale",locale,SupportedLocale.VALUES));
         return ownAccount(user,call(HttpMethod.PUT,"/auth/users/me/locale",user,new AuthData.AccountLocale(locale),AuthData.Account.class,200,Operation.ACCOUNT));
     }
     public void completeOnboarding(UUID user) {
+        AppLogger.current().info("auth account onboarding complete call");
         call(HttpMethod.PUT,"/auth/users/me/onboarding",user,null,Void.class,204,Operation.ACCOUNT);
     }
     public void recordAcquisition(UUID user,AuthData.Acquisition acquisition) {
+        // 광고 클릭 ID 값(gclid 등)은 클릭 하나를 특정하므로 남기지 않는다. 나머지 유입 값은 길이만 남는다
+        AppLogger.current().info("auth account acquisition record call",
+                LogField.param("utm_source",acquisition==null?null:acquisition.utmSource()),LogField.param("utm_medium",acquisition==null?null:acquisition.utmMedium()),
+                LogField.param("utm_campaign",acquisition==null?null:acquisition.utmCampaign()),LogField.param("utm_term",acquisition==null?null:acquisition.utmTerm()),
+                LogField.param("utm_content",acquisition==null?null:acquisition.utmContent()),LogField.param("click_id_type",acquisition==null?null:acquisition.clickIdType()),
+                LogField.param("referrer_host",acquisition==null?null:acquisition.referrerHost()),LogField.param("landing_path",acquisition==null?null:acquisition.landingPath()),
+                LogField.param("landed_at",acquisition==null?null:acquisition.landedAt()));
         call(HttpMethod.PUT,"/auth/users/me/acquisition",user,acquisition,Void.class,204,Operation.ACCOUNT);
     }
     public void deleteAccount(UUID user) {
+        AppLogger.current().info("auth account delete call");
         call(HttpMethod.DELETE,"/auth/users/me",user,null,Void.class,204,Operation.ACCOUNT);
     }
     private AuthData.Account ownAccount(UUID user,AuthData.Account account) {

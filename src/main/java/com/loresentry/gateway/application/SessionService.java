@@ -16,6 +16,7 @@ public class SessionService {
      * 결과마다 한 줄 남긴다. 세션 ID는 인증 수단이라 어느 줄에도 남기지 않는다.
      */
     public Revocation revoke(String id) {
+        AppLogger.current().info("session revoke");
         if(id==null) {AppLogger.current().info("session revoke skipped: no session cookie");return Revocation.NOT_REQUESTED;}
         try {new SessionId(id);}
         catch(IllegalArgumentException invalid) {AppLogger.current().warn("session revoke rejected: malformed session id");return Revocation.REJECTED;}

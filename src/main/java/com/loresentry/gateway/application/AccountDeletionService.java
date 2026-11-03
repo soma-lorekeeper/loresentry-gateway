@@ -18,13 +18,16 @@ public class AccountDeletionService {
     private final ContentApiClient content;
     private final ChatApiClient chat;
     public AccountDeletionService(AuthApiClient auth,ContentApiClient content,ChatApiClient chat){this.auth=auth;this.content=content;this.chat=chat;}
-    public void delete(UUID user,String confirmationEmail){delete(user,confirmationEmail,null);}
+    public void delete(UUID user,String confirmationEmail){AppLogger.current().info("account delete");delete(user,confirmationEmail,null);}
     /**
      * 탈퇴 순서: 확인 이메일 대조 → ai-chat 데이터 삭제 → auth 계정 삭제 → (답했으면) 탈퇴 설문 기록.
      * 단계마다 결과를 한 줄 남긴다. 어느 단계에서 멈췄는지 보이게 하기 위해서다. 이메일·설문 내용은 개인정보라 남기지 않는다.
      */
     public void delete(UUID user,String confirmationEmail,ContentData.WithdrawalSurvey survey) {
         var log=AppLogger.current();
+        // 확인 이메일은 남기지 않는다. 설문은 이유 개수와 가린 의견 길이만 남는다
+        log.info("account delete",LogField.param("survey_reasons",survey==null?null:survey.reasons()),
+                LogField.param("survey_comment",survey==null?null:survey.comment()));
         String email;
         try {email=auth.account(user).email();}
         catch(AuthCallFailure failure){log.warn("account deletion stopped: account lookup failed",LogField.errorType(failure.code()));throw failure(failure);}

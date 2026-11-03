@@ -7,6 +7,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.util.DefaultUriBuilderFactory;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.SkipEntryLog;
 
 public abstract class UpstreamClient {
 
@@ -26,6 +28,7 @@ public abstract class UpstreamClient {
         this.restClient = restClient;
     }
 
+    @SkipEntryLog("ProbeService가 대상을 고르고 정렬할 때 여러 번 부르는 getter다. 대상은 그다음 upstream 호출 줄의 url.domain으로 보인다")
     public String name() {
         return name;
     }
@@ -38,14 +41,17 @@ public abstract class UpstreamClient {
     }
 
     public Map<String, Object> describe() {
+        AppLogger.current().info("upstream service describe call");
         return get("/");
     }
 
     public Map<String, Object> health() {
+        AppLogger.current().info("upstream health probe call");
         return get("/health");
     }
 
     public Map<String, Object> databaseHealth() {
+        AppLogger.current().info("upstream database health probe call");
         try {
             return restClient.get()
                     .uri("/health/db")

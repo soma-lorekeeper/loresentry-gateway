@@ -1,5 +1,6 @@
 package com.loresentry.gateway.web;
 import com.loresentry.gateway.application.ProbeService;
+import com.loresentry.gateway.logging.AppLogger;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -9,6 +10,7 @@ public class DbHealthController {
     public DbHealthController(ProbeService probes) { this.probes = probes; }
     @GetMapping("/health/db")
     public ResponseEntity<ProbeService.Health> databaseHealth() {
+        AppLogger.current().info("database health probe requested");
         var result = probes.databaseHealth();
         return ResponseEntity.status("ok".equals(result.status()) ? 200 : 503).body(result);
     }

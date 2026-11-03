@@ -1,6 +1,7 @@
 package com.loresentry.gateway.web.auth;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -11,6 +12,7 @@ import com.loresentry.gateway.client.SupportedLocale;
 import com.loresentry.gateway.client.auth.AuthData;
 import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import com.loresentry.gateway.security.CurrentUser;
@@ -21,7 +23,8 @@ import org.springframework.web.bind.annotation.*;
  * 로그인한 사용자 자신의 계정(조회·이름·언어·온보딩·유입 경로·탈퇴)을 다루는 컨트롤러.
  *
  * <p>각 핸들러의 첫 줄은 진입 로그다. 대상은 늘 자기 계정이라 SessionFilter가 붙이는 user.id 말고 남길 ID가 없다.
- * 표시 이름, 이메일, 언어, 유입 경로, 탈퇴 확인 이메일·설문은 개인정보라 남기지 않는다.
+ * 표시 이름, 이메일, 탈퇴 확인 이메일, 광고 클릭 ID는 개인정보라 가려서도 남기지 않는다. 언어는 허용 목록 안의 코드만,
+ * 유입 경로와 탈퇴 설문은 LogField가 가려 길이·개수만 남긴다.
  */
 @RestController
 public class AccountController {
@@ -48,7 +51,7 @@ public class AccountController {
     public ResponseEntity<Account> update(@CurrentUser UUID user,@RequestBody Update input) {AppLogger.current().info("account update requested");return response(accounts.update(user,input.displayName()));}
     @PutMapping("/auth/users/me/locale")
     public ResponseEntity<Account> updateLocale(@CurrentUser UUID user,@RequestBody LocaleUpdate input) {
-        AppLogger.current().info("account locale update requested");
+        AppLogger.current().info("account locale update requested",LogField.code("locale",input==null?null:input.locale(),SupportedLocale.VALUES));
         if(input==null||!SupportedLocale.valid(input.locale())) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         return response(accounts.updateLocale(user,input.locale()));
     }
@@ -60,14 +63,20 @@ public class AccountController {
     }
     @PutMapping("/auth/users/me/acquisition")
     public ResponseEntity<Void> recordAcquisition(@CurrentUser UUID user,@RequestBody AuthData.Acquisition input) {
-        AppLogger.current().info("account acquisition record requested");
+        AppLogger.current().info("account acquisition record requested",LogField.param("utm_source",input==null?null:input.utmSource()),
+                LogField.param("utm_medium",input==null?null:input.utmMedium()),LogField.param("utm_campaign",input==null?null:input.utmCampaign()),
+                LogField.param("utm_term",input==null?null:input.utmTerm()),LogField.param("utm_content",input==null?null:input.utmContent()),
+                LogField.param("click_id_type",input==null?null:input.clickIdType()),LogField.param("referrer_host",input==null?null:input.referrerHost()),
+                LogField.param("landing_path",input==null?null:input.landingPath()),LogField.param("landed_at",input==null?null:input.landedAt()));
         if(input==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         accounts.recordAcquisition(user,input);
         return ResponseEntity.noContent().header("Cache-Control","no-store").build();
     }
     @PostMapping("/auth/users/me/deletion")
     public ResponseEntity<Void> delete(@CurrentUser UUID user,@RequestBody Deletion input,HttpServletRequest request,HttpServletResponse response) {
-        AppLogger.current().info("account delete requested");
+        AppLogger.current().info("account delete requested",
+                LogField.param("survey_reasons",input==null||input.survey()==null?null:input.survey().reasons()),
+                LogField.param("survey_comment",input==null||input.survey()==null?null:input.survey().comment()));
         if(input==null||input.confirmationEmail()==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         var survey=input.survey()==null?null:new ContentData.WithdrawalSurvey(input.survey().reasons(),input.survey().comment());
         deletions.delete(user,input.confirmationEmail(),survey);
