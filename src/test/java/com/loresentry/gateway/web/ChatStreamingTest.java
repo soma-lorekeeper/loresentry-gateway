@@ -21,14 +21,18 @@ import java.util.concurrent.TimeUnit;
 import com.loresentry.gateway.FakeChatUpstream;
 import com.loresentry.gateway.application.AccountService;
 import com.loresentry.gateway.client.session.OpaqueSessionReader.VerifiedSession;
+import com.loresentry.gateway.logging.RequestLogFilter;
 import com.loresentry.gateway.security.OpaqueSessionVerifier;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
@@ -39,6 +43,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @com.loresentry.gateway.LocalTestEnvironment
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ExtendWith(OutputCaptureExtension.class)
 class ChatStreamingTest {
     static final String SESSION = "A".repeat(43);
     static final UUID WRITER = UUID.fromString("0199a3f2-8c41-7c2a-9f3d-2b7e1c4a5d60");
@@ -93,7 +98,7 @@ class ChatStreamingTest {
     }
 
     @Test
-    void relaysEachEventToTheBrowserWithSseHeadersAndOneRenewedCookie() throws Exception {
+    void relaysEachEventToTheBrowserWithSseHeadersAndOneRenewedCookie(CapturedOutput output) throws Exception {
         var firstEventSeen = new CountDownLatch(1);
         var call = UPSTREAM.expect(exchange -> {
             exchange.startEvents();
@@ -130,6 +135,17 @@ class ChatStreamingTest {
         assertThat(upstream.headers()).doesNotContainKeys("cookie", "origin", "x-ls-csrf");
         var json = JsonMapper.builder().build();
         assertThat(json.readTree(upstream.body())).isEqualTo(json.readTree(BODY));
+        // relay는 MVC 비동기 실행기 스레드에서 돈다. 그 결과 줄에도 이 요청의 trace·사용자가 붙는다(ContextPropagatingTaskDecorator).
+        // 브라우저가 본문 끝을 받기 전에 relay가 이 줄을 찍고 돌아오므로 여기서는 이미 출력돼 있다
+        String traceId = response.headers().firstValue(RequestLogFilter.TRACE_HEADER).orElseThrow();
+        var relayed = output.getOut().lines().filter(line -> line.startsWith("{")).map(json::readTree)
+            .filter(line -> "ai-chat stream relay completed".equals(line.get("message").asString()))
+            .filter(line -> traceId.equals(line.at("/trace/id").asString())).toList();
+        assertThat(relayed).singleElement().satisfies(line -> {
+            assertThat(line.at("/user/id").asString()).isEqualTo(WRITER.toString());
+            assertThat(line.at("/loresentry/result/complete").asBoolean()).isTrue();
+            assertThat(line.at("/loresentry/result/bytes").asLong()).isEqualTo((PHASE + PING + DONE).getBytes(StandardCharsets.UTF_8).length);
+        });
     }
 
     @ParameterizedTest

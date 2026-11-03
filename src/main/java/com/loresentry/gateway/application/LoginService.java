@@ -32,7 +32,7 @@ public class LoginService {
             var response=client.prepare();
             return new Preparation(response.authorizationUrl(),response.loginRequestId(),response.expiresAt(),Result.SUCCESS);
         } catch(AuthCallFailure failure) {
-            AppLogger.current().warn("oauth login prepare failed",LogField.errorType(failure.code()));
+            AppLogger.current().warn("oauth login prepare failed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));
             return new Preparation(null,null,null,result(failure));
         }
     }
@@ -57,7 +57,7 @@ public class LoginService {
             var result=result(failure);
             // 사용자가 Google 화면에서 취소한 것은 정상 흐름이라 info로 남긴다
             if(result==Result.CANCELLED) AppLogger.current().info("oauth login cancelled by user");
-            else AppLogger.current().warn("oauth login callback failed",LogField.errorType(failure.code()));
+            else AppLogger.current().warn("oauth login callback failed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));
             return new CallbackResult(null,result,failure.consumed());
         }
     }

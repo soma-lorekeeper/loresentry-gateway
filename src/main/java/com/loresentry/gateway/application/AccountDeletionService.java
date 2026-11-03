@@ -7,6 +7,7 @@ import com.loresentry.gateway.client.auth.AuthCallFailure;
 import com.loresentry.gateway.client.chat.ChatApiClient;
 import com.loresentry.gateway.client.chat.ChatCallFailure;
 import com.loresentry.gateway.client.content.ContentApiClient;
+import com.loresentry.gateway.client.content.ContentCallFailure;
 import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.logging.LogField;
@@ -30,7 +31,7 @@ public class AccountDeletionService {
                 LogField.param("survey_comment",survey==null?null:survey.comment()));
         String email;
         try {email=auth.account(user).email();}
-        catch(AuthCallFailure failure){log.warn("account deletion stopped: account lookup failed",LogField.errorType(failure.code()));throw failure(failure);}
+        catch(AuthCallFailure failure){log.warn("account deletion stopped: account lookup failed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));throw failure(failure);}
         if(email==null||!normalize(email).equals(normalize(confirmationEmail))) {
             log.warn("account deletion rejected: confirmation email mismatch");
             throw new AuthOperationFailure(400,"ACCOUNT_CONFIRMATION_MISMATCH","NONE");
@@ -40,7 +41,7 @@ public class AccountDeletionService {
         catch(ChatCallFailure failure) {
             log.warn("account deletion stopped: ai-chat data was not deleted",LogField.errorType(failure.code()));
             if("UPSTREAM_INVALID_RESPONSE".equals(failure.code())) throw invalid();
-            throw unavailable();
+            throw unavailable(null);
         }
         log.info("account ai-chat data deleted");
         try {auth.deleteAccount(user);}
@@ -49,7 +50,7 @@ public class AccountDeletionService {
             if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&failure.status()==404&&"USER_NOT_FOUND".equals(failure.code())) {
                 log.warn("account was already deleted in auth");return;
             }
-            log.warn("account deletion stopped: auth account was not deleted",LogField.errorType(failure.code()));
+            log.warn("account deletion stopped: auth account was not deleted",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));
             throw failure(failure);
         }
         log.info("account auth record deleted");
@@ -58,7 +59,11 @@ public class AccountDeletionService {
     private void record(UUID user,ContentData.WithdrawalSurvey survey) {
         if(!answered(survey)) return;
         try {content.recordWithdrawalSurvey(user,survey);AppLogger.current().info("withdrawal survey recorded");}
-        catch(RuntimeException failure){AppLogger.current().warn("withdrawal survey was not recorded",LogField.errorType(failure.getClass().getSimpleName()));}
+        catch(RuntimeException failure){
+            // content가 돌려준 code(또는 gateway가 붙인 분류)는 error.code로 함께 남긴다
+            AppLogger.current().warn("withdrawal survey was not recorded",LogField.errorType(failure.getClass().getName()),
+                    LogField.errorCode(failure instanceof ContentCallFailure contentFailure?contentFailure.code():null));
+        }
     }
     private static boolean answered(ContentData.WithdrawalSurvey survey) {
         if(survey==null) return false;
@@ -70,9 +75,10 @@ public class AccountDeletionService {
     private static AuthOperationFailure failure(AuthCallFailure failure) {
         if(failure.kind()==AuthCallFailure.Kind.INVALID_RESPONSE) return invalid();
         if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&(failure.status()==401||failure.status()==404))
-            return new AuthOperationFailure(failure.status(),failure.code(),failure.nextAction());
-        return unavailable();
+            return new AuthOperationFailure(failure.status(),failure.code(),failure.nextAction(),failure.upstreamCode());
+        return unavailable(failure.upstreamCode());
     }
     private static AuthOperationFailure invalid(){return new AuthOperationFailure(502,"UPSTREAM_INVALID_RESPONSE","NONE");}
-    private static AuthOperationFailure unavailable(){return new AuthOperationFailure(503,"ACCOUNT_DELETION_UNAVAILABLE","RETRY_LATER");}
+    /** @param upstream 결과 줄 error.code에 남길 auth 오류 code. 없으면 null */
+    private static AuthOperationFailure unavailable(String upstream){return new AuthOperationFailure(503,"ACCOUNT_DELETION_UNAVAILABLE","RETRY_LATER",upstream);}
 }

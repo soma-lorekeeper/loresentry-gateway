@@ -1,10 +1,14 @@
 package com.loresentry.gateway.config;
 
 import java.util.List;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.core.Ordered;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.web.cors.DefaultCorsProcessor;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
@@ -29,16 +33,26 @@ public class BrowserCorsConfiguration {
     @Bean
     public FilterRegistrationBean<CorsFilter> browserCorsFilter(CorsConfiguration browserCors) {
         var source=new UrlBasedCorsConfigurationSource();source.registerCorsConfiguration("/**",browserCors);
-        var registration=new FilterRegistrationBean<CorsFilter>(new CorsFilter(source) {
+        var filter=new CorsFilter(source) {
             @Override protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
                     jakarta.servlet.http.HttpServletResponse response, jakarta.servlet.FilterChain chain)
                     throws java.io.IOException, jakarta.servlet.ServletException {
                 if (java.util.Collections.list(request.getHeaders("Origin")).size() > 1) {
+                    // Origin 헤더가 둘 이상이다. 거절 이유를 결과 줄(request completed)에 맡긴다. Origin 값은 남기지 않는다
+                    AppLogger.current().addToOutcome(LogField.errorType("CORS_REJECTED"));
                     response.setStatus(403);response.addHeader("Vary","Origin");return;
                 }
                 super.doFilterInternal(request,response,chain);
             }
+        };
+        // 허용하지 않는 Origin·메서드·헤더를 Spring 기본 처리기가 403으로 거절할 때도 같은 이유를 결과 줄에 맡긴다. 응답은 기본 처리기 그대로다
+        filter.setCorsProcessor(new DefaultCorsProcessor() {
+            @Override protected void rejectRequest(ServerHttpResponse response) throws java.io.IOException {
+                AppLogger.current().addToOutcome(LogField.errorType("CORS_REJECTED"));
+                super.rejectRequest(response);
+            }
         });
+        var registration=new FilterRegistrationBean<CorsFilter>(filter);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE+10);
         return registration;
     }

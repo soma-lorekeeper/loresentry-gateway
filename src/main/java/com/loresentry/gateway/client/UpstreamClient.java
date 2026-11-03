@@ -28,7 +28,7 @@ public abstract class UpstreamClient {
         this.restClient = restClient;
     }
 
-    @SkipEntryLog("ProbeService가 대상을 고르고 정렬할 때 여러 번 부르는 getter다. 대상은 그다음 upstream 호출 줄의 url.domain으로 보인다")
+    @SkipEntryLog("Getter called several times while ProbeService picks and sorts targets. The target shows up as url.domain on the next upstream call line")
     public String name() {
         return name;
     }
@@ -65,6 +65,8 @@ public abstract class UpstreamClient {
     }
 
     protected Map<String, Object> get(String uri) {
+        // describe·health가 공통으로 부르는 GET. 부른 주소는 다음 호출 결과 줄의 url.full로 보인다
+        AppLogger.current().info("upstream get call");
         try {
             return restClient.get()
                     .uri(uri)

@@ -20,7 +20,10 @@ public class SettingCheckService {
     public SettingCheckData.Run start(UUID userId, UUID projectId, SettingCheckData.Start body) {
         AppLogger.current().info("setting check start", LogField.projectId(projectId), LogField.documentId(body == null ? null : body.documentId()));
         enabled(userId);
-        return client.startSettingCheck(userId, projectId, body, locale(userId));
+        var started = client.startSettingCheck(userId, projectId, body, locale(userId));
+        // 새로 시작한 검사는 결과 줄의 전용 필드(setting_check.run_id)로 남긴다
+        AppLogger.current().info("setting check start completed", LogField.projectId(projectId), LogField.settingCheckRunId(started == null ? null : started.id()));
+        return started;
     }
     public SettingCheckData.Summary summary(UUID userId, UUID projectId) { AppLogger.current().info("setting check summary get", LogField.projectId(projectId)); enabled(userId); return client.settingCheckSummary(userId, projectId); }
     public SettingCheckData.Runs runs(UUID userId, UUID projectId, UUID documentId) { AppLogger.current().info("setting check list", LogField.projectId(projectId), LogField.documentId(documentId)); enabled(userId); return client.settingChecks(userId, projectId, documentId); }
@@ -48,7 +51,7 @@ public class SettingCheckService {
             return new ChatData.Profile(accounts.get(userId).locale(), null);
         } catch (RuntimeException failure) {
             AppLogger.current().warn("setting check starts without a locale",
-                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getSimpleName()));
+                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getName()));
             return null;
         }
     }

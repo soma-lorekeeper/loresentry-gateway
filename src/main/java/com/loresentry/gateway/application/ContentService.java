@@ -30,11 +30,16 @@ public class ContentService {
     public ContentData.Project createProject(UUID userId, ContentData.ProjectInput body, Conditions conditions) {
         AppLogger.current().info("project create", withConditions(conditions, LogField.param("name", body == null ? null : body.name()),
                 LogField.param("description", body == null ? null : body.description())));
-        return client.createProject(userId, body, conditions);
+        var created = client.createProject(userId, body, conditions);
+        // 새로 만든 프로젝트는 결과 줄의 전용 필드(project_id)로 남긴다
+        AppLogger.current().info("project create completed", LogField.projectId(created == null ? null : created.id()));
+        return created;
     }
     public ContentData.Project createSampleProject(UUID userId, String locale, Conditions conditions) {
         AppLogger.current().info("sample project create", withConditions(conditions, LogField.code("locale", locale, SupportedLocale.VALUES)));
-        return client.createSampleProject(userId, locale, conditions);
+        var created = client.createSampleProject(userId, locale, conditions);
+        AppLogger.current().info("sample project create completed", LogField.projectId(created == null ? null : created.id()));
+        return created;
     }
     public ContentData.Project getProject(UUID userId, UUID projectId, Conditions conditions) { AppLogger.current().info("project get", withConditions(conditions, LogField.projectId(projectId))); return client.getProject(userId, projectId, conditions); }
     public ContentData.Project updateProject(UUID userId, UUID projectId, ContentData.ProjectInput body, Conditions conditions) {
@@ -53,7 +58,7 @@ public class ContentService {
         catch (RuntimeException failure) {
             chatDataDeleted = false;
             AppLogger.current().warn("ai-chat data of deleted project was not removed", LogField.projectId(projectId),
-                    LogField.errorType(failure instanceof ChatCallFailure chatFailure ? chatFailure.code() : failure.getClass().getSimpleName()));
+                    LogField.errorType(failure instanceof ChatCallFailure chatFailure ? chatFailure.code() : failure.getClass().getName()));
         }
         AppLogger.current().info("project delete completed", LogField.projectId(projectId), LogField.result("chat_data_deleted", chatDataDeleted));
         return null;
@@ -65,7 +70,12 @@ public class ContentService {
         AppLogger.current().info("file create", withConditions(conditions, LogField.projectId(projectId), LogField.episodeId(body == null ? null : body.episodeId()),
                 LogField.param("kind", body == null ? null : body.kind()), LogField.param("title", body == null ? null : body.title()),
                 LogField.param("folder_code", body == null ? null : body.folderCode())));
-        return client.createFile(userId, projectId, body, conditions);
+        var created = client.createFile(userId, projectId, body, conditions);
+        // 새로 만든 것은 문서(file_id) 또는 회차(episode_id) 중 하나다. 다른 쪽은 null이라 줄에서 빠진다
+        AppLogger.current().info("file create completed", LogField.projectId(projectId),
+                LogField.fileId(created == null || created.document() == null ? null : created.document().id()),
+                LogField.episodeId(created == null || created.episode() == null ? null : created.episode().id()));
+        return created;
     }
     public ContentData.Document renameFile(UUID userId, UUID fileId, ContentData.Rename body, Conditions conditions) {
         AppLogger.current().info("file rename", withConditions(conditions, LogField.fileId(fileId), LogField.param("title", body == null ? null : body.title())));
@@ -106,7 +116,9 @@ public class ContentService {
     public ContentData.Versions versions(UUID userId, UUID fileId, Conditions conditions) { AppLogger.current().info("file version list", withConditions(conditions, LogField.fileId(fileId))); return client.versions(userId, fileId, conditions); }
     public ContentData.Version createVersion(UUID userId, UUID fileId, ContentData.NamedVersion body, Conditions conditions) {
         AppLogger.current().info("file version create", withConditions(conditions, LogField.fileId(fileId), LogField.param("label", body == null ? null : body.label())));
-        return client.createVersion(userId, fileId, body, conditions);
+        var created = client.createVersion(userId, fileId, body, conditions);
+        AppLogger.current().info("file version create completed", LogField.fileId(fileId), LogField.versionId(created == null ? null : created.id()));
+        return created;
     }
     public ContentData.Content restoreVersion(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { AppLogger.current().info("file version restore", withConditions(conditions, LogField.fileId(fileId), LogField.versionId(versionId))); return client.restoreVersion(userId, fileId, versionId, conditions); }
     public Void deleteVersion(UUID userId, UUID fileId, UUID versionId, Conditions conditions) { AppLogger.current().info("file version delete", withConditions(conditions, LogField.fileId(fileId), LogField.versionId(versionId))); return client.deleteVersion(userId, fileId, versionId, conditions); }
@@ -121,7 +133,9 @@ public class ContentService {
         AppLogger.current().info("memo create", withConditions(conditions, LogField.projectId(projectId), LogField.documentId(body == null ? null : body.documentId()),
                 LogField.param("scope", body == null ? null : body.scope()), LogField.param("title", body == null ? null : body.title()),
                 LogField.param("body", body == null ? null : body.body())));
-        return client.createMemo(userId, projectId, body, conditions);
+        var created = client.createMemo(userId, projectId, body, conditions);
+        AppLogger.current().info("memo create completed", LogField.projectId(projectId), LogField.memoId(created == null ? null : created.id()));
+        return created;
     }
     public ContentData.Memo updateMemo(UUID userId, UUID memoId, ContentData.MemoUpdate body, Conditions conditions) {
         AppLogger.current().info("memo update", withConditions(conditions, LogField.memoId(memoId), LogField.param("title", body == null ? null : body.title()),
@@ -143,11 +157,19 @@ public class ContentService {
         AppLogger.current().info("image upload ticket create", withConditions(conditions, LogField.projectId(projectId),
                 LogField.param("file_name", body == null ? null : body.fileName()), LogField.param("content_type", body == null ? null : body.contentType()),
                 LogField.param("size_bytes", body == null ? null : body.sizeBytes())));
-        return client.createImageTicket(userId, projectId, body, conditions);
+        var created = client.createImageTicket(userId, projectId, body, conditions);
+        // 업로드 URL·키는 서명 값이 들어 있어 남기지 않는다. 새 이미지 ID만 남긴다
+        AppLogger.current().info("image upload ticket create completed", LogField.projectId(projectId), LogField.imageId(created == null ? null : created.imageId()));
+        return created;
     }
     public ContentData.Image completeImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) { AppLogger.current().info("image upload complete", withConditions(conditions, LogField.projectId(projectId), LogField.imageId(imageId))); return client.completeImage(userId, projectId, imageId, conditions); }
     public ContentData.Image getImage(UUID userId, UUID projectId, UUID imageId, Conditions conditions) { AppLogger.current().info("image get", withConditions(conditions, LogField.projectId(projectId), LogField.imageId(imageId))); return client.getImage(userId, projectId, imageId, conditions); }
-    public ContentData.RefreshStart startRefresh(UUID userId, UUID projectId, Conditions conditions) { AppLogger.current().info("graph refresh start", withConditions(conditions, LogField.projectId(projectId))); return client.startRefresh(userId, projectId, conditions); }
+    public ContentData.RefreshStart startRefresh(UUID userId, UUID projectId, Conditions conditions) {
+        AppLogger.current().info("graph refresh start", withConditions(conditions, LogField.projectId(projectId)));
+        var started = client.startRefresh(userId, projectId, conditions);
+        AppLogger.current().info("graph refresh start completed", LogField.projectId(projectId), LogField.refreshRequestId(started == null ? null : started.requestId()));
+        return started;
+    }
     public ContentData.RefreshSummary latestRefresh(UUID userId, UUID projectId, Conditions conditions) { AppLogger.current().info("graph refresh latest get", withConditions(conditions, LogField.projectId(projectId))); return client.latestRefresh(userId, projectId, conditions); }
     public ContentData.RefreshDetail getRefresh(UUID userId, UUID projectId, UUID requestId, Conditions conditions) { AppLogger.current().info("graph refresh get", withConditions(conditions, LogField.projectId(projectId), LogField.refreshRequestId(requestId))); return client.getRefresh(userId, projectId, requestId, conditions); }
     public ContentData.SavedDraft saveRefreshDraft(UUID userId, UUID projectId, UUID requestId, UUID draftId, ContentData.DraftSave body, Conditions conditions) {

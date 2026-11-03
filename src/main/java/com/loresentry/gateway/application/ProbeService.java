@@ -33,7 +33,9 @@ public class ProbeService {
             // 실패한 대상의 호스트·상태는 바로 앞 upstream 호출 로그에 있다. 예외 메시지에는 호출 URI가 들어 있어 남기지 않는다
             try { result = client.databaseHealth(); }
             catch (UpstreamException failure) {
-                AppLogger.current().warn("database health probe failed", LogField.errorType("upstream_unavailable"));
+                // 어느 대상인지와 원인 예외(RestClient가 던진 예외) 클래스를 남긴다. 응답 본문에는 고정 값 upstream_unavailable을 싣는다
+                AppLogger.current().warn("database health probe failed", LogField.code("upstream", client.name(), UPSTREAMS),
+                        LogField.errorType(Objects.requireNonNullElse(failure.getCause(), failure).getClass().getName()));
                 result = Map.of("status", "error", "error", "upstream_unavailable");
             }
             if (result == null) {
