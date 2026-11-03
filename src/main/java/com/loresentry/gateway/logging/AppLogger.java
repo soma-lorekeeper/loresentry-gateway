@@ -167,27 +167,41 @@ public final class AppLogger {
 
     /** 정상 동작의 진행 상황. 어느 계층에서 무엇을 처리 중인지와 도메인 ID를 남긴다. */
     public void info(String message, LogField... fields) {
-        emit(Level.INFO, message, null, fields);
+        emit(null, Level.INFO, message, null, fields);
     }
 
     /** 처리했지만 예상 밖인 상황(재시도, 충돌, 검증 실패, 건너뛴 이벤트). */
     public void warn(String message, LogField... fields) {
-        emit(Level.WARN, message, null, fields);
+        emit(null, Level.WARN, message, null, fields);
     }
 
     /** 예외를 함께 남기는 warn. 예외 클래스·메시지·스택이 error.* 필드로 들어간다. */
     public void warn(String message, Throwable cause, LogField... fields) {
-        emit(Level.WARN, message, cause, fields);
+        emit(null, Level.WARN, message, cause, fields);
     }
 
     /** 작업 하나의 실패. 예외 없이 분류만 남길 때는 {@link LogField#errorType(String)}을 함께 넘긴다. */
     public void error(String message, LogField... fields) {
-        emit(Level.ERROR, message, null, fields);
+        emit(null, Level.ERROR, message, null, fields);
     }
 
     /** 예외로 작업 하나가 실패했을 때. 예외 클래스·메시지·스택이 error.* 필드로 들어간다. */
     public void error(String message, Throwable cause, LogField... fields) {
-        emit(Level.ERROR, message, cause, fields);
+        emit(null, Level.ERROR, message, cause, fields);
+    }
+
+    /**
+     * 줄 위치(log.logger·log.origin.function·log.package)를 찍은 곳 대신 {@code origin} 프레임으로 남기는 info.
+     * logging 패키지가 라이브러리 안에서 불려 찍는 줄에 쓴다. 예: RestClient 호출 결과 줄은 그 호출을 보낸 RestClient 메서드가 위치다.
+     * log.layer와 로그 레벨 설정은 찍은 클래스(예: UpstreamCallLogInterceptor) 기준이다. origin이 null이면 {@link #info}와 같다.
+     */
+    void infoAt(StackWalker.StackFrame origin, String message, LogField... fields) {
+        emit(origin, Level.INFO, message, null, fields);
+    }
+
+    /** {@link #infoAt}의 warn. */
+    void warnAt(StackWalker.StackFrame origin, String message, LogField... fields) {
+        emit(origin, Level.WARN, message, null, fields);
     }
 
     /** context-propagation에 이 저장소를 등록한다. 여러 번 불러도 한 번만 등록된다. */
@@ -197,10 +211,11 @@ public final class AppLogger {
         if (!registered) registry.registerThreadLocalAccessor(new Accessor());
     }
 
-    private void emit(Level level, String message, Throwable cause, LogField[] fields) {
+    private void emit(StackWalker.StackFrame origin, Level level, String message, Throwable cause, LogField[] fields) {
         // 호출한 클래스·메서드: AppLogger 자신의 프레임을 건너뛴 첫 프레임
         StackWalker.StackFrame caller = WALKER.walk(frames ->
                 frames.dropWhile(f -> f.getDeclaringClass() == AppLogger.class).findFirst().orElse(null));
+        // SLF4J logger는 늘 찍은 클래스의 것이다. 그래서 logging.level 설정(예: com.loresentry 패키지)이 우리 줄에 그대로 적용된다
         String loggerName = caller == null ? AppLogger.class.getName() : caller.getClassName();
         Logger logger = LoggerFactory.getLogger(loggerName);
         if (!logger.isEnabledForLevel(level)) return;
@@ -209,13 +224,19 @@ public final class AppLogger {
         try {
             LoggingEventBuilder event = logger.atLevel(level).setMessage(message);
             if (caller != null) {
-                String[] location = LOCATION.get(caller.getDeclaringClass());
+                // 줄 위치: 보통은 찍은 곳(caller). 위치를 따로 받았으면(infoAt·warnAt) 그 프레임이다
+                StackWalker.StackFrame where = origin == null ? caller : origin;
+                // log.layer는 늘 찍은 클래스 기준이다(예: UpstreamCallLogInterceptor의 @LogLayer("client"))
+                String layer = LOCATION.get(caller.getDeclaringClass())[0];
+                String packageName = LOCATION.get(where.getDeclaringClass())[1];
                 // 람다 본문이면 javac가 붙인 이름 대신 람다를 감싼 메서드 이름을 쓴다
-                String function = caller.getMethodName();
+                String function = where.getMethodName();
                 Matcher lambda = LAMBDA_METHOD.matcher(function);
                 if (lambda.matches()) function = lambda.group(1);
+                // 위치가 찍은 곳과 다르면 log.logger를 key-value로 넘긴다. EcsLogFormatter가 SLF4J logger 이름보다 이 값을 먼저 쓴다
+                if (origin != null) event = event.addKeyValue("log.logger", where.getClassName());
                 event = event.addKeyValue("log.origin.function", function)
-                        .addKeyValue("log.layer", location[0]).addKeyValue("log.package", location[1]);
+                        .addKeyValue("log.layer", layer).addKeyValue("log.package", packageName);
             }
             for (String tag : tags) event = event.addMarker(MarkerFactory.getMarker(tag));
             for (LogField field : context) event = add(event, field);

@@ -65,7 +65,15 @@ public final class EcsLogFormatter implements StructuredLogFormatter<ILoggingEve
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("@timestamp", event.getInstant().toString());
         put(root, "log.level", event.getLevel().toString());
-        put(root, "log.logger", event.getLoggerName());
+        // log.logger: 보통은 SLF4J logger 이름(찍은 클래스)이다. AppLogger가 줄 위치를 따로 넘긴 경우(RestClient 호출 결과 줄)는
+        // 그 key-value 값을 쓴다. 아래 key-value 반복은 이미 들어간 이름을 덮지 않으므로 같은 값이 두 번 들어가지 않는다
+        String loggerName = event.getLoggerName();
+        if (event.getKeyValuePairs() != null) {
+            for (KeyValuePair pair : event.getKeyValuePairs()) {
+                if ("log.logger".equals(pair.key) && pair.value != null) loggerName = pair.value.toString();
+            }
+        }
+        put(root, "log.logger", loggerName);
         put(root, "process.thread.name", event.getThreadName());
         put(root, "service.name", serviceName);
         put(root, "service.version", serviceVersion);
