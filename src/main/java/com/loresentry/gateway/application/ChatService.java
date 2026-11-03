@@ -4,13 +4,12 @@ import java.util.UUID;
 import com.loresentry.gateway.client.chat.ChatApiClient;
 import com.loresentry.gateway.client.chat.ChatData;
 import com.loresentry.gateway.client.chat.ChatStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ChatService {
-    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     private final ChatApiClient client;
     private final AccountService accounts;
     private final ChatAllowlist allowlist;
@@ -30,7 +29,11 @@ public class ChatService {
     public void cancel(UUID userId, UUID sessionId) { enabled(userId); client.cancel(userId, sessionId); }
 
     private void enabled(UUID userId) {
-        if (!allowlist.allows(userId)) throw new ChatNotEnabled();
+        // 허용 목록(loresentry.chat.allowed-users)에 없는 사용자다. user.id는 SessionFilter가 이미 줄에 붙였다
+        if (!allowlist.allows(userId)) {
+            AppLogger.current().warn("chat not enabled for user");
+            throw new ChatNotEnabled();
+        }
     }
 
     private ChatData.Profile profile(UUID userId) {
@@ -38,7 +41,8 @@ public class ChatService {
             var account = accounts.get(userId);
             return new ChatData.Profile(account.locale(), account.displayName());
         } catch (RuntimeException failure) {
-            log.warn("Chat request continues without a profile: {}", failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getSimpleName());
+            AppLogger.current().warn("chat request continues without a profile",
+                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getSimpleName()));
             return null;
         }
     }

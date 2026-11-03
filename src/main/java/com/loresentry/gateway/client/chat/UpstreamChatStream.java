@@ -8,11 +8,10 @@ import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.io.CloseMode;
 import org.apache.hc.core5.io.ModalCloseable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 
 final class UpstreamChatStream implements ChatStream {
-    private static final Logger log = LoggerFactory.getLogger(UpstreamChatStream.class);
     private final HttpUriRequestBase request;
     private final ClassicHttpResponse response;
     private final InputStream body;
@@ -33,7 +32,7 @@ final class UpstreamChatStream implements ChatStream {
                 try {
                     read = body.read(buffer);
                 } catch (IOException failure) {
-                    log.warn("ai-chat stream ended before completion: {}", failure.getClass().getSimpleName());
+                    AppLogger.current().warn("ai-chat stream ended before completion", LogField.errorType(failure.getClass().getSimpleName()));
                     return;
                 }
                 if (read < 0) {

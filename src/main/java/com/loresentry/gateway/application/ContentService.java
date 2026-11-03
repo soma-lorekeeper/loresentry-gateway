@@ -7,13 +7,12 @@ import com.loresentry.gateway.client.content.ContentApiClient;
 import com.loresentry.gateway.client.content.ContentApiClient.Conditions;
 import com.loresentry.gateway.client.content.ContentData;
 import com.loresentry.gateway.client.content.FileCreated;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ContentService {
-    private static final Logger log = LoggerFactory.getLogger(ContentService.class);
     private final ContentApiClient client;
     private final ChatApiClient chat;
     public ContentService(ContentApiClient client, ChatApiClient chat) { this.client = client; this.chat = chat; }
@@ -30,8 +29,8 @@ public class ContentService {
         client.deleteProject(userId, projectId, conditions);
         try { chat.deleteProjectData(userId, projectId); }
         catch (RuntimeException failure) {
-            log.warn("AI chat data of deleted project {} was not removed: {}", projectId,
-                    failure instanceof ChatCallFailure chatFailure ? chatFailure.code() : failure.getClass().getSimpleName());
+            AppLogger.current().warn("ai-chat data of deleted project was not removed", LogField.projectId(projectId),
+                    LogField.errorType(failure instanceof ChatCallFailure chatFailure ? chatFailure.code() : failure.getClass().getSimpleName()));
         }
         return null;
     }

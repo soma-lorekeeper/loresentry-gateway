@@ -87,7 +87,7 @@ class CorsTest {
         mockMvc.perform(options("/projects").header("Origin","http://localhost:3000")
             .header("Access-Control-Request-Method","PUT")
             .header("Access-Control-Request-Headers","Content-Type,X-LS-CSRF,If-Match,If-None-Match,X-Save-Id"))
-            .andExpect(status().isOk()).andExpect(header().string("Access-Control-Expose-Headers","Location"));
+            .andExpect(status().isOk()).andExpect(header().string("Access-Control-Expose-Headers","Location, X-Trace-Id"));
     }
     @Test void productionOriginDoesNotAllowSubdomainsOrLocalhost() {
         var config=new com.loresentry.gateway.config.BrowserCorsConfiguration().browserCors(

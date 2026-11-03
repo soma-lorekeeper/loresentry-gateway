@@ -4,12 +4,18 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loresentry.gateway.application.*;
 import com.loresentry.gateway.config.CookieSettings;
+import com.loresentry.gateway.logging.AppLogger;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 첫 로그인 때 약관을 보여 주고 동의를 받는 컨트롤러. 동의 쿠키(__Host-ls_consent)로 로그인 중인 사람을 찾는다.
+ *
+ * <p>각 핸들러의 첫 줄은 진입 로그다. 아직 세션이 없어 user.id도 없고, 동의 요청 ID·약관 버전·locale은 남기지 않는다.
+ */
 @RestController
 public final class TermsController {
     public record Accept(@JsonProperty("terms_version_id") String termsVersionId) {}
@@ -23,6 +29,7 @@ public final class TermsController {
 
     @GetMapping("/auth/terms")
     public ResponseEntity<Terms> query(@RequestParam(name="locale",required=false) String locale,HttpServletRequest request,HttpServletResponse response) {
+        AppLogger.current().info("terms get requested");
         try {
             var value=terms.query(credential(request),locale);
             return ResponseEntity.ok().header("Cache-Control","no-store").body(new Terms(value.termsVersionId(),value.version(),value.title(),value.content(),value.effectiveAt(),value.expiresAt(),value.locale()));
@@ -30,6 +37,7 @@ public final class TermsController {
     }
     @PostMapping("/auth/terms/accept")
     public ResponseEntity<Void> accept(@RequestBody Accept body,HttpServletRequest request,HttpServletResponse response) {
+        AppLogger.current().info("terms accept requested");
         try {
             var session=terms.accept(credential(request),body.termsVersionId());
             final org.springframework.http.ResponseCookie sessionCookie;

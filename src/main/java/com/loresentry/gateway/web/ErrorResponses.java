@@ -3,6 +3,7 @@ package com.loresentry.gateway.web;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import com.loresentry.gateway.logging.AppLogger;
 import org.springframework.http.ResponseEntity;
 
 public final class ErrorResponses {
@@ -30,6 +31,11 @@ public final class ErrorResponses {
         body.put("next_action", contract.nextAction());
         if (upstream != null) {
             body.put("upstream", upstream);
+        }
+        // 문의 받은 값을 Kibana에서 바로 찾도록 trace ID를 싣는다(LOG_SCHEMA.md 7절)
+        String traceId = AppLogger.current().traceId();
+        if (traceId != null) {
+            body.put("trace_id", traceId);
         }
         return ResponseEntity.status(contract.status()).body(body);
     }

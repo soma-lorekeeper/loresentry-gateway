@@ -18,6 +18,50 @@ server:
   port: 8000
   shutdown: graceful
 
+# 로그: 모든 줄을 ECS JSON 한 줄로 stdout에 쓴다(docs LOG_SCHEMA.md 5절). Logstash가 이 줄을 필드로 펼친다.
+logging:
+  structured:
+    format:
+      # Boot 내장 ecs 형식 대신 우리 formatter. log.origin.function·error.type 같은 필드를 이름 충돌 없이 함께 낸다
+      console: com.loresentry.gateway.logging.EcsLogFormatter
+    ecs:
+      service:
+        # Kubernetes 이름(LOG_SCHEMA.md 6절). spring.application.name(gateway)과 다르다
+        name: gateway-api
+        # 이미지 태그(build-<run>-<attempt>). CI가 docker build --build-arg로 넘기고 Dockerfile이 ENV로 둔다
+        version: ${APP_VERSION:unknown}
+
+# trace: W3C traceparent로 span을 잇는다(LOG_SCHEMA.md 7절).
+management:
+  tracing:
+    sampling:
+      # dev는 모든 요청을 기록한다. prod 비율은 prod 실측 후 overlay 환경 변수로 정한다
+      probability: 1.0
+    propagation:
+      # W3C 헤더만 읽고 쓴다. B3 등 다른 형식은 받지 않는다
+      consume: w3c
+      produce: w3c
+    baggage:
+      # baggage 헤더는 쓰지 않는다. 외부 값이 내부 서비스로 따라 들어가지 않게 끈다
+      enabled: false
+    export:
+      # span 전송(OTLP)은 collector를 세운 뒤 dev overlay 환경 변수로 켠다. 꺼 두어도 trace ID는 만들어지고 전파된다
+      enabled: false
+  opentelemetry:
+    resource-attributes:
+      "[service.name]": gateway-api
+      "[service.version]": ${APP_VERSION:unknown}
+  otlp:
+    metrics:
+      export:
+        # 지표는 Prometheus가 수집한다. OTLP로 따로 보내지 않는다
+        enabled: false
+  logging:
+    export:
+      otlp:
+        # 로그는 stdout → Filebeat → Logstash로 수집한다. OTLP로 따로 보내지 않는다
+        enabled: false
+
 loresentry:
   chat:
     allowed-users: ${LORESENTRY_CHAT_ALLOWED_USERS:}

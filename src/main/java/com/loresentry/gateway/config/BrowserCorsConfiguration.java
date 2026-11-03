@@ -21,7 +21,8 @@ public class BrowserCorsConfiguration {
         cors.setAllowedOrigins(List.of(browser.frontendOrigin()));
         cors.setAllowedMethods(List.of("GET","HEAD","POST","PATCH","PUT","DELETE","OPTIONS"));
         cors.setAllowedHeaders(List.of("Content-Type","X-LS-CSRF","If-Match","If-None-Match","X-Save-Id"));
-        cors.setExposedHeaders(List.of("Location"));
+        // X-Trace-Id: 브라우저가 문의할 때 보여 줄 trace ID(LOG_SCHEMA.md 7절)
+        cors.setExposedHeaders(List.of("Location","X-Trace-Id"));
         cors.setAllowCredentials(true);cors.setMaxAge(3600L);
         return cors;
     }

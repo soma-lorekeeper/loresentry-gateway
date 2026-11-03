@@ -7,11 +7,17 @@ import java.util.Locale;
 import com.loresentry.gateway.application.LoginService;
 import com.loresentry.gateway.config.BrowserProperties;
 import com.loresentry.gateway.config.CookieSettings;
+import com.loresentry.gateway.logging.AppLogger;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Google 로그인의 시작(prepare)과 돌아오기(callback)를 처리하는 컨트롤러.
+ *
+ * <p>각 핸들러의 첫 줄은 진입 로그다. OAuth code·state·error, 로그인 요청 쿠키 값은 로그인 과정의 비밀 값이라 남기지 않는다.
+ */
 @RestController
 public class OAuthController {
     private final LoginService login;
@@ -23,6 +29,7 @@ public class OAuthController {
     }
     @GetMapping("/auth/oauth/google/prepare")
     public ResponseEntity<Void> prepare() {
+        AppLogger.current().info("oauth login prepare requested");
         var result=login.prepare();
         if(result.result()!=LoginService.Result.SUCCESS) return result(result.result(),List.of());
         try {
@@ -33,10 +40,15 @@ public class OAuthController {
             var cookie=cookies.oauth(result.requestId(),result.expiresAt());
             return ResponseEntity.status(302).location(destination).header("Cache-Control","no-store")
                     .header("Referrer-Policy","no-referrer").header("Set-Cookie",cookie.toString()).build();
-        } catch(IllegalArgumentException invalid) {return result(LoginService.Result.FAILED,List.of());}
+        } catch(IllegalArgumentException invalid) {
+            // auth가 돌려준 인가 주소가 Google 주소 규칙에 맞지 않는다. 주소 값은 남기지 않는다(state가 들어 있다)
+            AppLogger.current().warn("oauth login prepare rejected: unexpected authorization url");
+            return result(LoginService.Result.FAILED,List.of());
+        }
     }
     @GetMapping("/auth/oauth/google/callback")
     public ResponseEntity<Void> callback(HttpServletRequest request) {
+        AppLogger.current().info("oauth login callback requested");
         LoginService.CallbackResult callback;
         try {
             callback=login.callback(AuthCookies.single(request,names.oauthName()),single(request,"state"),single(request,"code"),single(request,"error"));
@@ -55,7 +67,7 @@ public class OAuthController {
         return result(result,output);
     }
     @RequestMapping(value={"/auth/oauth/google/prepare","/auth/oauth/google/callback"},method=RequestMethod.HEAD)
-    public ResponseEntity<Void> head() {return ResponseEntity.status(405).header("Allow","GET").build();}
+    public ResponseEntity<Void> head() {AppLogger.current().info("oauth head requested");return ResponseEntity.status(405).header("Allow","GET").build();}
     private static String single(HttpServletRequest request,String name) {
         var values=request.getParameterValues(name);
         if(values==null)return null;
