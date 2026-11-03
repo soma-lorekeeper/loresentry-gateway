@@ -13,6 +13,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.HandlerMapping;
 
 /**
  * 브라우저 요청 하나의 시작점. 요청마다 {@link AppLogger}를 만들어 바인딩하고 접근 로그를 남긴다.
@@ -26,7 +27,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *   <li>observation 필터가 연 서버 span에서 traceId·spanId를 꺼내 {@code new AppLogger(traceId, spanId, null)}로 만든다.
  *       ALB의 X-Amzn-Trace-Id는 모든 줄에 {@code http.request.id}로 붙인다.</li>
  *   <li>응답 헤더 X-Trace-Id에 traceId를 싣는다. 문의 받은 값을 Kibana에서 바로 찾는다.</li>
- *   <li>"request received"(헬스체크 제외)와 "request completed"(상태·걸린 시간)를 남긴다. 결과 줄에는 예외 처리기·보안 응답이
+ *   <li>"request received"와 "request completed"(경로 템플릿 http.route·상태·걸린 시간)를 남긴다. 헬스체크도 같다. 헬스체크
+ *       요청은 그 요청의 모든 줄에 {@code tags: health}가 붙고, 정상(info) 줄은 Logstash가 버린다. 결과 줄에는 예외 처리기·보안 응답이
  *       {@link AppLogger#addToOutcome(LogField...)}로 맡긴 실패 이유(error.type 등)도 붙인다. 실패를 따로 찍지 않으므로 요청 하나의
  *       결과는 늘 한 줄이다. 맡긴 필드가 무엇인지는 이 필터가 보지 않는다. 사용자는 SessionFilter가 요청 속성에 넣은
  *       값을 완료 시점에 읽는다. 채팅 스트리밍처럼 비동기로 끝나는 요청은 비동기 완료 때 남긴다.</li>
@@ -53,14 +55,16 @@ public final class RequestLogFilter extends OncePerRequestFilter {
         String traceId = span == null ? null : span.context().traceId();
         String spanId = span == null ? null : span.context().spanId();
         AppLogger logger = new AppLogger(traceId, spanId, null).with(LogField.requestId(request.getHeader(ALB_TRACE_HEADER)));
+        String path = request.getRequestURI();
+        // 헬스체크 흐름의 모든 줄에 tags: health를 붙인다. 정상(info) 줄은 Logstash가 버리고, 실패한 헬스체크의 warn·error는 남는다
+        if (health(path)) logger = logger.withTag("health");
         if (traceId != null) {
             response.setHeader(TRACE_HEADER, traceId);
             request.setAttribute(TRACE_ATTRIBUTE, traceId);
         }
-        String path = request.getRequestURI();
         long started = System.nanoTime();
         try (var bound = AppLogger.bind(logger)) {
-            if (!health(path)) logger.info("request received", LogField.httpMethod(request.getMethod()), LogField.urlPath(path));
+            logger.info("request received", LogField.httpMethod(request.getMethod()), LogField.urlPath(path));
             try {
                 chain.doFilter(request, response);
             } catch (IOException | ServletException | RuntimeException failure) {
@@ -83,8 +87,11 @@ public final class RequestLogFilter extends OncePerRequestFilter {
      * 기본 필드(메서드, 경로, 상태, 걸린 시간) 뒤에 이 요청에 맡겨진 결과 필드를 그대로 붙인다.
      */
     private static void completed(AppLogger logger, HttpServletRequest request, int status, String path, long started) {
+        // http.route: Spring이 고른 경로 템플릿. 컨트롤러까지 가지 못한 요청(CSRF·세션 거절, 없는 경로)에는 없다
+        Object route = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
         LogField[] fields = concat(new LogField[]{LogField.httpMethod(request.getMethod()), LogField.urlPath(path),
-                LogField.statusCode(status), LogField.duration(elapsed(started))}, logger.outcomeFields());
+                LogField.route(route instanceof String pattern ? pattern : null), LogField.statusCode(status),
+                LogField.duration(elapsed(started))}, logger.outcomeFields());
         if (status >= 500) logger.error("request completed", fields);
         else if (status >= 400) logger.warn("request completed", fields);
         else logger.info("request completed", fields);

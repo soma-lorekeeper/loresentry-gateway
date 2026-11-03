@@ -27,6 +27,7 @@ public class LoginService {
         public CallbackResult(Session session,Result result,Boolean consumed) { this(session,null,result,consumed); }
     }
     public Preparation prepare() {
+        AppLogger.current().info("oauth login prepare");
         try {
             var response=client.prepare();
             return new Preparation(response.authorizationUrl(),response.loginRequestId(),response.expiresAt(),Result.SUCCESS);
@@ -36,6 +37,7 @@ public class LoginService {
         }
     }
     public CallbackResult callback(String requestId,String state,String code,String error) {
+        AppLogger.current().info("oauth login callback");
         // 로그인 요청 쿠키·state가 없거나, code와 error가 둘 다 있거나 둘 다 없으면 auth에 묻지 않고 거절한다
         if(blank(requestId)||blank(state)||(blank(code)==blank(error))) {
             AppLogger.current().warn("oauth login callback rejected: incomplete parameters");

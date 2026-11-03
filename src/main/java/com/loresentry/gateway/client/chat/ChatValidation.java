@@ -9,12 +9,10 @@ import static com.loresentry.gateway.client.chat.SettingCheckData.*;
 final class ChatValidation {
     private static final Set<String> STATUSES = Set.of("available", "too-large");
     private static final Set<String> ROLES = Set.of("user", "assistant");
-    private static final Set<String> INTENTS = Set.of("ask", "explain", "related", "flow");
     private static final Set<String> RUN_STATUSES = Set.of("RUNNING", "DONE", "FAILED", "CANCELLED");
     private static final Set<String> RUN_STAGES = Set.of("READING", "FINDING", "JUDGING");
     private static final Set<String> FINDING_KINDS = Set.of("SETTING", "MANUSCRIPT");
     private static final Set<String> CONFIDENCES = Set.of("HIGH", "LOW");
-    private static final Set<String> VERDICTS = Set.of("INTENDED", "NOT_CONFLICT");
     private ChatValidation() {}
     private static void required(Object... fields) {
         for (Object field : fields) Objects.requireNonNull(field);

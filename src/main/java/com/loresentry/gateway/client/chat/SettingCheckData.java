@@ -2,12 +2,15 @@ package com.loresentry.gateway.client.chat;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public final class SettingCheckData {
     private SettingCheckData() {}
+    /** 사용자 판정. ChatValidation이 응답을 검사하고, 진입 로그가 verdict 값을 거르는 데 쓴다(LogField.code). */
+    public static final Set<String> VERDICTS = Set.of("INTENDED", "NOT_CONFLICT");
     public record Read(Integer manuscripts, @JsonProperty("from_ordinal") Integer fromOrdinal, @JsonProperty("to_ordinal") Integer toOrdinal,
                        Integer settings, @JsonProperty("core_facts") Integer coreFacts) {}
     public record Counts(Integer open, Integer intended, @JsonProperty("not_conflict") Integer notConflict) {}

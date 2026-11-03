@@ -17,6 +17,8 @@ import org.springframework.http.client.ClientHttpResponse;
  *
  * <p>traceparent 헤더는 이 interceptor가 아니라 RestClient observation이 붙인다.
  */
+// log.layer: 이름 끝 규칙으로는 interceptor지만, 내부 서비스 호출 결과를 남기는 줄이라 실제 역할인 client로 지정한다
+@LogLayer("client")
 final class UpstreamCallLogInterceptor implements ClientHttpRequestInterceptor {
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)

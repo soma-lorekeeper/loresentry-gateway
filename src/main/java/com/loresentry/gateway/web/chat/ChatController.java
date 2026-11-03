@@ -1,6 +1,7 @@
 package com.loresentry.gateway.web.chat;
 
 import java.io.FilterOutputStream;
+import com.loresentry.gateway.client.chat.ChatData;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +20,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 /**
  * 브라우저의 AI 채팅 요청을 ai-chat으로 넘기는 컨트롤러.
  *
- * <p>각 핸들러의 첫 줄은 진입 로그다. 프로젝트·대화 세션 UUID만 남기고, 질문·인용 본문, 대화 제목, 검색어 q는 남기지 않는다.
+ * <p>각 핸들러의 첫 줄은 진입 로그다. 프로젝트·대화 세션 UUID는 전용 필드로 남긴다. 질문·인용 본문, 대화 제목, 검색어 q는
+ * LogField가 가려 길이만 남기고, 질문 의도(intent)는 허용 목록 안의 코드만 남긴다.
  */
 @RestController
 public class ChatController {
@@ -44,12 +46,12 @@ public class ChatController {
     }
     @GetMapping("/projects/{projectId}/chat/search")
     public ResponseEntity<ChatDtos.SearchHits> search(@CurrentUser UUID userId, @PathVariable UUID projectId, @RequestParam(name = "q", required = false) String query) {
-        AppLogger.current().info("chat search requested", LogField.projectId(projectId));
+        AppLogger.current().info("chat search requested", LogField.projectId(projectId), LogField.param("query", query));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ChatDtos.SearchHits.from(service.search(userId, projectId, query)));
     }
     @PatchMapping("/chat/sessions/{sessionId}")
     public ResponseEntity<ChatDtos.Session> renameSession(@CurrentUser UUID userId, @PathVariable UUID sessionId, @RequestBody ChatDtos.Rename body) {
-        AppLogger.current().info("chat session rename requested", LogField.chatSessionId(sessionId));
+        AppLogger.current().info("chat session rename requested", LogField.chatSessionId(sessionId), LogField.param("title", body == null ? null : body.title()));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ChatDtos.Session.from(service.renameSession(userId, sessionId, body == null ? null : body.internal())));
     }
     @DeleteMapping("/chat/sessions/{sessionId}")
@@ -70,7 +72,12 @@ public class ChatController {
     }
     @PostMapping("/chat/sessions/{sessionId}/messages")
     public ResponseEntity<StreamingResponseBody> send(@CurrentUser UUID userId, @PathVariable UUID sessionId, @RequestBody ChatDtos.SendInput body, HttpServletResponse response) {
-        AppLogger.current().info("chat message send requested", LogField.chatSessionId(sessionId));
+        // 인용한 파일·보고 있던 파일·다시 생성할 메시지는 대상(대화 세션)이 아니라 참조라 역할 이름을 붙인 param이다
+        AppLogger.current().info("chat message send requested", LogField.chatSessionId(sessionId), LogField.param("content", body == null ? null : body.content()),
+                LogField.code("intent", body == null ? null : body.intent(), ChatData.INTENTS),
+                LogField.param("quote_file_id", body == null || body.quote() == null ? null : body.quote().fileId()),
+                LogField.param("quote_text", body == null || body.quote() == null ? null : body.quote().text()), LogField.param("focus_file_id", body == null ? null : body.focusFileId()),
+                LogField.param("replaced_message_id", body == null ? null : body.replaces()), LogField.param("client_message_id", body == null ? null : body.clientMessageId()));
         var stream = service.send(userId, sessionId, body == null ? null : body.internal());
         return ResponseEntity.ok().contentType(EVENT_STREAM).cacheControl(CacheControl.noStore())
                 .header("X-Accel-Buffering", "no").body(output -> stream.relay(flushing(output, response)));

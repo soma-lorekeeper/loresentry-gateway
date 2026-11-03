@@ -63,6 +63,9 @@ class RequestLoggingTest {
         assertThat(completed.at("/log/level").asString()).isEqualTo("WARN");
         assertThat(completed.at("/http/response/status_code").asLong()).isEqualTo(401L);
         assertThat(completed.at("/error/type").asString()).isEqualTo("SESSION_REQUIRED");
+        // 세션 필터에서 막혀 컨트롤러까지 가지 않았으므로 경로 템플릿이 없다
+        assertThat(completed.at("/http/route").isMissingNode()).isTrue();
+        assertThat(completed.has("tags")).isFalse();
         assertThat(completed.at("/url/path").asString()).isEqualTo("/chat/usage");
         assertThat(completed.at("/http/request/id").asString()).isEqualTo("Root=1-6731b2f0-0123456789abcdef01234567");
         assertThat(completed.at("/service/name").asString()).isEqualTo("gateway-api");
@@ -74,11 +77,18 @@ class RequestLoggingTest {
     }
 
     @Test
-    void healthChecksHaveNoSpanAndNoReceivedLine(CapturedOutput output) throws Exception {
+    void healthChecksAreTracedAndEveryLineIsTaggedHealth(CapturedOutput output) throws Exception {
+        // 헬스체크도 다른 요청처럼 span·로그를 남긴다. Logstash가 tags: health인 info 줄을 버린다(LOG_SCHEMA.md 4절)
         var response = mvc.perform(get("/health")).andExpect(status().isOk()).andReturn().getResponse();
-        assertThat(response.getHeader(RequestLogFilter.TRACE_HEADER)).isNull();
-        var health = lines(output).stream().filter(json -> "/health".equals(json.at("/url/path").asString())).toList();
-        assertThat(health).extracting(json -> json.get("message").asString()).containsExactly("request completed");
-        assertThat(health.getFirst().has("trace")).isFalse();
+        String traceId = response.getHeader(RequestLogFilter.TRACE_HEADER);
+        assertThat(traceId).hasSize(32);
+        var health = lines(output).stream().filter(json -> traceId.equals(json.at("/trace/id").asString())).toList();
+        assertThat(health).extracting(json -> json.get("message").asString()).contains("request received", "request completed");
+        assertThat(health).allSatisfy(json -> assertThat(json.get("tags").toString()).contains("health"));
+        JsonNode completed = health.stream().filter(json -> "request completed".equals(json.get("message").asString())).findFirst().orElseThrow();
+        // 컨트롤러까지 간 요청은 Spring이 고른 경로 템플릿이 결과 줄에 남는다
+        assertThat(completed.at("/http/route").asString()).isEqualTo("/health");
+        assertThat(completed.at("/log/layer").asString()).isEqualTo("filter");
+        assertThat(completed.at("/log/package").asString()).isEqualTo("com.loresentry.gateway.logging");
     }
 }

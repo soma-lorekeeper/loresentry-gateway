@@ -1,19 +1,40 @@
 package com.loresentry.gateway;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.util.List;
+import java.util.Set;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogLayer;
+import com.loresentry.gateway.logging.SkipEntryLog;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.library.GeneralCodingRules;
 
 /**
- * 로그는 AppLogger로만 찍는다(LOG_SCHEMA.md 5절). logging 패키지 밖의 코드는 로깅 라이브러리와 표준 출력을 직접 쓰지 못한다.
- * 테스트 코드는 검사하지 않는다.
+ * 로그 규칙을 테스트로 강제한다(LOG_SCHEMA.md 5절). 테스트 코드는 검사하지 않는다.
+ * <ul>
+ *   <li>로그는 AppLogger로만 찍는다. logging 패키지 밖의 코드는 로깅 라이브러리와 표준 출력을 직접 쓰지 못한다.</li>
+ *   <li>레이어 클래스의 모든 public 메서드는 AppLogger의 info·warn·error를 직접 부른다. 그래서 trace 하나를 시간 순으로 놓으면
+ *       controller → service → client 흐름이 줄 단위로 보인다. 한 줄로 넘기는 메서드도 빠지지 않는다.
+ *       여러 번 불리는 getter처럼 이유를 적은 {@link SkipEntryLog}가 붙은 메서드만 뺀다.</li>
+ * </ul>
  */
 @AnalyzeClasses(packages = "com.loresentry.gateway", importOptions = ImportOption.DoNotIncludeTests.class)
 class LoggingArchitectureTest {
+    /** 진입 로그를 남겨야 하는 레이어 클래스의 이름 끝(LOG_SCHEMA.md 5절 레이어 표의 업무 레이어). */
+    private static final List<String> LAYER_SUFFIXES = List.of("Controller", "Service", "Client", "Repository", "Listener", "Consumer", "Publisher");
+    private static final Set<String> LOG_METHODS = Set.of("info", "warn", "error");
 
     @ArchTest
     static final ArchRule onlyTheLoggingPackageUsesLoggingLibraries = noClasses()
@@ -27,4 +48,32 @@ class LoggingArchitectureTest {
             .that().resideOutsideOfPackage("..logging..")
             .should(GeneralCodingRules.ACCESS_STANDARD_STREAMS)
             .because("System.out·System.err 줄은 ECS JSON이 아니어서 Logstash가 필드로 읽지 못한다");
+
+    @ArchTest
+    static final ArchRule everyLayerMethodLogs = methods()
+            .that().arePublic().and().areNotStatic()
+            .and().areDeclaredInClassesThat(layerClasses())
+            .and().areNotAnnotatedWith(SkipEntryLog.class)
+            .should(callAppLogger())
+            .because("레이어 클래스의 모든 public 메서드는 첫 줄에 진입 로그를 남긴다(LOG_SCHEMA.md 5절)");
+
+    /** 이름 끝이 업무 레이어이거나 @LogLayer가 붙은 일반 클래스. record·interface·enum과 logging 패키지는 뺀다. */
+    private static DescribedPredicate<JavaClass> layerClasses() {
+        return DescribedPredicate.describe("layer classes", type -> !type.isRecord() && !type.isInterface() && !type.isEnum()
+                && !type.getPackageName().endsWith(".logging")
+                && (type.isAnnotatedWith(LogLayer.class) || LAYER_SUFFIXES.stream().anyMatch(type.getSimpleName()::endsWith)));
+    }
+
+    /** 메서드 본문이 AppLogger의 info·warn·error를 직접 부르는지. 컴파일러가 만든 bridge·synthetic 메서드는 건너뛴다. */
+    private static ArchCondition<JavaMethod> callAppLogger() {
+        return new ArchCondition<>("call AppLogger.info, warn or error") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                if (method.getModifiers().contains(JavaModifier.BRIDGE) || method.getModifiers().contains(JavaModifier.SYNTHETIC)) return;
+                boolean logs = method.getMethodCallsFromSelf().stream().anyMatch(call ->
+                        call.getTargetOwner().isEquivalentTo(AppLogger.class) && LOG_METHODS.contains(call.getName()));
+                if (!logs) events.add(SimpleConditionEvent.violated(method, method.getFullName() + " does not log through AppLogger"));
+            }
+        };
+    }
 }
