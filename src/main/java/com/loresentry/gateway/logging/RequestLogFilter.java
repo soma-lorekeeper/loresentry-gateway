@@ -2,6 +2,9 @@ package com.loresentry.gateway.logging;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import com.loresentry.gateway.security.SessionFilter;
 import io.micrometer.tracing.Span;
@@ -12,8 +15,11 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.util.ServletRequestPathUtils;
 
 /**
  * 브라우저 요청 하나의 시작점. 요청마다 {@link AppLogger}를 만들어 바인딩하고 접근 로그를 남긴다.
@@ -25,7 +31,8 @@ import org.springframework.web.servlet.HandlerMapping;
  * <p>하는 일
  * <ol>
  *   <li>observation 필터가 연 서버 span에서 traceId·spanId를 꺼내 {@code new AppLogger(traceId, spanId, null)}로 만든다.
- *       ALB의 X-Amzn-Trace-Id는 모든 줄에 {@code http.request.id}로 붙인다.</li>
+ *       요청 하나의 모든 줄에 ALB의 X-Amzn-Trace-Id({@code http.request.id}), 브라우저가 부른 경로({@code url.path}),
+ *       경로 템플릿({@code http.route})을 붙인다. 경로 템플릿은 Spring MVC가 나중에 고를 것을 요청 시작 때 미리 찾는다.</li>
  *   <li>응답 헤더 X-Trace-Id에 traceId를 싣는다. 문의 받은 값을 Kibana에서 바로 찾는다.</li>
  *   <li>"request received"와 "request completed"(경로 템플릿 http.route·상태·걸린 시간)를 남긴다. 헬스체크도 같다. 헬스체크
  *       요청은 그 요청의 모든 줄에 {@code tags: health}가 붙고, 정상(info) 줄은 Logstash가 버린다. 결과 줄에는 예외 처리기·보안 응답이
@@ -43,9 +50,12 @@ public final class RequestLogFilter extends OncePerRequestFilter {
     private static final String ALB_TRACE_HEADER = "X-Amzn-Trace-Id";
 
     private final Tracer tracer;
+    /** 경로 템플릿을 미리 찾는 데 쓰는 컨트롤러 매핑. MVC가 없는 테스트 문맥에서는 비어 있고, 그때는 http.route를 붙이지 않는다. */
+    private final ObjectProvider<RequestMappingHandlerMapping> mappings;
 
-    public RequestLogFilter(Tracer tracer) {
+    public RequestLogFilter(Tracer tracer, ObjectProvider<RequestMappingHandlerMapping> mappings) {
         this.tracer = tracer;
+        this.mappings = mappings;
     }
 
     @Override
@@ -54,8 +64,9 @@ public final class RequestLogFilter extends OncePerRequestFilter {
         Span span = tracer.currentSpan();
         String traceId = span == null ? null : span.context().traceId();
         String spanId = span == null ? null : span.context().spanId();
-        AppLogger logger = new AppLogger(traceId, spanId, null).with(LogField.requestId(request.getHeader(ALB_TRACE_HEADER)));
         String path = request.getRequestURI();
+        AppLogger logger = new AppLogger(traceId, spanId, null).with(LogField.requestId(request.getHeader(ALB_TRACE_HEADER)),
+                LogField.urlPath(path), LogField.route(route(request)));
         // 헬스체크 흐름의 모든 줄에 tags: health를 붙인다. 정상(info) 줄은 Logstash가 버리고, 실패한 헬스체크의 warn·error는 남는다
         if (health(path)) logger = logger.withTag("health");
         if (traceId != null) {
@@ -64,37 +75,62 @@ public final class RequestLogFilter extends OncePerRequestFilter {
         }
         long started = System.nanoTime();
         try (var bound = AppLogger.bind(logger)) {
-            logger.info("request received", LogField.httpMethod(request.getMethod()), LogField.urlPath(path));
+            logger.info("request received", LogField.httpMethod(request.getMethod()));
             try {
                 chain.doFilter(request, response);
             } catch (IOException | ServletException | RuntimeException failure) {
                 // 컨트롤러 예외 처리기가 잡지 못한 예외. 이 뒤 Tomcat이 /error로 500을 쓴다
                 withUser(logger, request).error("request failed with an unhandled exception", failure,
-                        concat(new LogField[]{LogField.httpMethod(request.getMethod()), LogField.urlPath(path),
-                                LogField.statusCode(500), LogField.duration(elapsed(started))}, logger.outcomeFields()));
+                        concat(new LogField[]{LogField.httpMethod(request.getMethod()), LogField.statusCode(500),
+                                LogField.duration(elapsed(started))}, logger.outcomeFields()));
                 throw failure;
             }
             if (request.isAsyncStarted()) {
-                request.getAsyncContext().addListener(new Completion(logger, request, response, path, started));
+                request.getAsyncContext().addListener(new Completion(logger, request, response, started));
             } else {
-                completed(withUser(logger, request), request, response.getStatus(), path, started);
+                completed(withUser(logger, request), request, response.getStatus(), started);
             }
         }
     }
 
     /**
      * 결과 줄. 응답 상태로 레벨을 정한다: 5xx error, 4xx warn, 그 외 info. 2xx 헬스체크 줄은 Logstash가 버린다.
-     * 기본 필드(메서드, 경로, 상태, 걸린 시간) 뒤에 이 요청에 맡겨진 결과 필드를 그대로 붙인다.
+     * 기본 필드(메서드, 상태, 걸린 시간) 뒤에 이 요청에 맡겨진 결과 필드를 그대로 붙인다. url.path·http.route는 문맥 필드로 이미 붙어 있다.
      */
-    private static void completed(AppLogger logger, HttpServletRequest request, int status, String path, long started) {
-        // http.route: Spring이 고른 경로 템플릿. 컨트롤러까지 가지 못한 요청(CSRF·세션 거절, 없는 경로)에는 없다
-        Object route = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        LogField[] fields = concat(new LogField[]{LogField.httpMethod(request.getMethod()), LogField.urlPath(path),
-                LogField.route(route instanceof String pattern ? pattern : null), LogField.statusCode(status),
+    private static void completed(AppLogger logger, HttpServletRequest request, int status, long started) {
+        LogField[] fields = concat(new LogField[]{LogField.httpMethod(request.getMethod()), LogField.statusCode(status),
                 LogField.duration(elapsed(started))}, logger.outcomeFields());
         if (status >= 500) logger.error("request completed", fields);
         else if (status >= 400) logger.warn("request completed", fields);
         else logger.info("request completed", fields);
+    }
+
+    /**
+     * Spring MVC가 이 요청에 고를 경로 템플릿(예: /files/{fileId}/content). DispatcherServlet이 나중에 같은 매핑으로 똑같이 고르므로
+     * 결과가 같다. 그래서 세션 확인처럼 컨트롤러 앞에서 찍는 줄과, 세션·CSRF로 거절된 요청에도 템플릿이 붙는다.
+     *
+     * <p>매칭은 요청 속성(파싱한 경로, 고른 handler·템플릿 등)을 남긴다. 뒤의 필터와 DispatcherServlet이 보는 상태가 바뀌지 않도록
+     * 매칭 전 속성을 기억해 두었다가 그대로 되돌린다. 맞는 경로가 없거나(404) 매칭 중 예외(405 등)가 나면 null이다.
+     */
+    private String route(HttpServletRequest request) {
+        RequestMappingHandlerMapping mapping = mappings.getIfAvailable();
+        if (mapping == null) return null;
+        Map<String, Object> before = new HashMap<>();
+        for (String name : Collections.list(request.getAttributeNames())) before.put(name, request.getAttribute(name));
+        try {
+            // 경로 패턴 매칭은 파싱한 요청 경로를 요청 속성에서 읽는다. DispatcherServlet도 나중에 다시 파싱한다
+            ServletRequestPathUtils.parseAndCache(request);
+            if (mapping.getHandler(request) == null) return null;
+            return request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) instanceof String pattern ? pattern : null;
+        } catch (Exception noMatch) {
+            return null;
+        } finally {
+            // 매칭이 새로 만든 속성은 지우고, 바꾸거나 지운 속성은 원래 값으로 되돌린다
+            for (String name : Collections.list(request.getAttributeNames())) {
+                if (!before.containsKey(name)) request.removeAttribute(name);
+            }
+            before.forEach(request::setAttribute);
+        }
     }
 
     /** SessionFilter가 세션을 확인했으면 그 사용자를 더한다. 공개 경로(로그인 등)는 사용자가 없다. */
@@ -121,32 +157,30 @@ public final class RequestLogFilter extends OncePerRequestFilter {
         private final AppLogger logger;
         private final HttpServletRequest request;
         private final HttpServletResponse response;
-        private final String path;
         private final long started;
 
-        Completion(AppLogger logger, HttpServletRequest request, HttpServletResponse response, String path, long started) {
+        Completion(AppLogger logger, HttpServletRequest request, HttpServletResponse response, long started) {
             this.logger = logger;
             this.request = request;
             this.response = response;
-            this.path = path;
             this.started = started;
         }
 
         @Override
         public void onComplete(AsyncEvent event) {
-            completed(withUser(logger, request), request, response.getStatus(), path, started);
+            completed(withUser(logger, request), request, response.getStatus(), started);
         }
 
         @Override
         public void onTimeout(AsyncEvent event) {
             withUser(logger, request).warn("async request timed out", LogField.httpMethod(request.getMethod()),
-                    LogField.urlPath(path), LogField.duration(elapsed(started)));
+                    LogField.duration(elapsed(started)));
         }
 
         @Override
         public void onError(AsyncEvent event) {
             withUser(logger, request).error("async request failed", event.getThrowable(),
-                    LogField.httpMethod(request.getMethod()), LogField.urlPath(path), LogField.duration(elapsed(started)));
+                    LogField.httpMethod(request.getMethod()), LogField.duration(elapsed(started)));
         }
 
         @Override

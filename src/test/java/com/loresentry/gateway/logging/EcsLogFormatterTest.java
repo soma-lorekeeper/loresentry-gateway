@@ -45,6 +45,15 @@ class EcsLogFormatterTest {
     }
 
     @Test
+    void aLoggerKeyValueReplacesTheLoggerName() {
+        // AppLogger가 줄 위치를 따로 넘긴 경우(RestClient 호출 결과 줄): SLF4J logger 이름 대신 그 값이 log.logger다
+        var event = event(Level.INFO, "upstream call completed", null);
+        event.addKeyValuePair(new KeyValuePair("log.logger", "org.springframework.web.client.DefaultRestClient$DefaultResponseSpec"));
+        JsonNode json = format(event);
+        assertThat(json.at("/log/logger").asString()).isEqualTo("org.springframework.web.client.DefaultRestClient$DefaultResponseSpec");
+    }
+
+    @Test
     void mergesKeyValuesIntoTheSameObjectsTheFormatterWrites() {
         var event = event(Level.WARN, "upstream call completed", null);
         event.addKeyValuePair(new KeyValuePair("log.origin.function", "intercept"));

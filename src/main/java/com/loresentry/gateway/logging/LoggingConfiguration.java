@@ -3,6 +3,8 @@ package com.loresentry.gateway.logging;
 import java.util.Map;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.restclient.RestClientCustomizer;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -14,6 +16,7 @@ import org.springframework.core.task.TaskDecorator;
 import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * 로그·trace 배선. LOG_SCHEMA.md 5·7절.
@@ -41,8 +44,11 @@ public class LoggingConfiguration {
     }
 
     @Bean
-    public FilterRegistrationBean<RequestLogFilter> requestLogFilter(Tracer tracer) {
-        var registration = new FilterRegistrationBean<>(new RequestLogFilter(tracer));
+    public FilterRegistrationBean<RequestLogFilter> requestLogFilter(Tracer tracer,
+            @Qualifier("requestMappingHandlerMapping") ObjectProvider<RequestMappingHandlerMapping> mappings) {
+        // 컨트롤러 매핑은 MVC 설정 bean이다(actuator 등 다른 RequestMappingHandlerMapping과 헷갈리지 않게 이름으로 고른다).
+        // 필터를 만들 때가 아니라 요청마다 꺼내므로 bean 생성 순서에 기대지 않는다
+        var registration = new FilterRegistrationBean<>(new RequestLogFilter(tracer, mappings));
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         return registration;
     }

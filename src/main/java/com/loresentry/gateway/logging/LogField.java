@@ -1,5 +1,6 @@
 package com.loresentry.gateway.logging;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
@@ -140,12 +141,18 @@ public final class LogField {
         return of("http.request.method", method);
     }
 
-    /** 쿼리를 뺀 실제 경로. 쿼리에는 OAuth code·state, 검색어가 들어갈 수 있어 남기지 않는다. */
+    /**
+     * 브라우저가 부른 실제 경로(쿼리 제외). RequestLogFilter가 요청 하나의 모든 줄에 붙인다.
+     * 쿼리에는 OAuth code·state, 검색어가 들어갈 수 있어 남기지 않는다.
+     */
     public static LogField urlPath(String path) {
         return of("url.path", path);
     }
 
-    /** Spring이 매칭한 경로 템플릿(/projects/{projectId}). 엔드포인트별로 묶어 볼 때 쓴다. OpenTelemetry http.route와 같은 뜻이다. */
+    /**
+     * Spring이 매칭한 경로 템플릿(/projects/{projectId}). 엔드포인트별로 묶어 볼 때 쓴다. OpenTelemetry http.route와 같은 뜻이다.
+     * RequestLogFilter가 요청 시작 때 찾아 요청 하나의 모든 줄에 붙인다. 맞는 경로가 없는 요청(404)에는 없다.
+     */
     public static LogField route(String pattern) {
         return of("http.route", pattern);
     }
@@ -153,6 +160,17 @@ public final class LogField {
     /** 호출한 내부 서비스의 호스트(content-api 등). 들어온 요청이 아니라 나가는 호출에만 쓴다. */
     public static LogField urlDomain(String host) {
         return of("url.domain", host);
+    }
+
+    /**
+     * 나가는 호출의 대상 주소(scheme://host:port/path). ECS·OpenTelemetry HTTP client의 {@code url.full}이다.
+     * 같은 줄의 {@code url.path}는 브라우저가 부른 경로라서, 내부 서비스 쪽 경로는 이 필드로 본다.
+     * 쿼리는 넣지 않는다(검색어 등이 들어갈 수 있다).
+     */
+    public static LogField urlFull(URI uri) {
+        if (uri == null) return null;
+        String port = uri.getPort() < 0 ? "" : ":" + uri.getPort();
+        return of("url.full", uri.getScheme() + "://" + uri.getHost() + port + uri.getRawPath());
     }
 
     public static LogField statusCode(int status) {

@@ -28,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>응답 헤더 X-Trace-Id와 에러 본문 trace_id가 그 trace ID다</li>
  *   <li>접근 로그가 ECS JSON 한 줄로, 같은 trace ID와 응답 상태를 담아 남는다</li>
  *   <li>실패 이유(보안 응답이 맡긴 error.type)는 따로 찍히지 않고 결과 줄(request completed)에 붙는다</li>
+ *   <li>브라우저가 부른 경로(url.path)와 경로 템플릿(http.route)이 요청의 모든 줄에 붙는다</li>
  * </ul>
  */
 @LocalTestEnvironment
@@ -63,8 +64,11 @@ class RequestLoggingTest {
         assertThat(completed.at("/log/level").asString()).isEqualTo("WARN");
         assertThat(completed.at("/http/response/status_code").asLong()).isEqualTo(401L);
         assertThat(completed.at("/error/type").asString()).isEqualTo("SESSION_REQUIRED");
-        // 세션 필터에서 막혀 컨트롤러까지 가지 않았으므로 경로 템플릿이 없다
-        assertThat(completed.at("/http/route").isMissingNode()).isTrue();
+        // 세션 필터에서 막혀 컨트롤러까지 가지 않았어도, 경로 템플릿은 요청 시작 때 찾아 모든 줄에 붙는다
+        assertThat(mine).allSatisfy(json -> {
+            assertThat(json.at("/http/route").asString()).isEqualTo("/chat/usage");
+            assertThat(json.at("/url/path").asString()).isEqualTo("/chat/usage");
+        });
         assertThat(completed.has("tags")).isFalse();
         assertThat(completed.at("/url/path").asString()).isEqualTo("/chat/usage");
         assertThat(completed.at("/http/request/id").asString()).isEqualTo("Root=1-6731b2f0-0123456789abcdef01234567");
@@ -86,9 +90,24 @@ class RequestLoggingTest {
         assertThat(health).extracting(json -> json.get("message").asString()).contains("request received", "request completed");
         assertThat(health).allSatisfy(json -> assertThat(json.get("tags").toString()).contains("health"));
         JsonNode completed = health.stream().filter(json -> "request completed".equals(json.get("message").asString())).findFirst().orElseThrow();
-        // 컨트롤러까지 간 요청은 Spring이 고른 경로 템플릿이 결과 줄에 남는다
-        assertThat(completed.at("/http/route").asString()).isEqualTo("/health");
+        // 헬스체크 흐름의 모든 줄(진입, service, 내부 호출, 결과)에 경로와 경로 템플릿이 붙는다
+        assertThat(health).allSatisfy(json -> {
+            assertThat(json.at("/http/route").asString()).isEqualTo("/health");
+            assertThat(json.at("/url/path").asString()).isEqualTo("/health");
+        });
         assertThat(completed.at("/log/layer").asString()).isEqualTo("filter");
         assertThat(completed.at("/log/package").asString()).isEqualTo("com.loresentry.gateway.logging");
+    }
+
+    @Test
+    void pathsWithoutAControllerHaveNoRouteButKeepThePath(CapturedOutput output) throws Exception {
+        // 맞는 컨트롤러가 없는 경로는 경로 템플릿이 없다. 실제 경로는 남는다
+        var response = mvc.perform(get("/no-such-path")).andReturn().getResponse();
+        String traceId = response.getHeader(RequestLogFilter.TRACE_HEADER);
+        var mine = lines(output).stream().filter(json -> traceId.equals(json.at("/trace/id").asString())).toList();
+        assertThat(mine).isNotEmpty().allSatisfy(json -> {
+            assertThat(json.at("/http/route").isMissingNode()).isTrue();
+            assertThat(json.at("/url/path").asString()).isEqualTo("/no-such-path");
+        });
     }
 }
