@@ -60,7 +60,7 @@ public final class AppLogger {
     private static final Pattern LAMBDA_METHOD = Pattern.compile("lambda\\$(.+)\\$\\d+");
     /** 클래스 이름 끝 → log.layer. 위에서부터 맞춰 본다(LOG_SCHEMA.md 5절 표와 같다). */
     private static final List<Map.Entry<String, String>> LAYER_SUFFIXES = List.of(
-            Map.entry("Controller", "controller"), Map.entry("Service", "service"), Map.entry("Repository", "repository"),
+            Map.entry("Controller", "controller"), Map.entry("Service", "service"), Map.entry("Repository", "repository"), Map.entry("Store", "repository"),
             Map.entry("Client", "client"), Map.entry("Listener", "consumer"), Map.entry("Consumer", "consumer"),
             Map.entry("Publisher", "publisher"), Map.entry("Filter", "filter"), Map.entry("Handler", "handler"),
             Map.entry("Interceptor", "interceptor"));

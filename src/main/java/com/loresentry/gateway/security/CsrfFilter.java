@@ -6,6 +6,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
@@ -24,6 +26,9 @@ public class CsrfFilter extends OncePerRequestFilter {
         var csrf=Collections.list(request.getHeaders("X-LS-CSRF"));
         boolean allowed=origins.size()==1 && cors.checkOrigin(origins.getFirst())!=null;
         if (!allowed || csrf.size()!=1 || !"1".equals(csrf.getFirst())) {
+            // 거절한 이유를 개수·허용 여부로만 남긴다. Origin·X-LS-CSRF 값은 브라우저가 보낸 문자열이라 남기지 않는다
+            AppLogger.current().warn("csrf check rejected",LogField.param("origin_count",origins.size()),
+                    LogField.param("origin_allowed",allowed),LogField.param("csrf_header_count",csrf.size()));
             response.addHeader("Vary","Origin");
             if(allowed) {
                 response.setHeader("Access-Control-Allow-Origin",origins.getFirst());

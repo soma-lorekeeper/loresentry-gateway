@@ -80,13 +80,9 @@ public final class LogField {
         return uuid("loresentry.chat.turn_id", id);
     }
 
-    /** 관계도 최신화 요청(content의 graph-refresh requestId). */
+    /** 관계도 최신화 요청(content의 graph-refresh requestId). content의 run(refresh_runs.id)도 같은 값이라 이 필드 하나만 쓴다. */
     public static LogField refreshRequestId(UUID id) {
         return uuid("loresentry.refresh.request_id", id);
-    }
-
-    public static LogField refreshRunId(UUID id) {
-        return uuid("loresentry.refresh.run_id", id);
     }
 
     /**

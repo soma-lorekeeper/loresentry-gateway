@@ -24,7 +24,7 @@ public final class TermsService {
         try {
             var result=client.terms(id.value(),locale);
             validExpiry(result.expiresAt());return result;
-        } catch(AuthCallFailure failure){AppLogger.current().warn("terms lookup failed",LogField.errorType(failure.code()));throw mapped(failure);}
+        } catch(AuthCallFailure failure){AppLogger.current().warn("terms lookup failed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));throw mapped(failure);}
     }
     public LoginService.Session accept(ConsentId id,String version) {
         AppLogger.current().info("terms accept");
@@ -40,7 +40,7 @@ public final class TermsService {
             var session=new LoginService.Session(new SessionId(result.sessionId()),result.expiresAt());
             AppLogger.current().info("terms accepted");
             return session;
-        } catch(AuthCallFailure failure){AppLogger.current().warn("terms accept failed",LogField.errorType(failure.code()));throw mapped(failure);}
+        } catch(AuthCallFailure failure){AppLogger.current().warn("terms accept failed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));throw mapped(failure);}
     }
     private void validExpiry(Instant expiry) {
         // 만료가 없거나 이미 지난 응답은 auth 계약 위반이다
@@ -50,7 +50,7 @@ public final class TermsService {
         }
     }
     private AuthOperationFailure mapped(AuthCallFailure failure) {
-        if(failure.kind()==AuthCallFailure.Kind.CONTRACT)return new AuthOperationFailure(failure.status(),failure.code(),failure.nextAction());
+        if(failure.kind()==AuthCallFailure.Kind.CONTRACT)return new AuthOperationFailure(failure.status(),failure.code(),failure.nextAction(),failure.upstreamCode());
         if(failure.kind()==AuthCallFailure.Kind.UNAVAILABLE)return new AuthOperationFailure(503,"LOGIN_UNAVAILABLE","RESTART_LOGIN");
         return new AuthOperationFailure(502,"UPSTREAM_INVALID_RESPONSE","RESTART_LOGIN");
     }

@@ -2,6 +2,7 @@ package com.loresentry.gateway.security;
 
 import com.loresentry.gateway.config.CookieSettings;
 import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import com.loresentry.gateway.web.auth.AuthCookies;
 import com.loresentry.gateway.web.auth.SessionCookieResponse;
 import jakarta.servlet.*;
@@ -35,12 +36,20 @@ public final class SessionFilter extends OncePerRequestFilter {
         try {
             String id;
             try { id=AuthCookies.single(request,names.sessionName()); }
-            catch(IllegalArgumentException duplicate) { throw new SecurityFailure(SecurityFailure.Reason.SESSION_INVALID); }
+            catch(IllegalArgumentException duplicate) {
+                // 같은 이름의 세션 쿠키가 둘 이상이다. 쿠키 값은 인증 수단이라 남기지 않는다
+                AppLogger.current().warn("session verify rejected: duplicate session cookie");
+                throw new SecurityFailure(SecurityFailure.Reason.SESSION_INVALID);
+            }
             var verified=verifier.verify(id);
             user=verified.userId();
             renewed=new SessionCookieResponse(response,cookies,id,verified.expiresAt(),cookies.clearLegacy(request));
         } catch(SecurityFailure failure) { SecurityResponses.write(response,failure.reason());return; }
-        catch(RuntimeException unavailable) { SecurityResponses.write(response,SecurityFailure.Reason.SESSION_UNAVAILABLE);return; }
+        catch(RuntimeException unavailable) {
+            // 세션 확인·쿠키 갱신 준비 중 예상하지 못한 예외. 예외 메시지는 남기지 않고 클래스만 남긴다
+            AppLogger.current().warn("session verify failed: unexpected error",LogField.errorType(unavailable.getClass().getName()));
+            SecurityResponses.write(response,SecurityFailure.Reason.SESSION_UNAVAILABLE);return;
+        }
         var sanitized=new HttpServletRequestWrapper(request) {
             private boolean secret(String name) {
                 return "X-User-Id".equalsIgnoreCase(name)||"Cookie".equalsIgnoreCase(name)||"Authorization".equalsIgnoreCase(name);

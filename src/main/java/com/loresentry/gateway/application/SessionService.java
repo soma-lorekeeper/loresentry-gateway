@@ -23,10 +23,10 @@ public class SessionService {
         try {client.revokeSession(id);AppLogger.current().info("session revoked");return Revocation.CONFIRMED;}
         catch(AuthCallFailure failure) {
             if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&"INVALID_SESSION_ID".equals(failure.code())) {
-                AppLogger.current().warn("session revoke rejected by auth",LogField.errorType(failure.code()));return Revocation.REJECTED;
+                AppLogger.current().warn("session revoke rejected by auth",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));return Revocation.REJECTED;
             }
             // 폐기됐는지 알 수 없다(auth 장애·잘못된 응답). 쿠키는 컨트롤러가 그래도 지운다
-            AppLogger.current().warn("session revoke unconfirmed",LogField.errorType(failure.code()));
+            AppLogger.current().warn("session revoke unconfirmed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));
             return Revocation.UNCONFIRMED;
         }
     }

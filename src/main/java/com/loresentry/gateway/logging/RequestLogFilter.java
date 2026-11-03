@@ -16,6 +16,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -38,7 +39,8 @@ import org.springframework.web.util.ServletRequestPathUtils;
  *       요청은 그 요청의 모든 줄에 {@code tags: health}가 붙고, 정상(info) 줄은 Logstash가 버린다. 결과 줄에는 예외 처리기·보안 응답이
  *       {@link AppLogger#addToOutcome(LogField...)}로 맡긴 실패 이유(error.type 등)도 붙인다. 실패를 따로 찍지 않으므로 요청 하나의
  *       결과는 늘 한 줄이다. 맡긴 필드가 무엇인지는 이 필터가 보지 않는다. 사용자는 SessionFilter가 요청 속성에 넣은
- *       값을 완료 시점에 읽는다. 채팅 스트리밍처럼 비동기로 끝나는 요청은 비동기 완료 때 남긴다.</li>
+ *       값을 완료 시점에 읽는다. 채팅 스트리밍처럼 비동기로 끝나는 요청은 비동기 완료 때 남긴다. 비동기 시간 초과·오류도
+ *       이유를 결과 줄에 맡기고 원인 줄(warn, 브라우저 연결 끊김은 info)만 따로 남긴다.</li>
  * </ol>
  *
  * <p>쿼리스트링은 남기지 않는다(OAuth code·state, 검색어). 경로만 {@code url.path}에 넣는다.
@@ -152,7 +154,12 @@ public final class RequestLogFilter extends OncePerRequestFilter {
         return Duration.ofNanos(System.nanoTime() - started);
     }
 
-    /** 비동기 요청(채팅 SSE)이 끝났을 때 완료 로그를 남긴다. 이 콜백은 다른 스레드에서 불릴 수 있어 logger를 직접 들고 있다. */
+    /**
+     * 비동기 요청(채팅 SSE)이 끝났을 때 완료 로그를 남긴다. 이 콜백은 다른 스레드에서 불릴 수 있어 logger를 직접 들고 있다.
+     *
+     * <p>결과 줄(request completed)은 onComplete 한 곳에서만 찍는다. 시간 초과·오류는 서블릿 규약상 그 뒤에 onComplete가 오므로,
+     * 그 자리에서는 이유를 결과 줄에 맡기고(addToOutcome) 원인 줄만 남긴다. 그래서 비동기 요청도 결과는 한 줄이다.
+     */
     private static final class Completion implements AsyncListener {
         private final AppLogger logger;
         private final HttpServletRequest request;
@@ -173,13 +180,21 @@ public final class RequestLogFilter extends OncePerRequestFilter {
 
         @Override
         public void onTimeout(AsyncEvent event) {
+            logger.addToOutcome(LogField.errorType("ASYNC_REQUEST_TIMEOUT"));
             withUser(logger, request).warn("async request timed out", LogField.httpMethod(request.getMethod()),
                     LogField.duration(elapsed(started)));
         }
 
         @Override
         public void onError(AsyncEvent event) {
-            withUser(logger, request).error("async request failed", event.getThrowable(),
+            Throwable failure = event.getThrowable();
+            String type = failure == null ? null : failure.getClass().getName();
+            logger.addToOutcome(LogField.errorType(type));
+            // 브라우저가 연결을 끊은 것(탭 닫기·새로고침)은 서버 실패가 아니라 info로 남긴다. 예외 메시지는 남기지 않는다
+            boolean disconnected = failure instanceof AsyncRequestNotUsableException || (type != null && type.contains("ClientAbort"));
+            if (disconnected) withUser(logger, request).info("async request client disconnected", LogField.errorType(type),
+                    LogField.httpMethod(request.getMethod()), LogField.duration(elapsed(started)));
+            else withUser(logger, request).warn("async request failed", LogField.errorType(type),
                     LogField.httpMethod(request.getMethod()), LogField.duration(elapsed(started)));
         }
 

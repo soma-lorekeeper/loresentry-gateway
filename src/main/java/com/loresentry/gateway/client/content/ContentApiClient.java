@@ -104,13 +104,27 @@ public class ContentApiClient {
                 int status = response.getStatusCode().value();
                 if (expected.contains(status) && type == Void.class) return null;
                 var contentType = response.getHeaders().getContentType();
-                if (contentType == null || !MediaType.APPLICATION_JSON.isCompatibleWith(contentType))
+                if (contentType == null || !MediaType.APPLICATION_JSON.isCompatibleWith(contentType)) {
+                    AppLogger.current().warn("content response rejected", LogField.errorType("UNEXPECTED_CONTENT_TYPE"), LogField.statusCode(status));
                     throw ContentCallFailure.invalid();
+                }
                 if (expected.contains(status)) return ContentValidation.validate(JSON.readValue(response.getBody(), type));
-                if (status < 400) throw ContentCallFailure.invalid();
+                if (status < 400) {
+                    AppLogger.current().warn("content response rejected", LogField.errorType("UNEXPECTED_STATUS"), LogField.statusCode(status));
+                    throw ContentCallFailure.invalid();
+                }
                 var error = JSON.readValue(response.getBody(), Error.class);
                 if (error == null || errorStatus(error.code()) != status || !errorAction(error.code()).equals(error.nextAction())
-                        || error.message() == null) throw ContentCallFailure.invalid();
+                        || error.message() == null) {
+                    // code·message가 없거나, 모르는 code이거나, 아는 code인데 상태·next_action이 계약과 다르다.
+                    // 모르는 code는 content가 보낸 임의 문자열일 수 있어 error.code에 남기지 않는다
+                    boolean known = error != null && errorStatus(error.code()) != 0;
+                    AppLogger.current().warn("content response rejected",
+                            LogField.errorType(error == null || error.code() == null || error.message() == null ? "MISSING_FIELD"
+                                    : known ? "ERROR_CONTRACT_MISMATCH" : "UNKNOWN_ERROR_CODE"),
+                            LogField.errorCode(known ? error.code() : null), LogField.statusCode(status));
+                    throw ContentCallFailure.invalid();
+                }
                 if ("DOCUMENT_CONFLICT".equals(error.code())) {
                     var current = ContentValidation.validate(JSON.treeToValue(error.current(), ContentData.Content.class));
                     if (error.base() != null) ContentValidation.validate(error.base());
@@ -119,12 +133,20 @@ public class ContentApiClient {
                 throw new ContentCallFailure(status, error.code(), details(error));
             });
         } catch (ResourceAccessException failure) {
+            // 연결·전송 실패는 UpstreamCallLogInterceptor가 "upstream call failed"로 이미 남긴다
             throw ContentCallFailure.unavailable();
         } catch (JacksonException failure) {
+            // 원인이 IOException이면 본문 읽기 실패(연결 끊김), 아니면 모양이 틀린 응답이다
             for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause())
-                if (cause instanceof java.io.IOException) throw ContentCallFailure.unavailable();
+                if (cause instanceof java.io.IOException) {
+                    AppLogger.current().warn("content response read failed", LogField.errorType(cause.getClass().getName()));
+                    throw ContentCallFailure.unavailable();
+                }
+            AppLogger.current().warn("content response rejected", LogField.errorType(failure.getClass().getName()));
             throw ContentCallFailure.invalid();
         } catch (RestClientException | IllegalArgumentException | NullPointerException failure) {
+            // 응답 검증(ContentValidation)에서 빠진 필드·허용하지 않는 값 등. 예외 메시지는 남기지 않는다
+            AppLogger.current().warn("content response rejected", LogField.errorType(failure.getClass().getName()));
             throw ContentCallFailure.invalid();
         }
     }

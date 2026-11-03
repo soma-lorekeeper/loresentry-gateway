@@ -25,7 +25,7 @@ import com.tngtech.archunit.library.GeneralCodingRules;
  * 로그 규칙을 테스트로 강제한다(LOG_SCHEMA.md 5절). 테스트 코드는 검사하지 않는다.
  * <ul>
  *   <li>로그는 AppLogger로만 찍는다. logging 패키지 밖의 코드는 로깅 라이브러리와 표준 출력을 직접 쓰지 못한다.</li>
- *   <li>레이어 클래스의 모든 public 메서드는 AppLogger의 info·warn·error를 직접 부른다. 그래서 trace 하나를 시간 순으로 놓으면
+ *   <li>레이어 클래스의 private이 아닌 모든 메서드(public·protected·package-private, static 제외)는 AppLogger의 info·warn·error를 직접 부른다. 그래서 trace 하나를 시간 순으로 놓으면
  *       controller → service → client 흐름이 줄 단위로 보인다. 한 줄로 넘기는 메서드도 빠지지 않는다.
  *       여러 번 불리는 getter처럼 이유를 적은 {@link SkipEntryLog}가 붙은 메서드만 뺀다.</li>
  * </ul>
@@ -33,7 +33,7 @@ import com.tngtech.archunit.library.GeneralCodingRules;
 @AnalyzeClasses(packages = "com.loresentry.gateway", importOptions = ImportOption.DoNotIncludeTests.class)
 class LoggingArchitectureTest {
     /** 진입 로그를 남겨야 하는 레이어 클래스의 이름 끝(LOG_SCHEMA.md 5절 레이어 표의 업무 레이어). */
-    private static final List<String> LAYER_SUFFIXES = List.of("Controller", "Service", "Client", "Repository", "Listener", "Consumer", "Publisher");
+    private static final List<String> LAYER_SUFFIXES = List.of("Controller", "Service", "Client", "Repository", "Store", "Listener", "Consumer", "Publisher");
     private static final Set<String> LOG_METHODS = Set.of("info", "warn", "error");
 
     @ArchTest
@@ -51,11 +51,11 @@ class LoggingArchitectureTest {
 
     @ArchTest
     static final ArchRule everyLayerMethodLogs = methods()
-            .that().arePublic().and().areNotStatic()
+            .that().areNotPrivate().and().areNotStatic()
             .and().areDeclaredInClassesThat(layerClasses())
             .and().areNotAnnotatedWith(SkipEntryLog.class)
             .should(callAppLogger())
-            .because("레이어 클래스의 모든 public 메서드는 첫 줄에 진입 로그를 남긴다(LOG_SCHEMA.md 5절)");
+            .because("레이어 클래스의 private이 아닌 모든 메서드는 첫 줄에 진입 로그를 남긴다(LOG_SCHEMA.md 5절)");
 
     /** 이름 끝이 업무 레이어이거나 @LogLayer가 붙은 일반 클래스. record·interface·enum과 logging 패키지는 뺀다. */
     private static DescribedPredicate<JavaClass> layerClasses() {

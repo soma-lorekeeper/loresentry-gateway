@@ -19,7 +19,14 @@ public class ChatService {
     }
     public ChatData.Availability availability(UUID userId, UUID projectId) { AppLogger.current().info("chat availability get", LogField.projectId(projectId)); enabled(userId); return client.availability(userId, projectId); }
     public ChatData.Sessions sessions(UUID userId, UUID projectId) { AppLogger.current().info("chat session list", LogField.projectId(projectId)); enabled(userId); return client.sessions(userId, projectId); }
-    public ChatData.Session createSession(UUID userId, UUID projectId) { AppLogger.current().info("chat session create", LogField.projectId(projectId)); enabled(userId); return client.createSession(userId, projectId, profile(userId)); }
+    public ChatData.Session createSession(UUID userId, UUID projectId) {
+        AppLogger.current().info("chat session create", LogField.projectId(projectId));
+        enabled(userId);
+        var created = client.createSession(userId, projectId, profile(userId));
+        // 새로 만든 대화 세션은 결과 줄의 전용 필드(chat.session_id)로 남긴다
+        AppLogger.current().info("chat session create completed", LogField.projectId(projectId), LogField.chatSessionId(created == null ? null : created.id()));
+        return created;
+    }
     public ChatData.SearchHits search(UUID userId, UUID projectId, String query) { AppLogger.current().info("chat search", LogField.projectId(projectId), LogField.param("query", query)); enabled(userId); return client.search(userId, projectId, query); }
     public ChatData.Session renameSession(UUID userId, UUID sessionId, ChatData.Rename body) {
         AppLogger.current().info("chat session rename", LogField.chatSessionId(sessionId), LogField.param("title", body == null ? null : body.title()));
@@ -55,7 +62,7 @@ public class ChatService {
             return new ChatData.Profile(account.locale(), account.displayName());
         } catch (RuntimeException failure) {
             AppLogger.current().warn("chat request continues without a profile",
-                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getSimpleName()));
+                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getName()));
             return null;
         }
     }
