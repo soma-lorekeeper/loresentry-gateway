@@ -11,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import io.micrometer.context.ContextRegistry;
 import io.micrometer.context.ThreadLocalAccessor;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.slf4j.MarkerFactory;
@@ -201,7 +202,7 @@ public final class AppLogger {
         StackWalker.StackFrame caller = WALKER.walk(frames ->
                 frames.dropWhile(f -> f.getDeclaringClass() == AppLogger.class).findFirst().orElse(null));
         String loggerName = caller == null ? AppLogger.class.getName() : caller.getClassName();
-        var logger = LoggerFactory.getLogger(loggerName);
+        Logger logger = LoggerFactory.getLogger(loggerName);
         if (!logger.isEnabledForLevel(level)) return;
         // 이 줄 동안만 이 객체의 값으로 MDC를 덮고, 찍은 뒤 원래 값으로 되돌린다
         Map<String, String> previous = putMdc();
