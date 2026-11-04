@@ -11,6 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import io.micrometer.context.ContextRegistry;
 import io.micrometer.context.ThreadLocalAccessor;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -257,11 +259,18 @@ public final class AppLogger {
                 || f.getDeclaringClass() == factory).findFirst().orElse(null));
     }
 
-    /** context-propagation에 이 저장소를 등록한다. 여러 번 불러도 한 번만 등록된다. */
+    /**
+     * context-propagation에 이 저장소와 OpenTelemetry 문맥({@link SpanContextAccessor}, 지금 span)을 등록한다. 여러 번 불러도 한 번만
+     * 등록된다. 그래서 스레드를 옮기는 실행기(MVC 비동기 실행기의 ContextPropagatingTaskDecorator)가 AppLogger와 지금 span을 함께 옮긴다.
+     * 채팅 relay의 줄은 원래 요청의 trace·user를 갖고, relay 작업의 span({@code ai-chat stream relay})은 요청 서버 span 아래에 붙는다.
+     * agent의 executors 계측도 문맥을 옮기지만, agent가 없는 테스트에서도 같게 동작하도록 직접 옮긴다(둘 다 옮겨도 같은 문맥이라 결과가 같다).
+     */
     static void registerContextAccessor() {
         var registry = ContextRegistry.getInstance();
         boolean registered = registry.getThreadLocalAccessors().stream().anyMatch(a -> CONTEXT_KEY.equals(a.key()));
         if (!registered) registry.registerThreadLocalAccessor(new Accessor());
+        boolean spans = registry.getThreadLocalAccessors().stream().anyMatch(a -> SpanContextAccessor.KEY.equals(a.key()));
+        if (!spans) registry.registerThreadLocalAccessor(new SpanContextAccessor());
     }
 
     /**
@@ -441,6 +450,51 @@ public final class AppLogger {
             Map<String, String> saved = savedMdc.get();
             if (saved != null) restoreMdc(saved);
             savedMdc.remove();
+        }
+    }
+
+    /**
+     * 지금 OpenTelemetry 문맥(지금 span)을 새 스레드로 옮기는 context-propagation 접근자. 맡길 때의 문맥을 새 스레드에서 지금 문맥으로
+     * 두고, 작업이 끝나면 그 스레드를 원래대로 되돌린다. 문맥을 지금 문맥으로 두는 일은 스레드마다 연 반대 순서로 닫아야 해서, 연 범위를
+     * 스레드별로 기억한다.
+     */
+    private static final class SpanContextAccessor implements ThreadLocalAccessor<Context> {
+        /** context-propagation에 등록하는 이름. */
+        static final String KEY = "loresentry.otel-context";
+
+        /** setValue로 새 스레드에서 연 범위. restore에서 닫는다. */
+        private final ThreadLocal<Scope> scope = new ThreadLocal<>();
+
+        @Override
+        public Object key() {
+            return KEY;
+        }
+
+        @Override
+        public Context getValue() {
+            return Context.current();
+        }
+
+        @Override
+        public void setValue(Context value) {
+            scope.set(value.makeCurrent());
+        }
+
+        /** 맡길 때 문맥이 없었다. 새 스레드의 문맥을 그대로 둔다. */
+        @Override
+        public void setValue() {
+        }
+
+        @Override
+        public void restore(Context previousValue) {
+            restore();
+        }
+
+        @Override
+        public void restore() {
+            Scope opened = scope.get();
+            if (opened != null) opened.close();
+            scope.remove();
         }
     }
 }

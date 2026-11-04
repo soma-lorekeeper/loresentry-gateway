@@ -249,7 +249,6 @@ public class ChatApiClient {
             request.setHeader("X-User-Id", Objects.requireNonNull(userId).toString());
             request.setHeader("Accept", "text/event-stream, application/json");
             profile(profile, request::setHeader);
-            stream.trace(request::setHeader);
             request.setEntity(new ByteArrayEntity(JSON.writeValueAsBytes(body), ContentType.APPLICATION_JSON));
         } catch (JacksonException | IllegalArgumentException | NullPointerException failure) {
             // 보내기 전에 요청을 만들지 못했다(값 누락·직렬화 실패). 예외 메시지는 남기지 않는다
@@ -258,7 +257,9 @@ public class ChatApiClient {
             throw ChatCallFailure.invalid();
         }
         // SSE 요청은 RestClient를 거치지 않아 UpstreamCallLogInterceptor가 남기지 않는다. 같은 문구(upstream call completed·failed)와
-        // 주소 필드로 결과 줄을 남겨 한 번의 검색으로 함께 찾는다. 상태를 받은 시점까지의 결과다(본문 스트리밍은 relay 종료 줄에 있다)
+        // 주소 필드로 결과 줄을 남겨 한 번의 검색으로 함께 찾는다. 상태를 받은 시점까지의 결과다(본문 스트리밍은 relay 종료 줄에 있다).
+        // LogFlow.call이 upstream call span 안에서 보내므로 EDOT agent의 Apache HttpClient 계측이 연 CLIENT span이 그 자식이 되고,
+        // 그 계측이 traceparent 헤더를 넣는다(LOG_SCHEMA.md 7절 "서비스 간 HTTP")
         ClassicHttpResponse response;
         try {
             response = LogFlow.call("upstream", uri, call -> {

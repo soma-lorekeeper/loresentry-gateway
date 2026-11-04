@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 세션 저장소를 확인하지 못했을 때 저장소 호출 결과 줄(valkey call failed)에 단계·예외 종류가 남는지, 정상적인 거절(세션 없음)은
- * 호출 완료로 남는지, 기동 예열이 예외 없이 시작·종료 줄만 남기는지 확인한다.
+ * 호출 완료로 남는지, 기동 예열이 붙을 때까지 다시 시도하고 예외 없이 시작·종료 줄만 남기는지 확인한다.
  * AppLogger가 넘긴 Logback 이벤트를 그대로 받아 message와 key-value(error.type, param.stage)를 본다.
  */
 class OpaqueSessionReaderLoggingTest {
@@ -140,8 +140,38 @@ class OpaqueSessionReaderLoggingTest {
 
         assertThat(events.list).extracting(ILoggingEvent::getFormattedMessage)
                 .containsExactly("session store warm-up start", "session store warm-up completed");
-        assertThat(field(line("session store warm-up completed").orElseThrow(), "event.duration")).isInstanceOf(Long.class);
+        var completed = line("session store warm-up completed").orElseThrow();
+        assertThat(field(completed, "event.duration")).isInstanceOf(Long.class);
+        assertThat(field(completed, "loresentry.result.attempts")).isEqualTo(1);
         verify(commands, times(1)).get("auth:session:{login}:by-id:warm-up");
+        verify(connection).closeAsync();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test void warmUpRetriesUntilTheStoreAnswers() throws Exception {
+        // 첫 연결은 agent가 Lettuce·Netty 클래스를 처음 읽는 비용까지 더해져 500 ms 제한을 넘길 수 있다. 다음 시도에서 붙으면 완료다
+        var client = mock(RedisClient.class);
+        ConnectionFuture<StatefulRedisConnection<String, String>> slow = mock(ConnectionFuture.class);
+        ConnectionFuture<StatefulRedisConnection<String, String>> ready = mock(ConnectionFuture.class);
+        StatefulRedisConnection<String, String> connection = mock(StatefulRedisConnection.class);
+        RedisAsyncCommands<String, String> commands = mock(RedisAsyncCommands.class);
+        RedisFuture<String> get = mock(RedisFuture.class);
+        when(client.connectAsync(StringCodec.UTF8, ENDPOINT)).thenReturn(slow, ready);
+        when(slow.get(anyLong(), eq(TimeUnit.NANOSECONDS))).thenThrow(new ExecutionException(new RedisCommandTimeoutException("sensitive")));
+        when(ready.get(anyLong(), eq(TimeUnit.NANOSECONDS))).thenReturn(connection);
+        when(connection.async()).thenReturn(commands);
+        when(commands.get("auth:session:{login}:by-id:warm-up")).thenReturn(get);
+        when(get.get(anyLong(), eq(TimeUnit.NANOSECONDS))).thenReturn(null);
+
+        new OpaqueSessionReader(client, ENDPOINT).warmUp(Duration.ofSeconds(5));
+
+        // 시작·종료 줄은 하나씩이고, 종료 줄에 몇 번째에 붙었는지 남는다
+        assertThat(events.list).extracting(ILoggingEvent::getFormattedMessage)
+                .containsExactly("session store warm-up start", "session store warm-up completed");
+        assertThat(field(line("session store warm-up completed").orElseThrow(), "loresentry.result.attempts")).isEqualTo(2);
+        verify(client, times(2)).connectAsync(StringCodec.UTF8, ENDPOINT);
+        // 열리지 못한 첫 시도의 연결이 늦게 열리면 닫도록 걸어 둔다
+        verify(slow).whenComplete(any());
         verify(connection).closeAsync();
     }
 
@@ -153,8 +183,13 @@ class OpaqueSessionReaderLoggingTest {
         when(connecting.get(anyLong(), eq(TimeUnit.NANOSECONDS))).thenThrow(new TimeoutException());
 
         assertThatCode(() -> new OpaqueSessionReader(client, ENDPOINT).warmUp(Duration.ofMillis(10))).doesNotThrowAnyException();
+        // 정해 둔 횟수만큼 다시 시도한 뒤 실패 줄 하나를 남긴다(마지막 시도의 예외)
+        verify(client, times(5)).connectAsync(StringCodec.UTF8, ENDPOINT);
+        assertThat(events.list).extracting(ILoggingEvent::getFormattedMessage)
+                .containsExactly("session store warm-up start", "session store warm-up failed");
         var failed = line("session store warm-up failed").orElseThrow();
         assertThat(field(failed, "error.type")).isEqualTo("java.util.concurrent.TimeoutException");
+        assertThat(field(failed, "loresentry.result.attempts")).isEqualTo(5);
         assertThat(field(failed, "error.stack_trace")).isNotNull();
         assertThat(failed.getThrowableProxy()).isNull();
     }

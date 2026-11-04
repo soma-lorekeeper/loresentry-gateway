@@ -36,6 +36,11 @@ public final class OpaqueSessionReader {
     public record VerifiedSession(UUID userId, Instant expiresAt) {}
     /** 저장소 확인의 단계. 연결 → 세션 키 GET → 원자적 재확인·연장(EVAL) → 결과 검사 순서다. 실패 줄의 param.stage 허용 목록이다. */
     private static final Set<String> STAGES = Set.of("connect", "get", "eval", "result");
+    /**
+     * 기동 예열({@link #warmUp})을 다시 시도하는 횟수의 상한. 시도마다 연결·명령 시간 제한(500 ms, SessionRedisConfiguration)과
+     * 처음 읽는 클래스를 준비하는 시간만큼 걸린다.
+     */
+    static final int WARM_UP_ATTEMPTS = 5;
     private static final String SCRIPT = script();
     private static final JsonMapper JSON = JsonMapper.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -128,26 +133,46 @@ public final class OpaqueSessionReader {
     }
 
     /**
-     * 기동할 때 세션 저장소에 한 번 연결하고, 없는 세션 키를 한 번 읽는다(BFF 계정이 허용된 auth:session:* 의 GET만 쓴다).
+     * 기동할 때 세션 저장소에 연결하고, 없는 세션 키를 한 번 읽는다(BFF 계정이 허용된 auth:session:* 의 GET만 쓴다).
      *
      * <p>세션 확인은 요청마다 새 연결을 열고 500 ms 안에 끝내야 한다. 그런데 파드의 첫 연결은 Netty 스레드·TLS 초기화와 JIT가
      * 한꺼번에 겹쳐 이 시간을 넘기고, 그러면 새 파드가 처음 받은 로그인 확인이 SESSION_UNAVAILABLE(503)이 된다. 이 비용을
-     * 요청을 받기 전에 미리 치른다. 실패해도 예외를 밖으로 내지 않는다(저장소가 잠깐 없더라도 기동은 계속하고, 요청 때 다시 연결한다).
+     * 요청을 받기 전에 미리 치른다. 연결과 handshake(AUTH)에도 500 ms 제한이 있어(SessionRedisConfiguration), EDOT agent가 Lettuce·Netty
+     * 클래스를 처음 읽으며 계측을 붙이는 비용까지 더해지면 첫 시도가 그 시간을 넘길 수 있다. 클래스가 준비될수록 다음 시도가 빨라지므로
+     * 붙을 때까지 {@link #WARM_UP_ATTEMPTS}번까지 다시 시도한다(시작·종료 줄은 하나이고, 종료 줄의 result.attempts에 몇 번 시도했는지
+     * 남긴다). 끝내 실패해도 예외를 밖으로 내지 않는다(저장소가 잠깐 없더라도 기동은 계속하고, 요청 때 다시 연결한다).
      *
-     * @param timeout 연결과 GET 각각을 기다릴 시간. 요청 때의 500 ms보다 넉넉하게 준다
+     * @param timeout 시도마다 연결과 GET 각각을 기다릴 시간. 요청 때의 500 ms보다 넉넉하게 준다
      */
     public void warmUp(Duration timeout) {
-        // 시작 줄 "session store warm-up start"와 종료 줄 "session store warm-up completed"(걸린 시간) 또는
-        // "session store warm-up failed"(예외 종류·메시지 없는 스택)를 LogFlow가 남긴다
+        // 시작 줄 "session store warm-up start"와 종료 줄 "session store warm-up completed"(시도 횟수, 걸린 시간) 또는
+        // "session store warm-up failed"(마지막 시도의 예외 종류·메시지 없는 스택)를 LogFlow가 남긴다
         try {
             LogFlow.task("session store warm-up", task -> {
-                StatefulRedisConnection<String, String> connection = null;
-                try {
-                    connection = client.connectAsync(StringCodec.UTF8, writer).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                    connection.async().get("auth:session:{login}:by-id:warm-up").get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                } finally {
-                    if (connection != null) connection.closeAsync();
+                Exception last = null;
+                for (int attempt = 1; attempt <= WARM_UP_ATTEMPTS; attempt++) {
+                    StatefulRedisConnection<String, String> connection = null;
+                    io.lettuce.core.ConnectionFuture<StatefulRedisConnection<String, String>> connecting = null;
+                    try {
+                        connecting = client.connectAsync(StringCodec.UTF8, writer);
+                        connection = connecting.get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                        connection.async().get("auth:session:{login}:by-id:warm-up").get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                        task.result(LogField.result("attempts", attempt));
+                        return;
+                    } catch (InterruptedException interrupted) {
+                        // 기동이 멈추는 중이다. 더 시도하지 않고 실패 줄을 남긴다(인터럽트 표시는 아래 catch가 되살린다)
+                        task.result(LogField.result("attempts", attempt));
+                        throw interrupted;
+                    } catch (Exception failure) {
+                        last = failure;
+                    } finally {
+                        // 기다리다 그만둔 연결이 늦게 열리면 그때 닫는다(시도마다 연결이 하나씩 남지 않게)
+                        if (connection != null) connection.closeAsync();
+                        else if (connecting != null) connecting.whenComplete((late, error) -> { if (late != null) late.closeAsync(); });
+                    }
                 }
+                task.result(LogField.result("attempts", WARM_UP_ATTEMPTS));
+                throw last;
             });
         } catch (InterruptedException interrupted) {
             // 기동을 멈추지 않는다. 인터럽트 표시만 되살린다

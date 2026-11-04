@@ -1,0 +1,40 @@
+// EDOT Java agent에 꽂는 확장 jar(docs LOG_SCHEMA.md 7절 "시작점"). gateway가 나가는 호출에 traceparent를 넣기만 하고 들어온 값은
+// 읽지 않게 하는 전파기(tracecontext-inject-only) 하나가 들어 있다. 앱 jar와 따로 만들고, Dockerfile이 /app/otel-extension.jar로 넣으면
+// 시작 스크립트(docker/entrypoint.sh)가 -Dotel.javaagent.extensions로 agent에 꽂는다.
+plugins {
+	id 'java-library'
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// 버전은 앱과 같이 Spring Boot BOM이 정한다(앱의 opentelemetry-api와 같은 버전). 실행 중에는 agent 안의 OpenTelemetry API·SDK
+	// 클래스로 이어지므로 compileOnly다. 그래서 jar에는 우리 클래스와 서비스 등록 파일만 들어간다
+	compileOnly platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+	compileOnly 'io.opentelemetry:opentelemetry-api'
+	compileOnly 'io.opentelemetry:opentelemetry-sdk-extension-autoconfigure-spi'
+
+	testImplementation platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+	testImplementation 'io.opentelemetry:opentelemetry-api'
+	testImplementation 'io.opentelemetry:opentelemetry-sdk-extension-autoconfigure-spi'
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testImplementation 'org.assertj:assertj-core'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Dockerfile이 이 이름으로 꺼낸다. 이름을 고정해 두어 Dockerfile과 시작 스크립트가 버전을 몰라도 된다
+tasks.named('jar') {
+	archiveFileName = 'otel-extension.jar'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

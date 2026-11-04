@@ -14,7 +14,6 @@ import com.loresentry.gateway.LocalTestEnvironment;
 import com.loresentry.gateway.client.session.OpaqueSessionReader.VerifiedSession;
 import com.loresentry.gateway.security.OpaqueSessionVerifier;
 import com.loresentry.gateway.security.SecurityFailure;
-import io.micrometer.tracing.Tracer;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.http.Cookie;
@@ -37,9 +36,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 실제 필터 순서(숨김 → observation → RequestLogFilter → CSRF → 세션)로 요청 하나를 보내 확인한다.
+ * 실제 필터 순서(agent의 서버 span → RequestLogFilter → CSRF → 세션)로 요청 하나를 보내 확인한다. 테스트에는 agent가 없어 서버 span은
+ * support/AgentLikeTracing이 연다.
  * <ul>
- *   <li>인터넷에서 온 traceparent는 무시하고 새 trace를 시작한다</li>
+ *   <li>인터넷에서 온 traceparent는 무시하고 새 trace를 시작한다. 운영에서는 agent의 inject-only 전파기(otel-extension, 그 단위 테스트가
+ *       확인한다)가, 테스트에서는 흉내가 들어온 헤더를 읽지 않는다. 여기서는 우리 코드도 그 헤더를 읽거나 남기지 않는지 본다</li>
  *   <li>응답 헤더 X-Trace-Id와 에러 본문 trace_id가 그 trace ID다</li>
  *   <li>접근 로그가 ECS JSON 한 줄로, 같은 trace ID와 응답 상태를 담아 남는다</li>
  *   <li>실패 이유(보안 응답이 맡긴 error.type)는 따로 찍히지 않고 결과 줄(request completed)에 붙는다</li>
@@ -57,7 +58,6 @@ class RequestLoggingTest {
     private static final String EXTERNAL_TRACE = "0af7651916cd43dd8448eb211c80319c";
 
     @Autowired MockMvc mvc;
-    @Autowired Tracer tracer;
     @MockitoBean OpaqueSessionVerifier verifier;
 
     private static List<JsonNode> lines(CapturedOutput output) {
@@ -191,7 +191,7 @@ class RequestLoggingTest {
         String path = "/async-test/" + UUID.randomUUID();
         var request = new MockHttpServletRequest("POST", path);
         request.setAsyncSupported(true);
-        var filter = new RequestLogFilter(tracer, new StaticListableBeanFactory().getBeanProvider(RequestMappingHandlerMapping.class));
+        var filter = new RequestLogFilter(new StaticListableBeanFactory().getBeanProvider(RequestMappingHandlerMapping.class));
         filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> req.startAsync());
         var context = (MockAsyncContext) request.getAsyncContext();
         for (AsyncListener listener : context.getListeners()) callback.call(listener, context);

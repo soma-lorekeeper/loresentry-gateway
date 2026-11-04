@@ -27,8 +27,9 @@ final class UpstreamChatStream implements ChatStream {
     }
 
     /**
-     * ai-chat SSE 본문을 브라우저로 그대로 넘긴다. MVC 비동기 실행기 스레드에서 돈다(AppLogger는 ContextPropagatingTaskDecorator가 옮겨 온다).
-     * relay 하나가 작업 흐름 하나다: 시작 줄 "ai-chat stream relay start"와 종료 줄 하나를 남기고, 모든 줄에 chat.session_id가 붙는다.
+     * ai-chat SSE 본문을 브라우저로 그대로 넘긴다. MVC 비동기 실행기 스레드에서 돈다(AppLogger와 요청의 지금 span은 ContextPropagatingTaskDecorator가 옮겨 온다).
+     * relay 하나가 작업 흐름 하나다: 요청 서버 span 아래에 작업 span(ai-chat stream relay)을 열고, 시작 줄 "ai-chat stream relay start"와
+     * 종료 줄 하나를 남기고, 모든 줄에 chat.session_id가 붙는다.
      * <ul>
      *   <li>정상 종료: "ai-chat stream relay completed"(complete=true, 넘긴 바이트 수)</li>
      *   <li>ai-chat 쪽 끊김: 원인 줄 "ai-chat stream ended before completion"과 종료 줄 "ai-chat stream relay failed"

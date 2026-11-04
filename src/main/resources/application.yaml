@@ -11,6 +11,10 @@ spring:
   mvc:
     async:
       request-timeout: 180s
+    servlet:
+      # DispatcherServlet을 첫 요청이 아니라 기동할 때 준비한다. 첫 요청(보통 kubelet 헬스체크)이 그 준비 비용을 치르지 않고, 준비 줄
+      # ("Initializing Servlet ...")이 헬스체크 trace(collector가 버린다)에 붙어 APM에 없는 span을 가리키지 않는다
+      load-on-startup: 1
   lifecycle:
     timeout-per-shutdown-phase: 150s
 
@@ -30,42 +34,6 @@ logging:
         name: gateway-api
         # 이미지 태그(build-<run>-<attempt>). CI가 docker build --build-arg로 넘기고 Dockerfile이 ENV로 둔다
         version: ${APP_VERSION:unknown}
-
-# trace: W3C traceparent로 span을 잇는다(LOG_SCHEMA.md 7절).
-management:
-  tracing:
-    sampling:
-      # dev는 모든 요청을 기록한다. prod 비율은 prod 실측 후 overlay 환경 변수로 정한다
-      probability: 1.0
-    propagation:
-      # W3C 헤더만 읽고 쓴다. B3 등 다른 형식은 받지 않는다
-      consume: w3c
-      produce: w3c
-    baggage:
-      # baggage 헤더는 쓰지 않는다. 외부 값이 내부 서비스로 따라 들어가지 않게 끈다
-      enabled: false
-    export:
-      # 전체는 켜 둔다. Boot 4는 W3C 전파기(traceparent 읽기·쓰기)도 이 값에 묶어 두어, 끄면 전파기가 noop이 되어
-      # 받은 traceparent를 잇지 못하고 내부 호출에 싣지도 못한다
-      enabled: true
-      otlp:
-        # span 전송(OTLP)만 끈다. collector를 세운 뒤 dev overlay 환경 변수(MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED)로 켠다.
-        # 꺼 두어도 trace ID는 만들어지고 전파된다
-        enabled: false
-  opentelemetry:
-    resource-attributes:
-      "[service.name]": gateway-api
-      "[service.version]": ${APP_VERSION:unknown}
-  otlp:
-    metrics:
-      export:
-        # 지표는 Prometheus가 수집한다. OTLP로 따로 보내지 않는다
-        enabled: false
-  logging:
-    export:
-      otlp:
-        # 로그는 stdout → Filebeat → Logstash로 수집한다. OTLP로 따로 보내지 않는다
-        enabled: false
 
 loresentry:
   chat:

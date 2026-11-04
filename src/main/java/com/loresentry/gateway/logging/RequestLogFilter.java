@@ -5,8 +5,8 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
@@ -23,13 +23,16 @@ import org.springframework.web.util.ServletRequestPathUtils;
 /**
  * 브라우저 요청 하나의 시작점. 요청마다 {@link AppLogger}를 만들어 바인딩하고 접근 로그를 남긴다.
  *
- * <p>순서: TraceContextHidingFilter(HIGHEST_PRECEDENCE) → Spring observation 필터(+1, 서버 span 시작) → 이 필터(+2) →
- * CsrfFilter(+5)·CorsFilter(+10)·SessionFilter(+20). 그래서 CSRF·세션 필터가 직접 쓰는 403·401 응답도 이 필터의 완료 로그에
+ * <p>순서: EDOT agent의 Tomcat 계측이 필터보다 먼저 서버 span을 열고, 이 필터(HIGHEST_PRECEDENCE + 2)가 그 안에서 돈다. gateway의
+ * 전파기(otel-extension의 tracecontext-inject-only)는 들어온 traceparent를 읽지 않으므로 그 span은 외부 요청마다 새 trace다. 이 필터 안쪽에
+ * CsrfFilter(+5)·CorsFilter(+10)·SessionFilter(+20)가 돈다. 그래서 CSRF·세션 필터가 직접 쓰는 403·401 응답도 이 필터의 완료 로그에
  * 남고, 그 필터들 안의 로그에도 trace가 붙는다.
  *
  * <p>하는 일
  * <ol>
- *   <li>observation 필터가 연 서버 span에서 traceId·spanId를 꺼내 {@code new AppLogger(traceId, spanId, null)}로 만든다.
+ *   <li>agent가 연 서버 span(지금 span)에서 traceId·spanId를 꺼내 {@code new AppLogger(traceId, spanId, null)}로 만든다.
+ *       줄마다 남는 span.id는 이 값이 아니라 줄을 찍는 순간의 지금 span이다(EcsLogFormatter). 이 값은 지금 span이 없거나 다른 trace일 때
+ *       쓰는 흐름의 값이다.
  *       요청 하나의 모든 줄에 ALB의 X-Amzn-Trace-Id({@code http.request.id}), 브라우저가 부른 경로({@code url.path}),
  *       경로 템플릿({@code http.route}), 메서드({@code http.request.method})를 붙인다. 경로 템플릿은 Spring MVC가 나중에 고를 것을
  *       요청 시작 때 미리 찾는다. 이 값들은 MDC에도 들어가 같은 스레드의 프레임워크 줄에도 붙는다. 내부 서비스 호출 결과 줄도
@@ -52,21 +55,20 @@ public final class RequestLogFilter extends OncePerRequestFilter {
     public static final String TRACE_ATTRIBUTE = RequestLogFilter.class.getName() + ".traceId";
     private static final String ALB_TRACE_HEADER = "X-Amzn-Trace-Id";
 
-    private final Tracer tracer;
     /** 경로 템플릿을 미리 찾는 데 쓰는 컨트롤러 매핑. MVC가 없는 테스트 문맥에서는 비어 있고, 그때는 http.route를 붙이지 않는다. */
     private final ObjectProvider<RequestMappingHandlerMapping> mappings;
 
-    public RequestLogFilter(Tracer tracer, ObjectProvider<RequestMappingHandlerMapping> mappings) {
-        this.tracer = tracer;
+    public RequestLogFilter(ObjectProvider<RequestMappingHandlerMapping> mappings) {
         this.mappings = mappings;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        Span span = tracer.currentSpan();
-        String traceId = span == null ? null : span.context().traceId();
-        String spanId = span == null ? null : span.context().spanId();
+        // agent가 이 요청에 연 서버 span. agent도 테스트의 흉내(AgentLikeTracing)도 없으면 유효하지 않고, 그때는 trace 없는 객체다
+        SpanContext span = Span.current().getSpanContext();
+        String traceId = span.isValid() ? span.getTraceId() : null;
+        String spanId = span.isValid() ? span.getSpanId() : null;
         String path = request.getRequestURI();
         AppLogger logger = new AppLogger(traceId, spanId, null).with(LogField.requestId(request.getHeader(ALB_TRACE_HEADER)),
                 LogField.urlPath(path), LogField.route(route(request)), LogField.httpMethod(request.getMethod()));

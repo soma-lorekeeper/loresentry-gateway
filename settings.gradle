@@ -1,1 +1,4 @@
 rootProject.name = 'gateway'
+
+// EDOT Java agent에 꽂는 확장(inject-only 전파기). 앱 classpath에 들어가지 않고 이미지의 /app/otel-extension.jar가 된다
+include 'otel-extension'

@@ -26,6 +26,8 @@ import com.tngtech.archunit.library.GeneralCodingRules;
  * 로그 규칙을 테스트로 강제한다(LOG_SCHEMA.md 5절). 테스트 코드는 검사하지 않는다.
  * <ul>
  *   <li>로그는 AppLogger로만 찍는다. logging 패키지 밖의 코드는 로깅 라이브러리와 표준 출력을 직접 쓰지 못한다.</li>
+ *   <li>추적도 로깅 팩토리가 맡는다. logging 패키지 밖의 코드는 추적 API(OpenTelemetry, Micrometer Tracing, context-propagation)를
+ *       쓰지 못한다.</li>
  *   <li>레이어 클래스의 private이 아닌 모든 메서드(public·protected·package-private, static 제외)는 AppLogger의 info·warn·error를 직접 부른다. 그래서 trace 하나를 시간 순으로 놓으면
  *       controller → service → client 흐름이 줄 단위로 보인다. 한 줄로 넘기는 메서드도 빠지지 않는다.
  *       여러 번 불리는 getter처럼 이유를 적은 {@link SkipEntryLog}가 붙은 메서드만 뺀다.</li>
@@ -45,6 +47,13 @@ class LoggingArchitectureTest {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "org.slf4j..", "ch.qos.logback..", "java.util.logging..", "org.apache.commons.logging..", "org.apache.logging.log4j..")
             .because("로그는 com.loresentry.gateway.logging.AppLogger로만 찍는다");
+
+    @ArchTest
+    static final ArchRule onlyTheLoggingPackageUsesTracingLibraries = noClasses()
+            .that().resideOutsideOfPackage("..logging..")
+            .should().dependOnClassesThat().resideInAnyPackage("io.opentelemetry..", "io.micrometer.tracing..", "io.micrometer.context..")
+            .because("span을 열고 지금 문맥을 바꾸고 스레드로 문맥을 옮기는 일은 EDOT agent와 로깅 팩토리가 맡는다. 서비스 코드는 할 일(람다)과 "
+                    + "값만 넘기고, traceparent 헤더도 직접 넣지 않는다(LOG_SCHEMA.md 5절 \"만들기\", 7절)");
 
     @ArchTest
     static final ArchRule nothingWritesToStandardStreams = noClasses()
