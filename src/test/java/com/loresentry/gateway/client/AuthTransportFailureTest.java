@@ -14,14 +14,14 @@ import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 class AuthTransportFailureTest {
     @Test void refusedConnectionIsDefinitelyNotSent() throws Exception {
         int port;try(var socket=new ServerSocket(0)){port=socket.getLocalPort();}
-        try(var transport=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200))) {
+        try(var transport=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200),25,5)) {
             var service=new SessionService(new AuthApiClient(RestClient.builder().baseUrl("http://127.0.0.1:"+port)
                 .requestFactory(new HttpComponentsClientHttpRequestFactory(transport)).build()));
             assertThat(service.revoke("A".repeat(43))).isEqualTo(SessionService.Revocation.UNCONFIRMED);
         }
     }
     @Test void lostResponseIsUnknownAndPostIsSentOnce() throws Exception {
-        try(var socket=new ServerSocket(0);var transport=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200))) {
+        try(var socket=new ServerSocket(0);var transport=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200),25,5)) {
             socket.setSoTimeout(700);var requests=new AtomicInteger();
             var server=Thread.ofVirtual().start(()-> {
                 try {while(true)try(var connection=socket.accept()) {

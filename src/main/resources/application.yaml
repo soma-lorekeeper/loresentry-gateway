@@ -70,3 +70,6 @@ management:
 loresentry:
   chat:
     allowed-users: ${LORESENTRY_CHAT_ALLOWED_USERS:}
+  http:
+    max-connections: ${LORESENTRY_HTTP_MAX_CONNECTIONS:25}
+    max-connections-per-route: ${LORESENTRY_HTTP_MAX_CONNECTIONS_PER_ROUTE:5}

@@ -14,10 +14,17 @@ import com.loresentry.gateway.client.content.ContentApiClient;
 import com.loresentry.gateway.client.content.ContentData;
 
 class InternalHttpTransportTest {
+    @org.junit.jupiter.api.Test
+    void poolSizesComeFromSettings() throws Exception {
+        try(var pool=InternalHttpConfiguration.pool(Duration.ofMillis(200),Duration.ofMillis(200),50,10)) {
+            assertThat(pool.getMaxTotal()).isEqualTo(50);
+            assertThat(pool.getDefaultMaxPerRoute()).isEqualTo(10);
+        }
+    }
     @ParameterizedTest @ValueSource(booleans={false,true})
     void lostResponseBodyIsUnavailableAndNeverRetried(boolean timeout) throws Exception {
         try(var socket=new ServerSocket(0);
-            var http=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200))) {
+            var http=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200),25,5)) {
             socket.setSoTimeout(700);
             var count=new AtomicInteger();
             var worker=Thread.ofVirtual().start(()-> {
@@ -45,7 +52,7 @@ class InternalHttpTransportTest {
     @ParameterizedTest @org.junit.jupiter.params.provider.CsvSource({"false,false","true,false","false,true","true,true"})
     void disconnectOrTimeoutDoesNotRetryReadsOrWrites(boolean write, boolean timeout) throws Exception {
         try(var socket=new ServerSocket(0);
-            var http=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200))) {
+            var http=new InternalHttpConfiguration().internalHttpClient(Duration.ofMillis(200),Duration.ofMillis(200),25,5)) {
             socket.setSoTimeout(700);
             var count=new AtomicInteger();
             var worker=Thread.ofVirtual().start(()-> {
