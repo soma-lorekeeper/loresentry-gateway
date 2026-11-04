@@ -4,10 +4,14 @@ WORKDIR /workspace
 
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
+COPY otel-extension/build.gradle otel-extension/build.gradle
 RUN ./gradlew --no-daemon dependencies || true
 
 COPY src src
-RUN ./gradlew --no-daemon clean bootJar -x test
+COPY otel-extension/src otel-extension/src
+# 앱 jar와 함께 EDOT Java agent jar(build/otel/otel-agent.jar)를 받고, agent에 꽂을 확장 jar(inject-only 전파기)를 만든다.
+# agent 버전은 build.gradle의 otelAgent에 고정되어 있다
+RUN ./gradlew --no-daemon clean bootJar otelAgentJar :otel-extension:jar -x test
 
 FROM eclipse-temurin:21-jre-alpine
 
@@ -20,10 +24,16 @@ WORKDIR /app
 RUN addgroup -g 10001 app && adduser -D -u 10001 -G app app
 
 COPY --from=build /workspace/build/libs/*.jar app.jar
+# span을 만들고 잇는 EDOT Java agent와 그 설정(계측 범위, 안전한 기본값). docs LOG_SCHEMA.md 7절
+COPY --from=build /workspace/build/otel/otel-agent.jar otel-agent.jar
+# agent에 꽂는 확장. 들어온 traceparent를 읽지 않고 나가는 호출에만 넣는 전파기(tracecontext-inject-only)가 들어 있다
+COPY --from=build /workspace/otel-extension/build/libs/otel-extension.jar otel-extension.jar
+COPY docker/otel-agent.properties otel-agent.properties
+COPY --chmod=755 docker/entrypoint.sh entrypoint.sh
 
 USER app
 
 EXPOSE 8000
 
-# 컨테이너 메모리 한도의 75%를 heap 상한으로 쓴다
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+# agent와 확장을 붙이고 service.version을 span resource에 더해 JVM을 띄운다. heap 상한(컨테이너 메모리의 75%)도 이 스크립트가 넘긴다
+ENTRYPOINT ["/app/entrypoint.sh"]

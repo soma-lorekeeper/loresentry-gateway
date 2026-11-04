@@ -17,18 +17,42 @@ repositories {
 	mavenCentral()
 }
 
+configurations {
+	// 이미지에 넣을 EDOT Java agent jar. 앱 classpath와 따로 두고, jar 하나만 받는다(의존성을 따라가지 않는다)
+	otelAgent {
+		transitive = false
+	}
+}
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
 	implementation 'io.lettuce:lettuce-core'
-	// W3C traceparent 전파와 span 생성(Micrometer Tracing + OpenTelemetry bridge, OTLP 전송). LOG_SCHEMA.md 7절
-	implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+	// span을 만들고 잇는 일은 EDOT Java agent가 한다(LOG_SCHEMA.md 7절). 앱은 로깅 팩토리(logging 패키지)가 지금 span을 읽고
+	// 우리 span(외부 호출 감싸기, 작업)을 열 때 쓰는 OpenTelemetry API만 둔다. 실행 중에는 agent가 이 API를 자기 SDK에 잇는다.
+	// 버전은 Spring Boot가 관리한다
+	implementation 'io.opentelemetry:opentelemetry-api'
+	// MVC 비동기 실행기(채팅 SSE relay)가 AppLogger와 OpenTelemetry 문맥을 새 스레드로 옮길 때 쓴다(AppLogger의 접근자,
+	// LoggingConfiguration의 ContextPropagatingTaskDecorator)
+	implementation 'io.micrometer:context-propagation'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-restclient-test'
 	// 로그는 AppLogger로만 찍는다는 규칙(LOG_SCHEMA.md 5절)을 테스트로 강제한다
 	testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.0'
+	// 테스트에는 agent가 없다. 로깅 팩토리가 연 span과 지금 span 규칙은 OpenTelemetry SDK의 시험용 tracer로 확인한다
+	testImplementation 'io.opentelemetry:opentelemetry-sdk'
+	testImplementation 'io.opentelemetry:opentelemetry-sdk-testing'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// 이미지에 넣는 EDOT Java agent. 앱 classpath에는 들어가지 않고 otelAgentJar가 build/otel/otel-agent.jar로 꺼낸다
+	otelAgent 'co.elastic.otel:elastic-otel-javaagent:1.14.0'
+}
+
+// Dockerfile이 bootJar와 함께 부른다. 이름을 고정해 두어 Dockerfile과 시작 스크립트가 버전을 몰라도 된다
+tasks.register('otelAgentJar', Copy) {
+	from configurations.otelAgent
+	into layout.buildDirectory.dir('otel')
+	rename { 'otel-agent.jar' }
 }
 
 tasks.named('test') {

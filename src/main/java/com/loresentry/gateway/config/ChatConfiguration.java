@@ -3,14 +3,12 @@ package com.loresentry.gateway.config;
 import java.time.Duration;
 import com.loresentry.gateway.application.ChatAllowlist;
 import com.loresentry.gateway.client.chat.ChatStreamTransport;
-import com.loresentry.gateway.logging.TracePropagation;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.core5.util.Timeout;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,10 +25,8 @@ public class ChatConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    public ChatStreamTransport chatStreamTransport(UpstreamProperties upstream, ObjectProvider<TracePropagation> tracePropagation) {
-        // 추적 배선(LoggingConfiguration)이 없는 설정 단위 테스트에서는 traceparent를 싣지 않는다
-        return new ChatStreamTransport(streamHttpClient(), upstream.aiChat().baseUrl(),
-                tracePropagation.getIfAvailable(() -> TracePropagation.NONE));
+    public ChatStreamTransport chatStreamTransport(UpstreamProperties upstream) {
+        return new ChatStreamTransport(streamHttpClient(), upstream.aiChat().baseUrl());
     }
 
     public static CloseableHttpClient streamHttpClient() {

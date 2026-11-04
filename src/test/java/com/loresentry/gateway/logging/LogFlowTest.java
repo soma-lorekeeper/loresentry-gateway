@@ -2,21 +2,28 @@ package com.loresentry.gateway.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import io.micrometer.tracing.Tracer;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -32,10 +39,27 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *   <li>종료 줄에 걸린 시간(event.duration, 나노초 숫자)과 결과 값이 붙고, 실패 줄에는 예외 메시지가 없다</li>
  *   <li>줄의 위치(log.logger·log.origin.function·log.layer)는 흐름을 연 client·service 메서드다</li>
  *   <li>진행 중에 알게 된 대상 ID(with)와 사용자(identify)가 이후 줄과 종료·결과 줄에 붙는다</li>
+ *   <li>외부 호출·작업은 로깅 팩토리가 span을 열고, 그 줄이 그 span 안에서 찍힌다. 실패면 span 상태가 ERROR다(LOG_SCHEMA.md 7절)</li>
  * </ul>
  */
 class LogFlowTest {
-    private final ListAppender<ILoggingEvent> events = new ListAppender<>();
+    /**
+     * 로깅 팩토리가 여는 span을 받는 OpenTelemetry SDK. 운영에서는 agent의 SDK가 받는다. 이 테스트 클래스 동안 GlobalOpenTelemetry가 되고,
+     * 테스트마다 받은 span을 비운다.
+     */
+    @RegisterExtension
+    static final OpenTelemetryExtension OTEL = OpenTelemetryExtension.create();
+
+    /** 줄을 찍은 순간의 지금 span. formatter는 줄을 쓰는 순간 이 span으로 trace.id·span.id를 채운다. */
+    private final Map<ILoggingEvent, SpanContext> spanAtLine = new IdentityHashMap<>();
+
+    private final ListAppender<ILoggingEvent> events = new ListAppender<>() {
+        @Override
+        protected void append(ILoggingEvent event) {
+            spanAtLine.put(event, Span.current().getSpanContext());
+            super.append(event);
+        }
+    };
     private final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
 
     @BeforeEach void attach() { events.start(); root.addAppender(events); }
@@ -167,7 +191,7 @@ class LogFlowTest {
     @Test
     void anIdentifiedUserIsOnLaterLinesAndOnTheResultLine() throws Exception {
         UUID user = UUID.randomUUID();
-        var filter = new RequestLogFilter(mock(Tracer.class), new StaticListableBeanFactory().getBeanProvider(RequestMappingHandlerMapping.class));
+        var filter = new RequestLogFilter(new StaticListableBeanFactory().getBeanProvider(RequestMappingHandlerMapping.class));
         filter.doFilter(new MockHttpServletRequest("GET", "/identify-test"), new MockHttpServletResponse(), (request, response) -> {
             AppLogger.current().info("sample before identify");
             // 세션을 확인한 SessionFilter처럼 흐름 중간에 사용자를 알린다
@@ -189,5 +213,81 @@ class LogFlowTest {
     void identifyWithoutABoundFlowDoesNothing() {
         AppLogger.current().identify(UUID.randomUUID());
         assertThat(MDC.get("user.id")).isNull();
+    }
+
+    @Test
+    void aCallOpensASpanAndWritesItsResultLineInsideIt() throws IOException {
+        // 외부 호출 결과 줄의 span.id가 호출을 감싸는 span이다. 계측의 CLIENT span(채팅 SSE의 HTTP, Valkey 명령)은 그 자식이 된다
+        // (LOG_SCHEMA.md 7절 "외부 호출")
+        String[] inside = new String[1];
+        LogFlow.call("upstream", URI.create("http://ai-chat-api:8080/chat/sessions/s-1/messages"), call -> {
+            inside[0] = Span.current().getSpanContext().getSpanId();
+            return call.status(200);
+        });
+        SpanData upstream = span("upstream call");
+        assertThat(inside[0]).isEqualTo(upstream.getSpanId());
+        assertThat(upstream.getKind()).isEqualTo(SpanKind.INTERNAL);
+        assertThat(upstream.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+        assertThat(upstream.getInstrumentationScopeInfo().getName()).isEqualTo(TraceContext.INSTRUMENTATION_SCOPE);
+        assertThat(spanAtLine.get(line("upstream call completed")).getSpanId()).isEqualTo(upstream.getSpanId());
+
+        // 예외로 끝난 호출: span은 ERROR이고 설명은 예외 종류다. 실패 줄도 그 span 안에서 찍힌다
+        assertThatThrownBy(() -> LogFlow.call("valkey", call -> {
+            throw new IOException("secret host in message");
+        })).isInstanceOf(IOException.class);
+        SpanData valkey = span("valkey call");
+        assertThat(valkey.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
+        assertThat(valkey.getStatus().getDescription()).isEqualTo("java.io.IOException");
+        assertThat(spanAtLine.get(line("valkey call failed")).getSpanId()).isEqualTo(valkey.getSpanId());
+    }
+
+    @Test
+    void aCallThatFailsWithoutAnExceptionOrAServerErrorMarksItsSpan() {
+        // 예외 없이 알린 실패(fail)와 상대의 5xx도 span 상태가 ERROR다. 설명은 결과 줄의 error.type과 같은 값이다
+        LogFlow.call("valkey", call -> call.fail("DEADLINE_EXCEEDED"));
+        new SampleStreamClient().open(503);
+        assertThat(span("valkey call").getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
+        assertThat(span("valkey call").getStatus().getDescription()).isEqualTo("DEADLINE_EXCEEDED");
+        assertThat(span("upstream call").getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
+        assertThat(span("upstream call").getStatus().getDescription()).isEqualTo("UPSTREAM_SERVER_ERROR");
+    }
+
+    @Test
+    void aCallSpanIsAChildOfTheCurrentSpan() {
+        // 요청 안의 호출은 요청 서버 span(agent가 연 지금 span)의 자식이다
+        Span request = OTEL.getOpenTelemetry().getTracer("test").spanBuilder("GET").setSpanKind(SpanKind.SERVER).startSpan();
+        try (Scope ignored = request.makeCurrent()) {
+            new SampleStreamClient().open(200);
+        } finally {
+            request.end();
+        }
+        SpanData upstream = span("upstream call");
+        assertThat(upstream.getTraceId()).isEqualTo(request.getSpanContext().getTraceId());
+        assertThat(upstream.getParentSpanId()).isEqualTo(request.getSpanContext().getSpanId());
+    }
+
+    @Test
+    void aTaskOpensItsOwnSpanAndItsLinesAreInsideIt() {
+        new SampleRelayService().relay(UUID.randomUUID());
+        SpanData relay = span("sample relay");
+        assertThat(spanAtLine.get(line("sample relay start")).getSpanId()).isEqualTo(relay.getSpanId());
+        assertThat(spanAtLine.get(line("sample chunk relayed")).getSpanId()).isEqualTo(relay.getSpanId());
+        assertThat(spanAtLine.get(line("sample relay completed")).getSpanId()).isEqualTo(relay.getSpanId());
+        // 흐름 밖에서 시작한 작업(기동 때 예열)이면 이 span이 root다
+        assertThat(relay.getParentSpanContext().isValid()).isFalse();
+        assertThat(relay.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+
+        // 실패한 작업: 예외면 예외 종류, fail이면 그 이유가 span 상태의 설명이다
+        assertThatThrownBy(() -> new SampleRelayService().crash()).isInstanceOf(IllegalStateException.class);
+        LogFlow.task("sample interrupted relay", interrupted -> interrupted.fail("AI_CHAT_STREAM_INTERRUPTED"));
+        assertThat(OTEL.getSpans()).filteredOn(s -> s.getName().equals("sample relay"))
+                .anySatisfy(s -> assertThat(s.getStatus().getDescription()).isEqualTo("java.lang.IllegalStateException"));
+        assertThat(span("sample interrupted relay").getStatus().getDescription()).isEqualTo("AI_CHAT_STREAM_INTERRUPTED");
+    }
+
+    /** 이 테스트에서 끝난 span 가운데 그 이름의 첫 것. */
+    private static SpanData span(String name) {
+        return OTEL.getSpans().stream().filter(s -> s.getName().equals(name)).findFirst()
+                .orElseThrow(() -> new AssertionError("no span named " + name));
     }
 }
