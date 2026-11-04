@@ -1,5 +1,6 @@
 package com.loresentry.gateway.logging;
 
+import java.util.List;
 import java.util.Map;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
@@ -16,6 +17,8 @@ import org.springframework.core.task.TaskDecorator;
 import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.HandlerExceptionResolver;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
@@ -26,6 +29,8 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *   <li>헬스체크도 다른 요청처럼 span과 로그를 남긴다. 정상 헬스체크의 info 줄은 Logstash가 tags: health로 버린다.</li>
  *   <li>MVC 비동기 실행기(채팅 스트리밍)가 span과 AppLogger를 새 스레드로 옮기게 한다.</li>
  *   <li>모든 RestClient 호출에 결과 로그 interceptor를 붙인다.</li>
+ *   <li>우리 예외 처리기가 다루지 않은 프레임워크 예외의 클래스를 결과 줄에 맡긴다. CORS 거절은 {@link OutcomeCorsProcessor}가 맡긴다
+ *       (BrowserCorsConfiguration이 CORS 필터에 붙인다).</li>
  *   <li>Boot 기본 오류 응답(/error)에도 trace_id를 싣는다.</li>
  * </ul>
  */
@@ -62,6 +67,27 @@ public class LoggingConfiguration {
     @Bean
     public RestClientCustomizer upstreamCallLogging() {
         return builder -> builder.requestInterceptor(new UpstreamCallLogInterceptor());
+    }
+
+    /**
+     * 우리 예외 처리기(@ExceptionHandler)가 다루지 않은 프레임워크 예외(405, 415, 406, 없는 경로, 비동기 시간 초과, 경로·파라미터 변환 실패 등)의
+     * 클래스 이름을 결과 줄(request completed)의 error.type으로 맡긴다(LOG_SCHEMA.md 5절 "실패의 결과는 이 한 줄이다").
+     *
+     * <p>기본 목록은 ExceptionHandlerExceptionResolver → ResponseStatusExceptionResolver → DefaultHandlerExceptionResolver 순서다.
+     * 첫 resolver(우리 @ExceptionHandler) 바로 뒤에 넣는다. 그래서 우리 처리기가 다룬 예외는 여기 오지 않는다.
+     * 늘 null을 돌려주므로 응답은 뒤의 Spring 기본 resolver가 정한 그대로다. 예외 메시지는 남기지 않는다.
+     */
+    @Bean
+    public WebMvcConfigurer frameworkExceptionOutcome() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void extendHandlerExceptionResolvers(List<HandlerExceptionResolver> resolvers) {
+                resolvers.add(Math.min(1, resolvers.size()), (request, response, handler, exception) -> {
+                    AppLogger.current().addToOutcome(LogField.errorType(exception.getClass().getName()));
+                    return null;
+                });
+            }
+        };
     }
 
     @Bean

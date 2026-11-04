@@ -41,7 +41,7 @@ public class OAuthController {
                     ||destination.getPort()!=-1||destination.getFragment()!=null) throw new IllegalArgumentException();
         } catch(IllegalArgumentException invalid) {
             // auth가 돌려준 인가 주소가 Google 주소 규칙에 맞지 않는다. 주소 값은 남기지 않는다(state가 들어 있다)
-            AppLogger.current().warn("oauth login prepare rejected: unexpected authorization url");
+            AppLogger.current().warn("oauth login prepare rejected: unexpected authorization url",LogField.errorType("UNEXPECTED_AUTHORIZATION_URL"));
             return result(LoginService.Result.FAILED,List.of());
         }
         try {
@@ -50,7 +50,8 @@ public class OAuthController {
                     .header("Referrer-Policy","no-referrer").header("Set-Cookie",cookie.toString()).build();
         } catch(IllegalArgumentException invalid) {
             // 로그인 요청 ID나 만료 시각이 쿠키 규칙에 맞지 않는다. 로그인 요청 ID는 비밀 값이라 남기지 않는다
-            AppLogger.current().warn("oauth login prepare failed: login request cookie rejected",LogField.errorType(invalid.getClass().getName()));
+            AppLogger.current().warn("oauth login prepare failed: login request cookie rejected",LogField.errorType(invalid.getClass().getName()),
+                    LogField.safeStackTrace(invalid));
             return result(LoginService.Result.FAILED,List.of());
         }
     }
@@ -62,7 +63,7 @@ public class OAuthController {
             callback=login.callback(AuthCookies.single(request,names.oauthName()),single(request,"state"),single(request,"code"),single(request,"error"));
         } catch(IllegalArgumentException ambiguous) {
             // 로그인 요청 쿠키나 state·code·error 파라미터가 둘 이상이다. 값은 로그인 과정의 비밀 값이라 남기지 않는다
-            AppLogger.current().warn("oauth login callback rejected: ambiguous parameters");
+            AppLogger.current().warn("oauth login callback rejected: ambiguous parameters",LogField.errorType("AMBIGUOUS_OAUTH_PARAMETERS"));
             return result(LoginService.Result.INVALID,List.of());
         }
         var output=new ArrayList<ResponseCookie>();
@@ -71,7 +72,8 @@ public class OAuthController {
             try {output.add(cookies.session(callback.session().id().value(),callback.session().expiresAt()));output.add(cookies.clearConsent());output.addAll(cookies.clearLegacy(request));}
             catch(IllegalArgumentException invalid) {
                 // auth가 준 세션 ID·만료 시각으로 세션 쿠키를 만들 수 없다. 세션 ID는 인증 수단이라 남기지 않는다
-                AppLogger.current().warn("oauth login callback failed: session cookie rejected",LogField.errorType(invalid.getClass().getName()));
+                AppLogger.current().warn("oauth login callback failed: session cookie rejected",LogField.errorType(invalid.getClass().getName()),
+                        LogField.safeStackTrace(invalid));
                 result=LoginService.Result.FAILED;
             }
         }
@@ -79,7 +81,8 @@ public class OAuthController {
             try {output.add(cookies.consent(callback.consent().id().value(),callback.consent().expiresAt()));}
             catch(IllegalArgumentException invalid) {
                 // 동의 요청 ID·만료 시각으로 동의 쿠키를 만들 수 없다. 동의 요청 ID는 남기지 않는다
-                AppLogger.current().warn("oauth login callback failed: consent cookie rejected",LogField.errorType(invalid.getClass().getName()));
+                AppLogger.current().warn("oauth login callback failed: consent cookie rejected",LogField.errorType(invalid.getClass().getName()),
+                        LogField.safeStackTrace(invalid));
                 result=LoginService.Result.FAILED;
             }
         }

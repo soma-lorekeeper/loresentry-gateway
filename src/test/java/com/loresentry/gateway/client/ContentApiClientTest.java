@@ -35,7 +35,7 @@ class ContentApiClientTest {
         var builder=RestClient.builder().baseUrl("http://content.test");
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
         mocks.getServer().expect(requestTo("http://content.test/projects")).andRespond(withSuccess(payload,MediaType.APPLICATION_JSON));
-        assertThatThrownBy(()->new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null))
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),new Conditions(null,null,null)))
             .isInstanceOf(com.loresentry.gateway.client.content.ContentCallFailure.class)
             .hasMessage("UPSTREAM_INVALID_RESPONSE");
         mocks.getServer().verify();
@@ -58,7 +58,7 @@ class ContentApiClientTest {
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
         mocks.getServer().expect(requestTo("http://content.test/projects")).andRespond(withStatus(org.springframework.http.HttpStatusCode.valueOf(status))
             .contentType(MediaType.APPLICATION_JSON).body("{\"code\":\""+code+"\",\"message\":\"private SQL detail\",\"next_action\":\""+action+"\"}"));
-        assertThatThrownBy(()->new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null))
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),new Conditions(null,null,null)))
             .isInstanceOf(com.loresentry.gateway.client.content.ContentCallFailure.class).hasMessage(result);
         mocks.getServer().verify();
     }
@@ -67,7 +67,7 @@ class ContentApiClientTest {
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
         mocks.getServer().expect(requestTo("http://content.test/projects"))
             .andRespond(withSuccess("{\"projects\":[],\"refresh_token\":\"secret\"}",MediaType.APPLICATION_JSON));
-        var dto=com.loresentry.gateway.web.content.ContentDtos.Projects.from(new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),null));
+        var dto=com.loresentry.gateway.web.content.ContentDtos.Projects.from(new ContentApiClient(builder.build()).listProjects(UUID.randomUUID(),new Conditions(null,null,null)));
         assertThat(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(dto)).isEqualTo("{\"projects\":[]}");
     }
     /** 문서 이미지는 image_id 하나만 보내고, 돌려받은 문서의 image_url 을 그대로 옮긴다. */
@@ -84,8 +84,8 @@ class ContentApiClientTest {
         mocks.getServer().expect(requestTo("http://content.test/files/"+file+"/image")).andExpect(method(org.springframework.http.HttpMethod.DELETE))
             .andExpect(header("X-User-Id",user.toString())).andRespond(withNoContent());
         var client=new ContentApiClient(builder.build());
-        assertThat(client.setDocumentImage(user,file,new ContentData.DocumentImage(image),null).imageUrl()).isEqualTo(url);
-        client.clearDocumentImage(user,file,null);
+        assertThat(client.setDocumentImage(user,file,new ContentData.DocumentImage(image),new Conditions(null,null,null)).imageUrl()).isEqualTo(url);
+        client.clearDocumentImage(user,file,new Conditions(null,null,null));
         mocks.getServer().verify();
     }
     @Test void sampleProjectIsBodilessPostWithOnlyTheVerifiedUser() {
@@ -120,7 +120,7 @@ class ContentApiClientTest {
         var mocks=new MockServerRestClientCustomizer();mocks.customize(builder);
         mocks.getServer().expect(requestTo("http://content.test/projects/sample"))
             .andRespond(withSuccess("{\"id\":\""+UUID.randomUUID()+"\",\"name\":\"n\",\"description\":\"\",\"last_worked_at\":\"2026-09-30T00:00:00Z\",\"created_at\":\"2026-09-30T00:00:00Z\"}",MediaType.APPLICATION_JSON));
-        assertThatThrownBy(()->new ContentApiClient(builder.build()).createSampleProject(UUID.randomUUID(),null,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        assertThatThrownBy(()->new ContentApiClient(builder.build()).createSampleProject(UUID.randomUUID(),null,new Conditions(null,null,null))).hasMessage("UPSTREAM_INVALID_RESPONSE");
         mocks.getServer().verify();
     }
     @Test void feedbackPostsTheContractBodyWithTheVerifiedUser() {
@@ -148,7 +148,7 @@ class ContentApiClientTest {
         mocks.getServer().expect(requestTo("http://content.test/feedback")).andRespond(withStatus(org.springframework.http.HttpStatusCode.valueOf(status))
             .contentType(MediaType.APPLICATION_JSON).body("{\"code\":\""+code+"\",\"message\":\"m\",\"next_action\":\""+action+"\"}"));
         assertThatThrownBy(()->new ContentApiClient(builder.build()).createFeedback(UUID.randomUUID(),
-            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m",null,null),null)).hasMessage(result);
+            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m",null,null),new Conditions(null,null,null))).hasMessage(result);
         mocks.getServer().verify();
     }
     @org.junit.jupiter.params.ParameterizedTest
@@ -159,7 +159,7 @@ class ContentApiClientTest {
         mocks.getServer().expect(requestTo("http://content.test/feedback"))
             .andRespond(withStatus(org.springframework.http.HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body(payload));
         assertThatThrownBy(()->new ContentApiClient(builder.build()).createFeedback(UUID.randomUUID(),
-            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m",null,null),null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+            new com.loresentry.gateway.client.content.ContentData.FeedbackInput("BUG","m",null,null),new Conditions(null,null,null))).hasMessage("UPSTREAM_INVALID_RESPONSE");
         mocks.getServer().verify();
     }
 
@@ -225,7 +225,7 @@ class ContentApiClientTest {
     void refreshStartRejectsIncompleteSuccess(int status,String payload) {
         var f=fixture();
         f.server().expect(requestTo(REFRESH)).andRespond(json(status,payload));
-        assertThatThrownBy(()->f.client().startRefresh(UUID.randomUUID(),PROJECT,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        assertThatThrownBy(()->f.client().startRefresh(UUID.randomUUID(),PROJECT,new Conditions(null,null,null))).hasMessage("UPSTREAM_INVALID_RESPONSE");
         f.server().verify();
     }
     @Test void refreshSummaryKeepsNullsAndFailureCause() {
@@ -233,7 +233,7 @@ class ContentApiClientTest {
         f.server().expect(requestTo(REFRESH)).andExpect(method(org.springframework.http.HttpMethod.GET)).andRespond(json(200,
             "{\"request_id\":\""+REQUEST+"\",\"status\":\"FAILED\",\"started_at\":\"2026-10-20T00:00:00Z\",\"ready_at\":null,"
             +"\"completed_at\":\"2026-10-20T00:30:00Z\",\"error\":{\"code\":\"TIMEOUT\",\"message\":null},\"draft_counts\":{\"total\":0,\"matched\":0,\"new\":0}}"));
-        var summary=f.client().latestRefresh(UUID.randomUUID(),PROJECT,null);
+        var summary=f.client().latestRefresh(UUID.randomUUID(),PROJECT,new Conditions(null,null,null));
         assertThat(summary.error().code()).isEqualTo("TIMEOUT");assertThat(summary.error().message()).isNull();
         assertThat(summary.readyAt()).isNull();assertThat(summary.draftCounts().created()).isZero();
         f.server().verify();
@@ -244,12 +244,12 @@ class ContentApiClientTest {
         var f=fixture();
         f.server().expect(requestTo(REFRESH)).andRespond(json(200,"{\"request_id\":\""+REQUEST+"\",\"status\":\""+status+"\",\"started_at\":\"2026-10-20T00:00:00Z\","
             +"\"ready_at\":null,\"completed_at\":null,\"error\":null,\"draft_counts\":{\"total\":0,\"matched\":0,\"new\":0}}"));
-        assertThatThrownBy(()->f.client().latestRefresh(UUID.randomUUID(),PROJECT,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        assertThatThrownBy(()->f.client().latestRefresh(UUID.randomUUID(),PROJECT,new Conditions(null,null,null))).hasMessage("UPSTREAM_INVALID_RESPONSE");
     }
     @Test void refreshDetailReadsEditAndNewDrafts() {
         var f=fixture();
         f.server().expect(requestTo(REFRESH+"/"+REQUEST)).andExpect(method(org.springframework.http.HttpMethod.GET)).andRespond(json(200,DETAIL));
-        var detail=f.client().getRefresh(UUID.randomUUID(),PROJECT,REQUEST,null);
+        var detail=f.client().getRefresh(UUID.randomUUID(),PROJECT,REQUEST,new Conditions(null,null,null));
         var edit=detail.drafts().get(0);var created=detail.drafts().get(1);
         assertThat(edit.document().revisionNo()).isEqualTo(4L);assertThat(edit.baseSnapshot().body().get("schema_version").asInt()).isEqualTo(1);
         assertThat(edit.rightSnapshot().relations().get(0).targetCandidateId()).isEqualTo("new:PLACE:유리 정원");
@@ -276,7 +276,7 @@ class ContentApiClientTest {
         assertThat(DETAIL).contains(from);
         var f=fixture();
         f.server().expect(requestTo(REFRESH+"/"+REQUEST)).andRespond(json(200,DETAIL.replace(from,to)));
-        assertThatThrownBy(()->f.client().getRefresh(UUID.randomUUID(),PROJECT,REQUEST,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        assertThatThrownBy(()->f.client().getRefresh(UUID.randomUUID(),PROJECT,REQUEST,new Conditions(null,null,null))).hasMessage("UPSTREAM_INVALID_RESPONSE");
     }
     @Test void draftSaveSendsBothSidesIncludingNulls() {
         var f=fixture();var user=UUID.randomUUID();
@@ -291,7 +291,7 @@ class ContentApiClientTest {
                 org.springframework.test.json.JsonCompareMode.STRICT))
             .andRespond(json(200,"{\"id\":\""+DRAFT+"\",\"draft_revision\":4,\"matched\":false,\"updated_at\":\"2026-10-20T00:02:00Z\","
                 +"\"left_snapshot\":null,\"right_snapshot\":"+SIDE+"}"));
-        var saved=f.client().saveRefreshDraft(user,PROJECT,REQUEST,DRAFT,new ContentData.DraftSave(3L,null,right),null);
+        var saved=f.client().saveRefreshDraft(user,PROJECT,REQUEST,DRAFT,new ContentData.DraftSave(3L,null,right),new Conditions(null,null,null));
         assertThat(saved.draftRevision()).isEqualTo(4L);assertThat(saved.leftSnapshot()).isNull();
         f.server().verify();
     }
@@ -301,7 +301,7 @@ class ContentApiClientTest {
             .andExpect(content().string("")).andRespond(json(200,"{\"request_id\":\""+REQUEST+"\",\"status\":\"APPLIED\","
                 +"\"created\":[{\"draft_id\":\""+DRAFT+"\",\"candidate_id\":\"new:PLACE:유리 정원\",\"file_id\":\""+FILE+"\"}],"
                 +"\"updated\":[{\"draft_id\":\""+DRAFT+"\",\"file_id\":\""+FILE+"\",\"revision_no\":5}],\"unchanged\":[\""+DRAFT+"\"]}"));
-        var confirmed=f.client().confirmRefresh(UUID.randomUUID(),PROJECT,REQUEST,null);
+        var confirmed=f.client().confirmRefresh(UUID.randomUUID(),PROJECT,REQUEST,new Conditions(null,null,null));
         assertThat(confirmed.created().get(0).fileId()).isEqualTo(FILE);assertThat(confirmed.updated().get(0).revisionNo()).isEqualTo(5L);
         assertThat(confirmed.unchanged()).containsExactly(DRAFT);
         f.server().verify();
@@ -313,14 +313,14 @@ class ContentApiClientTest {
     void confirmRejectsIncompleteResult(String fields) {
         var f=fixture();
         f.server().expect(requestTo(REFRESH+"/"+REQUEST+"/confirm")).andRespond(json(200,"{\"request_id\":\""+REQUEST+"\","+fields+"}"));
-        assertThatThrownBy(()->f.client().confirmRefresh(UUID.randomUUID(),PROJECT,REQUEST,null)).hasMessage("UPSTREAM_INVALID_RESPONSE");
+        assertThatThrownBy(()->f.client().confirmRefresh(UUID.randomUUID(),PROJECT,REQUEST,new Conditions(null,null,null))).hasMessage("UPSTREAM_INVALID_RESPONSE");
     }
 
     static ContentCallFailure refreshFailure(String code,String details) {
         var f=fixture();
         f.server().expect(requestTo(REFRESH+"/"+REQUEST+"/confirm")).andRespond(json(409,
             "{\"code\":\""+code+"\",\"message\":\"private detail\",\"next_action\":\"NONE\","+details+"}"));
-        return catchThrowableOfType(ContentCallFailure.class,()->f.client().confirmRefresh(UUID.randomUUID(),PROJECT,REQUEST,null));
+        return catchThrowableOfType(ContentCallFailure.class,()->f.client().confirmRefresh(UUID.randomUUID(),PROJECT,REQUEST,new Conditions(null,null,null)));
     }
     @Test void draftConflictCarriesTheCurrentDraft() {
         var failure=refreshFailure("REFRESH_DRAFT_CONFLICT","\"current\":{\"draft_revision\":5,\"matched\":true,\"left_snapshot\":"+SIDE+",\"right_snapshot\":null}");
@@ -362,7 +362,7 @@ class ContentApiClientTest {
             +"\"title\":\"리아\",\"folder_code\":\"CHARACTER\",\"episode_id\":null,\"body\":{\"schema_version\":1,\"doc\":{}},\"legacy_body_md\":null,"
             +"\"properties\":[],\"relations\":[],\"locked\":false,\"refresh_locked\":false,\"char_count\":0,\"revision_no\":9,\"updated_at\":\"2026-10-20T00:00:00Z\"},\"base\":null}"));
         var failure=catchThrowableOfType(ContentCallFailure.class,()->f.client().saveContent(UUID.randomUUID(),doc,
-            new ContentData.Snapshot("리아",null,"",java.util.List.of(),java.util.List.of()),null));
+            new ContentData.Snapshot("리아",null,"",java.util.List.of(),java.util.List.of()),new Conditions(null,null,null)));
         assertThat(failure.code()).isEqualTo("DOCUMENT_CONFLICT");assertThat(failure.current().revisionNo()).isEqualTo(9L);
         assertThat(failure.base()).isNull();assertThat(failure.details()).isNull();
     }

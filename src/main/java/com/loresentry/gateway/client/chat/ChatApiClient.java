@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -12,6 +11,7 @@ import java.util.function.BiConsumer;
 import com.loresentry.gateway.client.SupportedLocale;
 import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.logging.LogField;
+import com.loresentry.gateway.logging.LogFlow;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ContentType;
@@ -76,11 +76,10 @@ public class ChatApiClient {
         }
         var error = JSON.readValue(body, Error.class);
         if (error == null || errorStatus(error.code()) != status) {
-            // 모르는 code는 ai-chat이 보낸 임의 문자열일 수 있어 error.code에 남기지 않는다
-            boolean known = error != null && errorStatus(error.code()) != 0;
+            // code가 없거나, 모르는 code이거나, 아는 code인데 상태가 계약과 다르다. 모르는 code는 error.code에 남지 않는다
             AppLogger.current().warn("ai-chat response rejected",
-                    LogField.errorType(error == null || error.code() == null ? "MISSING_FIELD" : known ? "ERROR_CONTRACT_MISMATCH" : "UNKNOWN_ERROR_CODE"),
-                    LogField.errorCode(known ? error.code() : null), LogField.statusCode(status));
+                    LogField.upstreamError(error == null ? null : error.code(), true, error != null && errorStatus(error.code()) != 0),
+                    LogField.statusCode(status));
             return ChatCallFailure.invalid();
         }
         return new ChatCallFailure(status, error.code(), status == 503 ? "RETRY_LATER" : "NONE");
@@ -97,10 +96,12 @@ public class ChatApiClient {
     private static ChatCallFailure decodingFailure(JacksonException failure) {
         for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause())
             if (cause instanceof IOException) {
-                AppLogger.current().warn("ai-chat response read failed", LogField.errorType(cause.getClass().getName()));
+                AppLogger.current().warn("ai-chat response read failed", LogField.errorType(cause.getClass().getName()),
+                        LogField.safeStackTrace(cause));
                 return ChatCallFailure.unavailable();
             }
-        AppLogger.current().warn("ai-chat response rejected", LogField.errorType(failure.getClass().getName()));
+        AppLogger.current().warn("ai-chat response rejected", LogField.errorType(failure.getClass().getName()),
+                LogField.safeStackTrace(failure));
         return ChatCallFailure.invalid();
     }
 
@@ -129,7 +130,8 @@ public class ChatApiClient {
             throw decodingFailure(failure);
         } catch (RestClientException | IllegalArgumentException | NullPointerException failure) {
             // 응답 검증(ChatValidation)에서 빠진 필드·허용하지 않는 값 등. 예외 메시지는 남기지 않는다
-            AppLogger.current().warn("ai-chat response rejected", LogField.errorType(failure.getClass().getName()));
+            AppLogger.current().warn("ai-chat response rejected", LogField.errorType(failure.getClass().getName()),
+                    LogField.safeStackTrace(failure));
             throw ChatCallFailure.invalid();
         }
     }
@@ -196,7 +198,9 @@ public class ChatApiClient {
         AppLogger.current().info("ai-chat setting check get call", LogField.settingCheckRunId(runId));
         var run = call(HttpMethod.GET, "/setting-checks/{runId}", Map.of("runId", runId), userId, null, null, SettingCheckData.Run.class, 200);
         if (run.findings() == null) {
-            AppLogger.current().warn("ai-chat response rejected", LogField.errorType("MISSING_FIELD"));
+            // 200으로 받은 검사 결과에 findings가 없다(call은 기대한 상태 200일 때만 값을 돌려준다)
+            AppLogger.current().warn("ai-chat response rejected", LogField.settingCheckRunId(runId), LogField.errorType("MISSING_FIELD"),
+                    LogField.statusCode(200));
             throw ChatCallFailure.invalid();
         }
         return run;
@@ -249,48 +253,50 @@ public class ChatApiClient {
             request.setEntity(new ByteArrayEntity(JSON.writeValueAsBytes(body), ContentType.APPLICATION_JSON));
         } catch (JacksonException | IllegalArgumentException | NullPointerException failure) {
             // 보내기 전에 요청을 만들지 못했다(값 누락·직렬화 실패). 예외 메시지는 남기지 않는다
-            AppLogger.current().warn("ai-chat stream request build failed", LogField.errorType(failure.getClass().getName()));
+            AppLogger.current().warn("ai-chat stream request build failed", LogField.chatSessionId(sessionId),
+                    LogField.errorType(failure.getClass().getName()), LogField.safeStackTrace(failure));
             throw ChatCallFailure.invalid();
         }
-        // SSE 요청은 RestClient를 거치지 않아 UpstreamCallLogInterceptor가 남기지 않는다. 같은 문구로 여기서 남겨 한 번의 검색으로 함께 찾는다
-        long started = System.nanoTime();
+        // SSE 요청은 RestClient를 거치지 않아 UpstreamCallLogInterceptor가 남기지 않는다. 같은 문구(upstream call completed·failed)와
+        // 주소 필드로 결과 줄을 남겨 한 번의 검색으로 함께 찾는다. 상태를 받은 시점까지의 결과다(본문 스트리밍은 relay 종료 줄에 있다)
         ClassicHttpResponse response;
         try {
-            response = stream.http().executeOpen(null, request, null);
+            response = LogFlow.call("upstream", uri, call -> {
+                call.with(LogField.chatSessionId(sessionId));
+                var answered = stream.http().executeOpen(null, request, null);
+                call.status(answered.getCode());
+                return answered;
+            });
         } catch (IOException failure) {
-            AppLogger.current().warn("upstream call failed", LogField.urlDomain(uri.getHost()), LogField.urlFull(uri), LogField.httpMethod("POST"),
-                    LogField.errorType(failure.getClass().getName()), LogField.duration(Duration.ofNanos(System.nanoTime() - started)));
             UpstreamChatStream.abort(request, null);
             throw ChatCallFailure.unavailable();
         }
         int status = response.getCode();
         boolean streaming = false;
         try {
-            // 상태를 받은 시점까지 걸린 시간이다(본문 스트리밍 시간은 relay 결과 줄과 요청 결과 줄에 있다). 대상의 5xx는 warn
-            LogField[] call = {LogField.urlDomain(uri.getHost()), LogField.urlFull(uri), LogField.httpMethod("POST"), LogField.statusCode(status),
-                    LogField.duration(Duration.ofNanos(System.nanoTime() - started))};
-            if (status >= 500) AppLogger.current().warn("upstream call completed", call);
-            else AppLogger.current().info("upstream call completed", call);
             var entity = response.getEntity();
             var contentType = entity == null || entity.getContentType() == null ? null : MediaType.parseMediaType(entity.getContentType());
             if (status == 200) {
                 if (contentType == null || !MediaType.TEXT_EVENT_STREAM.isCompatibleWith(contentType)) {
-                    AppLogger.current().warn("ai-chat response rejected", LogField.errorType("UNEXPECTED_CONTENT_TYPE"), LogField.statusCode(status));
+                    AppLogger.current().warn("ai-chat response rejected", LogField.chatSessionId(sessionId),
+                            LogField.errorType("UNEXPECTED_CONTENT_TYPE"), LogField.statusCode(status));
                     throw ChatCallFailure.invalid();
                 }
-                var opened = new UpstreamChatStream(request, response, entity.getContent());
+                var opened = new UpstreamChatStream(request, response, entity.getContent(), sessionId);
                 streaming = true;
                 return opened;
             }
             throw failure(status, contentType, entity == null ? InputStream.nullInputStream() : entity.getContent());
         } catch (IOException failure) {
-            AppLogger.current().warn("ai-chat response read failed", LogField.errorType(failure.getClass().getName()), LogField.statusCode(status));
+            AppLogger.current().warn("ai-chat response read failed", LogField.chatSessionId(sessionId),
+                    LogField.errorType(failure.getClass().getName()), LogField.safeStackTrace(failure), LogField.statusCode(status));
             throw ChatCallFailure.unavailable();
         } catch (JacksonException failure) {
             throw decodingFailure(failure);
         } catch (IllegalArgumentException | NullPointerException failure) {
             // Content-Type을 읽지 못했거나 응답 모양이 틀렸다. 예외 메시지는 남기지 않는다
-            AppLogger.current().warn("ai-chat response rejected", LogField.errorType(failure.getClass().getName()), LogField.statusCode(status));
+            AppLogger.current().warn("ai-chat response rejected", LogField.chatSessionId(sessionId),
+                    LogField.errorType(failure.getClass().getName()), LogField.safeStackTrace(failure), LogField.statusCode(status));
             throw ChatCallFailure.invalid();
         } finally {
             if (!streaming) UpstreamChatStream.abort(request, response);

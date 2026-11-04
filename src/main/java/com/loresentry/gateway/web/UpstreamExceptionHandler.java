@@ -27,24 +27,20 @@ public class UpstreamExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleUpstreamFailure(UpstreamException exception) {
         // 예외 메시지에는 호출 URI가 들어 있어 남기지 않는다. 호출 결과는 upstream 호출 로그에 이미 있다.
         // 결과 줄에는 어느 대상의 실패인지도 붙인다. error.type은 우리 오류 code 하나라 원인 예외 클래스는 싣지 않는다
-        failed(GatewayFailure.Reason.UPSTREAM_UNAVAILABLE);
-        AppLogger.current().addToOutcome(LogField.code("upstream", exception.getUpstream(), UPSTREAMS));
+        AppLogger.current().addToOutcome(LogField.errorType(GatewayFailure.Reason.UPSTREAM_UNAVAILABLE.name()),
+                LogField.code("upstream", exception.getUpstream(), UPSTREAMS));
         return ErrorResponses.response(GatewayFailure.Reason.UPSTREAM_UNAVAILABLE, exception.getUpstream());
     }
 
     @ExceptionHandler(GatewayFailure.class)
     public ResponseEntity<Map<String, Object>> handleGatewayFailure(GatewayFailure failure) {
-        failed(failure.reason());
+        // 처리한 실패의 이유를 결과 줄에 맡긴다. 상태·레벨은 결과 줄이 응답에서 정한다
+        AppLogger.current().addToOutcome(LogField.errorType(failure.reason().name()));
         return ErrorResponses.response(failure.reason(), null);
     }
     @ExceptionHandler(com.loresentry.gateway.security.SecurityFailure.class)
     public void security(com.loresentry.gateway.security.SecurityFailure failure,
             jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         com.loresentry.gateway.security.SecurityResponses.write(response,failure.reason());
-    }
-
-    /** 처리한 실패의 이유를 결과 줄에 맡긴다. 상태·레벨은 결과 줄이 응답에서 정한다. */
-    private static void failed(GatewayFailure.Reason reason) {
-        AppLogger.current().addToOutcome(LogField.errorType(reason.name()));
     }
 }

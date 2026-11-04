@@ -36,7 +36,7 @@ class InternalHttpTransportTest {
             });
             var client=new ContentApiClient(RestClient.builder().baseUrl("http://127.0.0.1:"+socket.getLocalPort())
                     .requestFactory(new HttpComponentsClientHttpRequestFactory(http)).build());
-            assertThatThrownBy(()->client.listProjects(UUID.randomUUID(),null)).hasMessage("CONTENT_UNAVAILABLE");
+            assertThatThrownBy(()->client.listProjects(UUID.randomUUID(),new ContentApiClient.Conditions(null,null,null))).hasMessage("CONTENT_UNAVAILABLE");
             worker.join(2000);
             assertThat(worker.isAlive()).isFalse();
             assertThat(count).hasValue(1);
@@ -63,8 +63,8 @@ class InternalHttpTransportTest {
             var client=new ContentApiClient(RestClient.builder().baseUrl("http://127.0.0.1:"+socket.getLocalPort())
                 .requestFactory(new HttpComponentsClientHttpRequestFactory(http)).build());
             assertThatThrownBy(()-> {
-                if(write) client.createProject(UUID.randomUUID(),new ContentData.ProjectInput("Novel",""),null);
-                else client.listProjects(UUID.randomUUID(),null);
+                if(write) client.createProject(UUID.randomUUID(),new ContentData.ProjectInput("Novel",""),new ContentApiClient.Conditions(null,null,null));
+                else client.listProjects(UUID.randomUUID(),new ContentApiClient.Conditions(null,null,null));
             }).hasMessage("CONTENT_UNAVAILABLE");
             worker.join(2000);
             assertThat(worker.isAlive()).isFalse();

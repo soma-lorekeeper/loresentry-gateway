@@ -1,5 +1,6 @@
 package com.loresentry.gateway.web.chat;
 
+import java.util.Set;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loresentry.gateway.application.ChatNotEnabled;
@@ -23,14 +24,16 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  */
 @RestControllerAdvice(assignableTypes = {ChatController.class, SettingCheckController.class})
 public class ChatExceptionHandler {
+    /** gateway가 ai-chat 호출 실패에 스스로 붙이는 code(ChatCallFailure.invalid·unavailable). ai-chat이 돌려준 code가 아니다. */
+    private static final Set<String> GATEWAY_CODES = Set.of("UPSTREAM_INVALID_RESPONSE", "AI_CHAT_UNAVAILABLE");
     record Error(String code, String message, @JsonProperty("next_action") String nextAction,
                  @JsonProperty("trace_id") @JsonInclude(JsonInclude.Include.NON_NULL) String traceId) {}
 
     @ExceptionHandler(ChatCallFailure.class)
     ResponseEntity<Error> chat(ChatCallFailure failure) {
         // 잘못된 응답·연결 실패는 gateway가 붙인 code다. 그 밖의 code는 ai-chat이 오류 본문으로 돌려준 값이라 error.code에도 남긴다
-        boolean classified = "UPSTREAM_INVALID_RESPONSE".equals(failure.code()) || "AI_CHAT_UNAVAILABLE".equals(failure.code());
-        return error(failure.status(), failure.code(), failure.nextAction(), classified ? null : failure.code());
+        AppLogger.current().addToOutcome(LogField.upstreamErrorCode(failure.code(), GATEWAY_CODES));
+        return error(failure.status(), failure.code(), failure.nextAction());
     }
     @ExceptionHandler(ChatNotEnabled.class)
     ResponseEntity<Error> disabled() { return error(403, "CHAT_NOT_ENABLED", "NONE"); }
@@ -47,16 +50,9 @@ public class ChatExceptionHandler {
         };
     }
 
+    /** 오류 본문을 만들고 처리한 실패의 이유(error.type)를 결과 줄에 맡긴다. 예외 메시지는 싣지 않는다. 상태·레벨은 결과 줄이 응답에서 정한다. */
     private static ResponseEntity<Error> error(int status, String code, String nextAction) {
-        return error(status, code, nextAction, null);
-    }
-    /**
-     * 오류 본문을 만들고 처리한 실패의 이유를 결과 줄에 맡긴다. 예외 메시지는 싣지 않는다. 상태·레벨은 결과 줄이 응답에서 정한다.
-     *
-     * @param upstream ai-chat이 오류 본문으로 돌려준 code(error.code). gateway가 정한 실패면 null이라 줄에서 빠진다
-     */
-    private static ResponseEntity<Error> error(int status, String code, String nextAction, String upstream) {
-        AppLogger.current().addToOutcome(LogField.errorType(code), LogField.errorCode(upstream));
+        AppLogger.current().addToOutcome(LogField.errorType(code));
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).cacheControl(CacheControl.noStore())
                 .body(new Error(code, message(code), nextAction, AppLogger.current().traceId()));
     }

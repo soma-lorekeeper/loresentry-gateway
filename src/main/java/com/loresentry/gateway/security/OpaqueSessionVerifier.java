@@ -1,6 +1,7 @@
 package com.loresentry.gateway.security;
 
 import com.loresentry.gateway.logging.AppLogger;
+import com.loresentry.gateway.logging.LogField;
 import com.loresentry.gateway.logging.LogLayer;
 import com.loresentry.gateway.application.SessionId;
 import com.loresentry.gateway.client.session.OpaqueSessionReader;
@@ -25,7 +26,7 @@ public final class OpaqueSessionVerifier {
         SessionId id;
         try { id = new SessionId(value); }
         catch (IllegalArgumentException invalid) {
-            AppLogger.current().warn("session verify rejected: malformed session id");
+            AppLogger.current().warn("session verify rejected: malformed session id", LogField.errorType("MALFORMED_SESSION_ID"));
             throw new SecurityFailure(SecurityFailure.Reason.SESSION_INVALID);
         }
         try {
@@ -34,9 +35,10 @@ public final class OpaqueSessionVerifier {
             return verified;
         }
         catch (SessionLookupFailure failure) {
-            // INVALID는 저장소에 세션이 없거나(만료·폐기) 재확인에서 거절된 것이다. 저장소 장애의 단계·원인은 reader가 warn으로 남긴다
+            // INVALID는 저장소에 세션이 없거나(만료·폐기) 재확인에서 거절된 것이라 정상적인 거절(info)이다.
+            // 저장소 장애(UNAVAILABLE)의 단계·원인은 reader의 저장소 호출 결과 줄(valkey call failed)에 있다
             if (failure.kind() == SessionLookupFailure.Kind.INVALID) AppLogger.current().info("session verify rejected: session expired or revoked");
-            else AppLogger.current().warn("session verify failed: session store unavailable");
+            else AppLogger.current().warn("session verify failed: session store unavailable", LogField.errorType("SESSION_STORE_UNAVAILABLE"));
             throw new SecurityFailure(failure.kind() == SessionLookupFailure.Kind.INVALID
                     ? SecurityFailure.Reason.SESSION_INVALID : SecurityFailure.Reason.SESSION_UNAVAILABLE);
         }

@@ -19,7 +19,7 @@ public class SessionService {
         AppLogger.current().info("session revoke");
         if(id==null) {AppLogger.current().info("session revoke skipped: no session cookie");return Revocation.NOT_REQUESTED;}
         try {new SessionId(id);}
-        catch(IllegalArgumentException invalid) {AppLogger.current().warn("session revoke rejected: malformed session id");return Revocation.REJECTED;}
+        catch(IllegalArgumentException invalid) {AppLogger.current().warn("session revoke rejected: malformed session id",LogField.errorType("MALFORMED_SESSION_ID"));return Revocation.REJECTED;}
         try {client.revokeSession(id);AppLogger.current().info("session revoked");return Revocation.CONFIRMED;}
         catch(AuthCallFailure failure) {
             if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&"INVALID_SESSION_ID".equals(failure.code())) {

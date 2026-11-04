@@ -38,7 +38,7 @@ public final class SessionFilter extends OncePerRequestFilter {
             try { id=AuthCookies.single(request,names.sessionName()); }
             catch(IllegalArgumentException duplicate) {
                 // 같은 이름의 세션 쿠키가 둘 이상이다. 쿠키 값은 인증 수단이라 남기지 않는다
-                AppLogger.current().warn("session verify rejected: duplicate session cookie");
+                AppLogger.current().warn("session verify rejected: duplicate session cookie",LogField.errorType("DUPLICATE_SESSION_COOKIE"));
                 throw new SecurityFailure(SecurityFailure.Reason.SESSION_INVALID);
             }
             var verified=verifier.verify(id);
@@ -47,7 +47,8 @@ public final class SessionFilter extends OncePerRequestFilter {
         } catch(SecurityFailure failure) { SecurityResponses.write(response,failure.reason());return; }
         catch(RuntimeException unavailable) {
             // 세션 확인·쿠키 갱신 준비 중 예상하지 못한 예외. 예외 메시지는 남기지 않고 클래스만 남긴다
-            AppLogger.current().warn("session verify failed: unexpected error",LogField.errorType(unavailable.getClass().getName()));
+            AppLogger.current().warn("session verify failed: unexpected error",LogField.errorType(unavailable.getClass().getName()),
+                    LogField.safeStackTrace(unavailable));
             SecurityResponses.write(response,SecurityFailure.Reason.SESSION_UNAVAILABLE);return;
         }
         var sanitized=new HttpServletRequestWrapper(request) {
@@ -60,8 +61,9 @@ public final class SessionFilter extends OncePerRequestFilter {
             @Override public Cookie[] getCookies(){return null;}
         };
         sanitized.setAttribute(USER_ATTRIBUTE,user);
-        // 세션을 확인한 뒤부터는 이 요청의 모든 로그 줄에 user.id가 붙는다
-        try (var bound=AppLogger.bind(AppLogger.current().withUser(user))) { chain.doFilter(sanitized,renewed); }
+        // 세션을 확인한 뒤부터는 이 요청의 모든 로그 줄(결과 줄, 채팅 스트리밍 스레드의 줄 포함)에 user.id가 붙는다
+        AppLogger.current().identify(user);
+        try { chain.doFilter(sanitized,renewed); }
         finally { renewed.finish(); }
     }
 }

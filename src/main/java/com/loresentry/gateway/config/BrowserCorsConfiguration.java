@@ -3,12 +3,11 @@ package com.loresentry.gateway.config;
 import java.util.List;
 import com.loresentry.gateway.logging.AppLogger;
 import com.loresentry.gateway.logging.LogField;
+import com.loresentry.gateway.logging.OutcomeCorsProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.core.Ordered;
-import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.web.cors.DefaultCorsProcessor;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
@@ -46,12 +45,7 @@ public class BrowserCorsConfiguration {
             }
         };
         // 허용하지 않는 Origin·메서드·헤더를 Spring 기본 처리기가 403으로 거절할 때도 같은 이유를 결과 줄에 맡긴다. 응답은 기본 처리기 그대로다
-        filter.setCorsProcessor(new DefaultCorsProcessor() {
-            @Override protected void rejectRequest(ServerHttpResponse response) throws java.io.IOException {
-                AppLogger.current().addToOutcome(LogField.errorType("CORS_REJECTED"));
-                super.rejectRequest(response);
-            }
-        });
+        filter.setCorsProcessor(new OutcomeCorsProcessor());
         var registration=new FilterRegistrationBean<CorsFilter>(filter);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE+10);
         return registration;

@@ -26,9 +26,11 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>항상: {@code @timestamp}, {@code log.level}, {@code log.logger}, {@code message}, {@code service.name},
  *       {@code service.version}, {@code process.thread.name}, {@code ecs.version}</li>
  *   <li>trace: AppLogger가 MDC에 넣은 {@code trace.id}·{@code span.id}. 없으면 Micrometer Tracing이 넣은 현재 span
- *       ({@code traceId}·{@code spanId})을 쓴다. 그 밖의 MDC 값은 내보내지 않는다.</li>
+ *       ({@code traceId}·{@code spanId})을 쓴다.</li>
  *   <li>사용자: MDC {@code user.id}</li>
  *   <li>key-value: AppLogger가 LogField로 넘긴 값(점 이름을 중첩 객체로)</li>
+ *   <li>문맥 필드: AppLogger가 바인딩하며 MDC에 넣은 {@link AppLogger#MDC_CONTEXT_KEYS}({@code url.path}, {@code http.route},
+ *       {@code http.request.method}, {@code http.request.id}). 같은 스레드의 프레임워크 줄에도 붙는다. 그 밖의 MDC 값은 내보내지 않는다.</li>
  *   <li>예외: {@code error.type}(클래스), {@code error.message}, {@code error.stack_trace}</li>
  *   <li>SLF4J marker: {@code tags}</li>
  * </ul>
@@ -97,6 +99,9 @@ public final class EcsLogFormatter implements StructuredLogFormatter<ILoggingEve
         if (pairs != null) {
             for (KeyValuePair pair : pairs) put(root, pair.key, pair.value);
         }
+        // 문맥 필드는 key-value 뒤에 넣는다. AppLogger 줄은 key-value에 같은 값이 이미 있으므로 그대로이고,
+        // 프레임워크 줄(key-value 없음)은 여기서 요청의 경로·경로 템플릿·메서드를 얻는다
+        for (String key : AppLogger.MDC_CONTEXT_KEYS) put(root, key, mdc.get(key));
         List<Marker> markers = event.getMarkerList();
         if (markers != null && !markers.isEmpty()) {
             List<String> tags = new ArrayList<>();

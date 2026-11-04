@@ -81,4 +81,32 @@ class AppLoggerLocationTest {
         }
         assertThat(events.list.getLast().getMarkerList()).extracting(org.slf4j.Marker::getName).containsExactly("health");
     }
+
+    @Test
+    void contextFieldsStayInMdcWhileBoundSoFrameworkLinesGetThem() {
+        // 바인딩한 동안 같은 스레드에서 프레임워크가 찍는 줄(여기서는 SLF4J logger를 직접 쓴 줄)의 MDC에 요청의 문맥 필드가 있다
+        org.slf4j.Logger framework = LoggerFactory.getLogger("org.springframework.sample.Framework");
+        AppLogger request = new AppLogger("a".repeat(32), "b".repeat(16), null).with(LogField.requestId("Root=1-abc"),
+                LogField.urlPath("/projects/p-1"), LogField.route("/projects/{projectId}"), LogField.httpMethod("GET"),
+                LogField.projectId(java.util.UUID.randomUUID()));
+        try (var bound = AppLogger.bind(request)) {
+            framework.warn("framework line");
+            assertThat(events.list.getLast().getMDCPropertyMap()).containsEntry("url.path", "/projects/p-1")
+                    .containsEntry("http.route", "/projects/{projectId}").containsEntry("http.request.method", "GET")
+                    .containsEntry("http.request.id", "Root=1-abc").containsEntry("trace.id", "a".repeat(32))
+                    // MDC_CONTEXT_KEYS 밖의 문맥 필드는 MDC에 넣지 않는다(우리 줄에만 붙는다)
+                    .doesNotContainKey("loresentry.project_id");
+            // 안쪽에서 문맥 필드가 없는 객체를 바인딩하면 그동안은 요청 값이 MDC에 남지 않는다
+            try (var inner = AppLogger.bind(new AppLogger("c".repeat(32), "d".repeat(16), null))) {
+                framework.warn("inner line");
+                assertThat(events.list.getLast().getMDCPropertyMap()).doesNotContainKeys("url.path", "http.route", "http.request.method");
+            }
+            framework.warn("after inner");
+            assertThat(events.list.getLast().getMDCPropertyMap()).containsEntry("url.path", "/projects/p-1");
+        }
+        // 바인딩이 끝나면 MDC에서 빠진다(스레드를 다시 쓰는 다음 요청에 남지 않는다)
+        framework.warn("after request");
+        assertThat(events.list.getLast().getMDCPropertyMap()).doesNotContainKeys("url.path", "http.route", "http.request.method",
+                "http.request.id", "trace.id");
+    }
 }
