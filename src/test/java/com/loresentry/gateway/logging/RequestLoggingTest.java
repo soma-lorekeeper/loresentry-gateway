@@ -43,7 +43,7 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>응답 헤더 X-Trace-Id와 에러 본문 trace_id가 그 trace ID다</li>
  *   <li>접근 로그가 ECS JSON 한 줄로, 같은 trace ID와 응답 상태를 담아 남는다</li>
  *   <li>실패 이유(보안 응답이 맡긴 error.type)는 따로 찍히지 않고 결과 줄(request completed)에 붙는다</li>
- *   <li>브라우저가 부른 경로(url.path)와 경로 템플릿(http.route)이 요청의 모든 줄에 붙는다</li>
+ *   <li>브라우저가 부른 경로(url.path), 경로 템플릿(http.route), 메서드(http.request.method)가 요청의 모든 줄에 붙는다</li>
  *   <li>우리 예외 처리기가 다루지 않은 프레임워크 예외도 그 클래스가 결과 줄의 error.type이 된다</li>
  *   <li>비동기 요청의 오류·시간 초과는 원인 줄 하나와 결과 줄 하나로 남는다(결과 줄이 두 번 찍히지 않는다)</li>
  * </ul>
@@ -86,6 +86,7 @@ class RequestLoggingTest {
         assertThat(mine).allSatisfy(json -> {
             assertThat(json.at("/http/route").asString()).isEqualTo("/chat/usage");
             assertThat(json.at("/url/path").asString()).isEqualTo("/chat/usage");
+            assertThat(json.at("/http/request/method").asString()).isEqualTo("GET");
         });
         assertThat(completed.has("tags")).isFalse();
         assertThat(completed.at("/url/path").asString()).isEqualTo("/chat/usage");
@@ -112,6 +113,7 @@ class RequestLoggingTest {
         assertThat(health).allSatisfy(json -> {
             assertThat(json.at("/http/route").asString()).isEqualTo("/health");
             assertThat(json.at("/url/path").asString()).isEqualTo("/health");
+            assertThat(json.at("/http/request/method").asString()).isEqualTo("GET");
         });
         assertThat(completed.at("/log/layer").asString()).isEqualTo("filter");
         assertThat(completed.at("/log/package").asString()).isEqualTo("com.loresentry.gateway.logging");

@@ -3,6 +3,8 @@ package com.loresentry.gateway.logging;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,9 @@ public final class LogField {
     static final String REDACTED = "[redacted]";
     /** 허용 목록 밖의 코드 값을 대신하는 값. */
     static final String OTHER = "other";
+    /** 안전한 스택 트레이스에 남기는 원인 수·원인마다의 프레임 수 상한. */
+    private static final int MAX_CAUSES = 8;
+    private static final int MAX_FRAMES = 30;
     private static final String PARAM = "loresentry.param.";
     private static final String RESULT = "loresentry.result.";
 
@@ -96,6 +101,19 @@ public final class LogField {
         } catch (IllegalArgumentException notUuid) {
             return null;
         }
+    }
+
+    /**
+     * content 호출의 조건부 요청 값(If-Match·X-Save-Id·If-None-Match). If-Match·If-None-Match는 ETag 문자열이라 가려 길이만 남기고
+     * ({@code param.if_match}, {@code param.if_none_match}), X-Save-Id는 문서 저장의 중복 방지 키라 전용 필드({@link #saveId})다.
+     * 없는 값은 줄에서 빠지고, 셋 다 없으면 null이다. client 타입(Conditions)을 받지 않고 값만 받는다.
+     */
+    public static LogField conditions(String ifMatch, String saveId, String ifNoneMatch) {
+        List<Map.Entry<String, Object>> entries = new ArrayList<>();
+        for (LogField field : new LogField[] {param("if_match", ifMatch), saveId(saveId), param("if_none_match", ifNoneMatch)}) {
+            if (field != null) entries.addAll(field.entries);
+        }
+        return entries.isEmpty() ? null : new LogField(List.copyOf(entries));
     }
 
     /** 회차 폴더(content episode_folders). */
@@ -180,8 +198,11 @@ public final class LogField {
 
     // ---------------------------------------------------------------- 시간·에러 (ECS)
 
-    /** 걸린 시간. ECS event.duration은 나노초다. */
-    public static LogField duration(Duration duration) {
+    /**
+     * 걸린 시간. ECS event.duration은 나노초다. 시간은 로깅 팩토리(RequestLogFilter, UpstreamCallLogInterceptor, LogFlow)만 잰다.
+     * 서비스 코드가 시간을 재서 넘기지 않도록 이 패키지 안에서만 보인다.
+     */
+    static LogField duration(Duration duration) {
         return of("event.duration", duration == null ? null : duration.toNanos());
     }
 
@@ -193,6 +214,50 @@ public final class LogField {
     /** 상대가 돌려준 오류 코드(예: upstream 응답 본문의 code). */
     public static LogField errorCode(String code) {
         return of("error.code", code);
+    }
+
+    /**
+     * 실패의 code 중 상대가 오류 본문으로 돌려준 것만 error.code로 남긴다. gateway가 스스로 붙인 code(gatewayCodes, 예:
+     * UPSTREAM_INVALID_RESPONSE·CONTENT_UNAVAILABLE)는 상대가 보낸 값이 아니라 남기지 않는다(null).
+     *
+     * @param code         실패의 code
+     * @param gatewayCodes gateway가 그 호출의 실패에 스스로 붙이는 code
+     */
+    public static LogField upstreamErrorCode(String code, Set<String> gatewayCodes) {
+        return code == null || gatewayCodes.contains(code) ? null : errorCode(code);
+    }
+
+    /**
+     * 상대(auth·content·ai-chat)가 돌려준 오류 본문을 계약에 맞지 않아 거절한 이유(error.type)와 그 code(error.code).
+     * error.type은 필수 칸이 없으면 MISSING_FIELD, 우리가 아는 code인데 상태·next_action이 계약과 다르면 ERROR_CONTRACT_MISMATCH,
+     * 모르는 code면 UNKNOWN_ERROR_CODE다. error.code는 우리가 아는 code일 때만 남긴다(모르는 code는 상대가 보낸 임의 문자열일 수 있다).
+     *
+     * @param code     오류 본문의 code. 없으면 null(MISSING_FIELD)
+     * @param complete code 밖의 필수 칸(message 등)이 모두 있는지. 아니면 MISSING_FIELD
+     * @param known    우리가 아는 code(오류 계약 목록 안)인지
+     */
+    public static LogField upstreamError(String code, boolean complete, boolean known) {
+        String type = code == null || !complete ? "MISSING_FIELD" : known ? "ERROR_CONTRACT_MISMATCH" : "UNKNOWN_ERROR_CODE";
+        if (!known || code == null) return of("error.type", type);
+        return new LogField(List.of(Map.entry("error.type", type), Map.entry("error.code", code)));
+    }
+
+    /**
+     * 예외 메시지를 뺀 스택 트레이스({@code error.stack_trace}). 원인마다 클래스 이름과 프레임만 적는다.
+     * 예외 메시지에는 요청 값·주소·토큰이 섞일 수 있어서, 예외로 생긴 warn·error 줄의 원인을 남길 때 예외 대신 이 필드를 넘긴다.
+     */
+    public static LogField safeStackTrace(Throwable failure) {
+        if (failure == null) return null;
+        StringBuilder trace = new StringBuilder();
+        int causes = 0;
+        for (Throwable cause = failure; cause != null && causes < MAX_CAUSES; cause = cause.getCause(), causes++) {
+            trace.append(cause.getClass().getName()).append('\n');
+            Arrays.stream(cause.getStackTrace()).limit(MAX_FRAMES)
+                    .forEach(frame -> trace.append("  at ").append(frame).append('\n'));
+            // 원인이 자기 자신을 가리키는 예외는 거기서 멈춘다
+            if (cause.getCause() == cause) break;
+        }
+        return of("error.stack_trace", trace.toString());
     }
 
     // ---------------------------------------------------------------- 입력값 (loresentry.param.*)

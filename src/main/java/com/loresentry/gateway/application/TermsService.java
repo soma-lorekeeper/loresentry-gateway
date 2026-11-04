@@ -31,7 +31,7 @@ public final class TermsService {
         try {
             if(!UUID.fromString(version).toString().equals(version))throw new IllegalArgumentException();
         } catch(RuntimeException invalid){
-            AppLogger.current().warn("terms accept rejected: malformed terms version id");
+            AppLogger.current().warn("terms accept rejected: malformed terms version id",LogField.errorType("MALFORMED_TERMS_VERSION_ID"));
             throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
         }
         try {

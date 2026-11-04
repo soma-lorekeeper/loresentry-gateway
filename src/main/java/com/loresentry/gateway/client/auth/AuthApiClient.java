@@ -119,7 +119,7 @@ public class AuthApiClient {
             throw AuthCallFailure.unavailable(notSent(unavailable));
         }
         catch(RestClientException|IllegalArgumentException invalid) {
-            AppLogger.current().warn("auth response rejected",LogField.errorType(invalid.getClass().getName()));
+            AppLogger.current().warn("auth response rejected",LogField.errorType(invalid.getClass().getName()),LogField.safeStackTrace(invalid));
             throw AuthCallFailure.invalid(null);
         }
     }
@@ -152,25 +152,26 @@ public class AuthApiClient {
             }
             var error=JSON.treeToValue(tree,AuthData.Error.class);
             if(error.code()==null||error.message()==null||!known(operation,status,error.code(),error.nextAction())) {
-                // code·message가 없거나, 모르는 code이거나, 아는 code인데 작업·상태·next_action이 계약과 다르다
-                boolean knownCode=error.code()!=null&&CODES.contains(error.code());
+                // code·message가 없거나, 모르는 code이거나, 아는 code인데 작업·상태·next_action이 계약과 다르다. 모르는 code는 error.code에 남지 않는다
                 AppLogger.current().warn("auth response rejected",
-                        LogField.errorType(error.code()==null||error.message()==null?"MISSING_FIELD":knownCode?"ERROR_CONTRACT_MISMATCH":"UNKNOWN_ERROR_CODE"),
-                        LogField.errorCode(knownCode?error.code():null),LogField.statusCode(status));
+                        LogField.upstreamError(error.code(),error.message()!=null,error.code()!=null&&CODES.contains(error.code())),
+                        LogField.statusCode(status));
                 throw AuthCallFailure.invalid(consumed);
             }
             throw new AuthCallFailure(AuthCallFailure.Kind.CONTRACT,status,error.code(),error.nextAction(),consumed,false);
         } catch(JacksonException malformed) {
             for(Throwable cause=malformed.getCause();cause!=null;cause=cause.getCause())
                 if(cause instanceof IOException) {
-                    AppLogger.current().warn("auth response read failed",LogField.errorType(cause.getClass().getName()));
+                    AppLogger.current().warn("auth response read failed",LogField.errorType(cause.getClass().getName()),LogField.safeStackTrace(cause));
                     throw AuthCallFailure.unavailable(false);
                 }
-            AppLogger.current().warn("auth response rejected",LogField.errorType(malformed.getClass().getName()),LogField.statusCode(status));
+            AppLogger.current().warn("auth response rejected",LogField.errorType(malformed.getClass().getName()),LogField.safeStackTrace(malformed),
+                    LogField.statusCode(status));
             throw AuthCallFailure.invalid(consumed);
         } catch(IllegalArgumentException|NullPointerException malformed) {
             // 응답 검증(validate)에서 빠진 필드·허용하지 않는 값 등. 예외 메시지는 남기지 않는다
-            AppLogger.current().warn("auth response rejected",LogField.errorType(malformed.getClass().getName()),LogField.statusCode(status));
+            AppLogger.current().warn("auth response rejected",LogField.errorType(malformed.getClass().getName()),LogField.safeStackTrace(malformed),
+                    LogField.statusCode(status));
             throw AuthCallFailure.invalid(consumed);
         }
     }

@@ -51,7 +51,7 @@ public class ChatService {
     private void enabled(UUID userId) {
         // 허용 목록(loresentry.chat.allowed-users)에 없는 사용자다. user.id는 SessionFilter가 이미 줄에 붙였다
         if (!allowlist.allows(userId)) {
-            AppLogger.current().warn("chat not enabled for user");
+            AppLogger.current().warn("chat not enabled for user", LogField.errorType("CHAT_NOT_ENABLED"));
             throw new ChatNotEnabled();
         }
     }
@@ -62,7 +62,8 @@ public class ChatService {
             return new ChatData.Profile(account.locale(), account.displayName());
         } catch (RuntimeException failure) {
             AppLogger.current().warn("chat request continues without a profile",
-                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getName()));
+                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getName()),
+                    LogField.safeStackTrace(failure));
             return null;
         }
     }

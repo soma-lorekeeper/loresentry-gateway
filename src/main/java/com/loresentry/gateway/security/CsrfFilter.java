@@ -27,7 +27,7 @@ public class CsrfFilter extends OncePerRequestFilter {
         boolean allowed=origins.size()==1 && cors.checkOrigin(origins.getFirst())!=null;
         if (!allowed || csrf.size()!=1 || !"1".equals(csrf.getFirst())) {
             // 거절한 이유를 개수·허용 여부로만 남긴다. Origin·X-LS-CSRF 값은 브라우저가 보낸 문자열이라 남기지 않는다
-            AppLogger.current().warn("csrf check rejected",LogField.param("origin_count",origins.size()),
+            AppLogger.current().warn("csrf check rejected",LogField.errorType("CSRF_REJECTED"),LogField.param("origin_count",origins.size()),
                     LogField.param("origin_allowed",allowed),LogField.param("csrf_header_count",csrf.size()));
             response.addHeader("Vary","Origin");
             if(allowed) {

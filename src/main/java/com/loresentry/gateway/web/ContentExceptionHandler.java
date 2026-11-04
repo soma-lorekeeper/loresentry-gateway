@@ -2,6 +2,7 @@ package com.loresentry.gateway.web;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -24,6 +25,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  */
 @RestControllerAdvice(assignableTypes = ContentApiController.class)
 public class ContentExceptionHandler {
+    /** gateway가 content 호출 실패에 스스로 붙이는 code(ContentCallFailure.invalid·unavailable). content가 돌려준 code가 아니다. */
+    private static final Set<String> GATEWAY_CODES = Set.of("UPSTREAM_INVALID_RESPONSE", "CONTENT_UNAVAILABLE");
     record Error(String code, String message, @JsonProperty("next_action") String nextAction,
                  @JsonProperty("trace_id") @JsonInclude(JsonInclude.Include.NON_NULL) String traceId) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -44,9 +47,9 @@ public class ContentExceptionHandler {
                          List<Map<String, String>> problems, @JsonProperty("trace_id") @JsonInclude(JsonInclude.Include.NON_NULL) String traceId) {}
     @ExceptionHandler(ContentCallFailure.class)
     ResponseEntity<?> content(ContentCallFailure failure) {
+        // 처리한 실패의 이유(error.type, 브라우저에 돌려주는 우리 오류 code)를 결과 줄에 맡긴다. 상태·레벨은 결과 줄이 응답에서 정한다.
         // 잘못된 응답·연결 실패는 gateway가 붙인 code다. 그 밖의 code는 content가 오류 본문으로 돌려준 값이라 error.code에도 남긴다
-        boolean classified = "UPSTREAM_INVALID_RESPONSE".equals(failure.code()) || "CONTENT_UNAVAILABLE".equals(failure.code());
-        failed(failure.code(), classified ? null : failure.code());
+        AppLogger.current().addToOutcome(LogField.errorType(failure.code()), LogField.upstreamErrorCode(failure.code(), GATEWAY_CODES));
         String traceId = AppLogger.current().traceId();
         if ("DOCUMENT_CONFLICT".equals(failure.code()))
             return ResponseEntity.status(409).header("Cache-Control","no-store").body(new Conflict(
@@ -69,20 +72,17 @@ public class ContentExceptionHandler {
         return ResponseEntity.status(failure.status()).header("Cache-Control","no-store").body(body);
     }
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    ResponseEntity<?> invalid() { failed("INVALID_REQUEST", null); return error(400, "INVALID_REQUEST", "NONE"); }
+    ResponseEntity<?> invalid() {
+        AppLogger.current().addToOutcome(LogField.errorType("INVALID_REQUEST"));
+        return error(400, "INVALID_REQUEST", "NONE");
+    }
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    ResponseEntity<?> path() { failed("PROJECT_NOT_FOUND", null); return error(404, "PROJECT_NOT_FOUND", "NONE"); }
+    ResponseEntity<?> path() {
+        AppLogger.current().addToOutcome(LogField.errorType("PROJECT_NOT_FOUND"));
+        return error(404, "PROJECT_NOT_FOUND", "NONE");
+    }
     private ResponseEntity<Error> error(int status, String code, String action) {
         return ResponseEntity.status(status).header("Cache-Control","no-store").body(new Error(code,message(status),action,AppLogger.current().traceId()));
-    }
-    /**
-     * 처리한 실패의 이유를 결과 줄(request completed)에 맡긴다. 예외 메시지는 싣지 않는다. 상태·레벨은 결과 줄이 응답에서 정한다.
-     *
-     * @param code     브라우저에 돌려주는 우리 오류 code(error.type)
-     * @param upstream content가 오류 본문으로 돌려준 code(error.code). gateway가 붙인 code면 null이라 줄에서 빠진다
-     */
-    private static void failed(String code, String upstream) {
-        AppLogger.current().addToOutcome(LogField.errorType(code), LogField.errorCode(upstream));
     }
     private static String message(int status) {
         return switch (status) {

@@ -13,9 +13,11 @@ import org.springframework.http.client.ClientHttpResponse;
  * 내부 서비스(authentication·content·graph-rag·ai-chat) 호출 한 번마다 결과를 한 줄 남기는 RestClient interceptor.
  * gateway의 RestClient는 모두 Boot의 RestClient.Builder로 만들므로(RestClientConfig) 여기 한 곳에서 모든 호출이 남는다.
  *
- * <p>남기는 값: 대상 호스트({@code url.domain}), 대상 주소({@code url.full}, 쿼리 제외), 메서드, 응답 상태, 걸린 시간.
- * {@code url.path}·{@code http.route}는 RequestLogFilter가 붙인 브라우저 요청의 값이 그대로 들어간다.
+ * <p>남기는 값: 대상 호스트({@code url.domain}), 대상 주소({@code url.full}, 쿼리 제외), 응답 상태, 걸린 시간.
+ * {@code url.path}·{@code http.route}·{@code http.request.method}는 RequestLogFilter가 붙인 브라우저 요청의 값이 그대로 들어간다
+ * (보낸 호출의 메서드는 남기지 않는다).
  * 요청·응답 본문과 헤더(X-User-Display-Name 등)는 남기지 않는다. 대상의 5xx와 연결 실패는 warn, 그 밖은 info다.
+ * 5xx의 error.type은 {@code UPSTREAM_SERVER_ERROR}, 연결 실패는 예외 클래스와 메시지 없는 스택이다(LogFlow.call의 결과 줄과 같다).
  *
  * <p>줄 위치(log.logger·log.origin.function)는 이 interceptor가 아니라 실제로 HTTP를 보낸 Spring RestClient 메서드다
  * (예: {@code DefaultRestClient$DefaultResponseSpec.body}). 그 메서드를 부른 우리 client 메서드는 바로 앞 진입 줄에 있다.
@@ -40,14 +42,15 @@ final class UpstreamCallLogInterceptor implements ClientHttpRequestInterceptor {
         try {
             ClientHttpResponse response = execution.execute(request, body);
             int status = response.getStatusCode().value();
-            LogField[] fields = {LogField.urlDomain(uri.getHost()), LogField.urlFull(uri), LogField.httpMethod(request.getMethod().name()),
-                    LogField.statusCode(status), LogField.duration(elapsed(started))};
+            // 대상의 5xx는 warn이고 error.type이 UPSTREAM_SERVER_ERROR다. 그 밖은 error.type이 없다(null 필드는 줄에서 빠진다)
+            LogField[] fields = {LogField.urlDomain(uri.getHost()), LogField.urlFull(uri), LogField.statusCode(status),
+                    LogField.errorType(status >= 500 ? LogFlow.UPSTREAM_SERVER_ERROR : null), LogField.duration(elapsed(started))};
             if (status >= 500) logger.warnAt(restClient, "upstream call completed", fields);
             else logger.infoAt(restClient, "upstream call completed", fields);
             return response;
         } catch (IOException failure) {
             logger.warnAt(restClient, "upstream call failed", LogField.urlDomain(uri.getHost()), LogField.urlFull(uri),
-                    LogField.httpMethod(request.getMethod().name()), LogField.errorType(failure.getClass().getName()),
+                    LogField.errorType(failure.getClass().getName()), LogField.safeStackTrace(failure),
                     LogField.duration(elapsed(started)));
             throw failure;
         }

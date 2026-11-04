@@ -41,7 +41,7 @@ public class SettingCheckService {
     private void enabled(UUID userId) {
         // 허용 목록(loresentry.chat.allowed-users)에 없는 사용자다. user.id는 SessionFilter가 이미 줄에 붙였다
         if (!allowlist.allows(userId)) {
-            AppLogger.current().warn("setting check not enabled for user");
+            AppLogger.current().warn("setting check not enabled for user", LogField.errorType("CHAT_NOT_ENABLED"));
             throw new ChatNotEnabled();
         }
     }
@@ -51,7 +51,8 @@ public class SettingCheckService {
             return new ChatData.Profile(accounts.get(userId).locale(), null);
         } catch (RuntimeException failure) {
             AppLogger.current().warn("setting check starts without a locale",
-                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getName()));
+                    LogField.errorType(failure instanceof AuthOperationFailure auth ? auth.code() : failure.getClass().getName()),
+                    LogField.safeStackTrace(failure));
             return null;
         }
     }

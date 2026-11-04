@@ -33,7 +33,7 @@ public class AccountDeletionService {
         try {email=auth.account(user).email();}
         catch(AuthCallFailure failure){log.warn("account deletion stopped: account lookup failed",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));throw failure(failure);}
         if(email==null||!normalize(email).equals(normalize(confirmationEmail))) {
-            log.warn("account deletion rejected: confirmation email mismatch");
+            log.warn("account deletion rejected: confirmation email mismatch",LogField.errorType("ACCOUNT_CONFIRMATION_MISMATCH"));
             throw new AuthOperationFailure(400,"ACCOUNT_CONFIRMATION_MISMATCH","NONE");
         }
         log.info("account deletion confirmed");
@@ -48,7 +48,7 @@ public class AccountDeletionService {
         catch(AuthCallFailure failure) {
             // 이미 지워진 계정(재시도 등)은 성공으로 본다. 이때는 설문을 기록하지 않는다
             if(failure.kind()==AuthCallFailure.Kind.CONTRACT&&failure.status()==404&&"USER_NOT_FOUND".equals(failure.code())) {
-                log.warn("account was already deleted in auth");return;
+                log.warn("account was already deleted in auth",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));return;
             }
             log.warn("account deletion stopped: auth account was not deleted",LogField.errorType(failure.reason()),LogField.errorCode(failure.upstreamCode()));
             throw failure(failure);
@@ -62,7 +62,7 @@ public class AccountDeletionService {
         catch(RuntimeException failure){
             // content가 돌려준 code(또는 gateway가 붙인 분류)는 error.code로 함께 남긴다
             AppLogger.current().warn("withdrawal survey was not recorded",LogField.errorType(failure.getClass().getName()),
-                    LogField.errorCode(failure instanceof ContentCallFailure contentFailure?contentFailure.code():null));
+                    LogField.errorCode(failure instanceof ContentCallFailure contentFailure?contentFailure.code():null),LogField.safeStackTrace(failure));
         }
     }
     private static boolean answered(ContentData.WithdrawalSurvey survey) {

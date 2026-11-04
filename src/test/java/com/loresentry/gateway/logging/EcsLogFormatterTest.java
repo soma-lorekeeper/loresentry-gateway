@@ -86,6 +86,32 @@ class EcsLogFormatterTest {
     }
 
     @Test
+    void writesContextFieldsFromMdcOnFrameworkLines() {
+        // 프레임워크 줄: key-value가 없어도 AppLogger가 바인딩하며 MDC에 넣은 요청의 문맥 필드가 붙는다
+        var framework = event(Level.WARN, "framework line", null);
+        framework.setMDCPropertyMap(Map.of("url.path", "/projects/p-1", "http.route", "/projects/{projectId}",
+                "http.request.method", "GET", "http.request.id", "Root=1-abc", "loresentry.project_id", "not a context key"));
+        JsonNode json = format(framework);
+        assertThat(json.at("/url/path").asString()).isEqualTo("/projects/p-1");
+        assertThat(json.at("/http/route").asString()).isEqualTo("/projects/{projectId}");
+        assertThat(json.at("/http/request/method").asString()).isEqualTo("GET");
+        assertThat(json.at("/http/request/id").asString()).isEqualTo("Root=1-abc");
+        // 목록 밖의 MDC 값은 내보내지 않는다
+        assertThat(json.has("loresentry")).isFalse();
+    }
+
+    @Test
+    void lineKeyValuesWinOverMdcContextFields() {
+        // AppLogger 줄은 문맥 필드를 key-value로도 넘긴다. 둘이 다르면 그 줄에 넘긴 값이 남는다
+        var line = event(Level.INFO, "d", null);
+        line.addKeyValuePair(new KeyValuePair("url.path", "/from-line"));
+        line.setMDCPropertyMap(Map.of("url.path", "/from-mdc", "http.route", "/from-mdc-route"));
+        JsonNode json = format(line);
+        assertThat(json.at("/url/path").asString()).isEqualTo("/from-line");
+        assertThat(json.at("/http/route").asString()).isEqualTo("/from-mdc-route");
+    }
+
+    @Test
     void writesTheExceptionAsErrorFieldsOnOneLine() {
         JsonNode json = format(event(Level.ERROR, "request failed", new IllegalStateException("boom")));
         assertThat(json.at("/error/type").asString()).isEqualTo("java.lang.IllegalStateException");

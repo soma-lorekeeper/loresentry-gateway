@@ -31,12 +31,13 @@ public class SessionController {
         try {result=sessions.revoke(AuthCookies.single(request,names.sessionName()));}
         catch(IllegalArgumentException ambiguous) {
             // 같은 이름의 세션 쿠키가 둘 이상이다. 쿠키 값은 인증 수단이라 남기지 않는다
-            AppLogger.current().warn("session revoke rejected: duplicate session cookie");
+            AppLogger.current().warn("session revoke rejected: duplicate session cookie",LogField.errorType("DUPLICATE_SESSION_COOKIE"));
             result=SessionService.Revocation.REJECTED;
         }
         catch(RuntimeException unconfirmed) {
             // 폐기 요청 중 예상하지 못한 예외. 예외 메시지는 남기지 않고 클래스만 남긴다
-            AppLogger.current().warn("session revoke unconfirmed: unexpected error",LogField.errorType(unconfirmed.getClass().getName()));
+            AppLogger.current().warn("session revoke unconfirmed: unexpected error",LogField.errorType(unconfirmed.getClass().getName()),
+                    LogField.safeStackTrace(unconfirmed));
             result=SessionService.Revocation.UNCONFIRMED;
         }
         int status=switch(result) {case CONFIRMED,NOT_REQUESTED -> 200;case REJECTED -> 400;case UNCONFIRMED -> 503;};
