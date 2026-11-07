@@ -30,7 +30,7 @@ AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api), 설정 오류 점검 경로�
 |---|---|---|
 | `GET /auth/oauth/google/prepare` | 없음 | 임시 쿠키 설정 후 Google로 `302` |
 | `GET /auth/oauth/google/callback` | Google callback 쿼리와 OAuth 임시 쿠키 | 세션 쿠키 설정 후 고정 프론트로 `303` |
-| `POST /auth/password/signup` | CSRF 헤더와 `login_id`·`password`·선택 `display_name` 본문 | `200`, `status`. 세션 쿠키 또는 동의 대기 쿠키 설정 |
+| `POST /auth/password/signup` | CSRF 헤더와 `login_id`·`password` 본문 | `200`, `status`. 세션 쿠키 또는 동의 대기 쿠키 설정 |
 | `POST /auth/password/login` | CSRF 헤더와 `login_id`·`password` 본문 | `200`, `status`. 세션 쿠키 또는 동의 대기 쿠키 설정 |
 | `POST /auth/sessions/revoke` | CSRF 헤더와 세션 쿠키, 본문 없음 | 쿠키 삭제 헤더와 폐기 확인 결과 |
 | `GET /auth/users/me` | 세션 쿠키 | `200`, 계정 |
@@ -77,7 +77,7 @@ Google 계정 없이 쓰는 로그인 수단이다. 페이지 이동 없이 JSON
 
 | 제공 API | 브라우저 입력 | 성공 결과 |
 |---|---|---|
-| `POST /auth/password/signup` | CSRF 헤더, JSON의 `login_id`·`password`·선택 `display_name` | `200`, `{"status": ...}` |
+| `POST /auth/password/signup` | CSRF 헤더, JSON의 `login_id`·`password` | `200`, `{"status": ...}` |
 | `POST /auth/password/login` | CSRF 헤더, JSON의 `login_id`·`password` | `200`, `{"status": ...}` |
 
 | `status` | 쿠키 | 프론트 다음 동작 |

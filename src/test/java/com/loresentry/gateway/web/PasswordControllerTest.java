@@ -47,9 +47,9 @@ class PasswordControllerTest {
         return post(path).header("Origin","http://localhost:3000").header("X-LS-CSRF","1").contentType("application/json").content(body);
     }
     @Test void signUpSetsTheSessionCookieAndReturnsOnlyTheStatus() throws Exception {
-        when(client.signUp(new AuthData.SignUp("judge1","correct-horse-7","심사")))
+        when(client.signUp(new AuthData.SignUp("judge1","correct-horse-7")))
                 .thenReturn(new AuthData.LoginSession("AUTHENTICATED",SESSION,null,NOW.plusSeconds(1209600),null));
-        var response=mvc.perform(browser("/auth/password/signup","{\"login_id\":\"judge1\",\"password\":\"correct-horse-7\",\"display_name\":\"심사\"}")
+        var response=mvc.perform(browser("/auth/password/signup","{\"login_id\":\"judge1\",\"password\":\"correct-horse-7\"}")
                 .cookie(new Cookie("ls_consent",CONSENT)))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
                 .andExpect(content().json("{\"status\":\"AUTHENTICATED\"}",org.springframework.test.json.JsonCompareMode.STRICT))

@@ -19,10 +19,10 @@ class AuthPasswordClientTest {
     }
     @Test void signUpPostsSnakeCaseFieldsWithoutCredentialsAndReadsTheSession() {
         server.expect(requestTo("http://auth.test/auth/password/signup")).andExpect(method(HttpMethod.POST))
-            .andExpect(content().json("{\"login_id\":\"judge1\",\"password\":\"correct-horse-7\",\"display_name\":null}"))
+            .andExpect(content().json("{\"login_id\":\"judge1\",\"password\":\"correct-horse-7\"}"))
             .andExpect(headerDoesNotExist("Cookie")).andExpect(headerDoesNotExist("X-User-Id"))
             .andRespond(withSuccess("{\"status\":\"AUTHENTICATED\",\"session_id\":\""+"A".repeat(43)+"\",\"expires_at\":\"2026-11-21T00:00:00Z\"}",MediaType.APPLICATION_JSON));
-        var result=client.signUp(new AuthData.SignUp("judge1","correct-horse-7",null));
+        var result=client.signUp(new AuthData.SignUp("judge1","correct-horse-7"));
         assertThat(result.status()).isEqualTo("AUTHENTICATED");assertThat(result.sessionId()).isEqualTo("A".repeat(43));
         assertThat(result.toString()).doesNotContain("A".repeat(43));server.verify();
     }

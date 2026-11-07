@@ -13,10 +13,9 @@ public final class PasswordLoginService {
     private final AuthApiClient client;
     private final Clock clock;
     public PasswordLoginService(AuthApiClient client,Clock clock){this.client=client;this.clock=clock;}
-    public Outcome signUp(String loginId,String password,String displayName) {
+    public Outcome signUp(String loginId,String password) {
         requireText(loginId);requireText(password);
-        if(displayName!=null&&displayName.isBlank()) displayName=null;
-        try {return outcome(client.signUp(new AuthData.SignUp(loginId,password,displayName)));}
+        try {return outcome(client.signUp(new AuthData.SignUp(loginId,password)));}
         catch(AuthCallFailure failure){throw mapped(failure);}
     }
     public Outcome login(String loginId,String password) {

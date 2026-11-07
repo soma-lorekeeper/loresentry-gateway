@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 public final class PasswordController {
-    public record SignUp(@JsonProperty("login_id") String loginId,String password,@JsonProperty("display_name") String displayName) {
+    public record SignUp(@JsonProperty("login_id") String loginId,String password) {
         @Override public String toString(){return "SignUp[redacted]";}
     }
     public record Login(@JsonProperty("login_id") String loginId,String password) {
@@ -26,7 +26,7 @@ public final class PasswordController {
     @PostMapping("/auth/password/signup")
     public ResponseEntity<Status> signUp(@RequestBody SignUp body,HttpServletRequest request) {
         if(body==null) throw new AuthOperationFailure(400,"INVALID_REQUEST","NONE");
-        return respond(passwords.signUp(body.loginId(),body.password(),body.displayName()),request);
+        return respond(passwords.signUp(body.loginId(),body.password()),request);
     }
     @PostMapping("/auth/password/login")
     public ResponseEntity<Status> login(@RequestBody Login body,HttpServletRequest request) {
