@@ -16,6 +16,18 @@
 - 고정 `/login?result=...` 복귀 뒤 `GET /auth/users/me`로 실제 로그인을 확인한다.
   result는 화면 안내 값이며 인증 근거가 아니다.
 
+## 아이디·비밀번호 로그인
+
+로그인 화면은 Google 버튼 아래에 아이디·비밀번호 폼과 계정 만들기 전환을 둔다.
+`POST /auth/password/login`·`/signup`은 세션을 교체하는 인증 전환이므로 다른 보호 요청과 겹치지 않게 조율한다.
+
+- 응답 `status`가 `AUTHENTICATED`면 쿼리 캐시를 비우고 `GET /auth/users/me`로 로그인을 확인한 뒤 서비스로 이동한다.
+- `TERMS_REQUIRED`면 `/login?result=terms_required`로 이동해 아래 약관 동의 흐름을 그대로 탄다.
+- `INVALID_CREDENTIALS`는 폼 오류("아이디 또는 비밀번호가 맞지 않아요"), `LOGIN_ID_TAKEN`은 아이디 입력란 오류로 보인다.
+  `LOGIN_UNAVAILABLE`·통신 실패는 다시 시도 안내이며 자동 재전송하지 않는다.
+- 아이디는 입력 중 소문자로 맞추고, 가입 전에 서버와 같은 규칙(영문 소문자·숫자·`._-` 3~32자, 비밀번호 공백 없이 8~72자)으로 먼저 검사한다.
+- 아이디 계정은 이메일이 없으므로 계정 응답의 `email`은 `null`이다. 계정 설정은 이메일 칸을 숨기고, 탈퇴 확인 입력은 아이디 계정에서는 쓸 수 없다.
+
 ## 약관 동의
 
 로그인 화면에서 동의 모달을 표시한다. `result=terms_required`로 복귀한 경우에는 위 본인 계정

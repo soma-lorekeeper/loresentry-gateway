@@ -19,6 +19,12 @@ public final class AuthData {
             @JsonProperty("expires_at") Instant expiresAt,@JsonProperty("login_request_consumed") Boolean consumed) {
         @Override public String toString() { return "LoginSession[redacted]"; }
     }
+    public record SignUp(@JsonProperty("login_id") String loginId,String password,@JsonProperty("display_name") String displayName) {
+        @Override public String toString(){return "SignUp[redacted]";}
+    }
+    public record PasswordLogin(@JsonProperty("login_id") String loginId,String password) {
+        @Override public String toString(){return "PasswordLogin[redacted]";}
+    }
     public record Session(@JsonProperty("session_id") String sessionId) {
         @Override public String toString(){return "Session[redacted]";}
     }

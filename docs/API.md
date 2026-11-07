@@ -18,7 +18,7 @@ AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api), 설정 오류 점검 경로�
 
 - 브라우저는 HttpOnly 세션 쿠키 하나로 인증하며 쿠키·CSRF·CORS는 [브라우저 보안](BROWSER_SECURITY.md)을 따른다.
 - 본인 계정·Content 등 보호 API는 세션 검증과 활동 만료 연장에 성공해야 내부로 전달한다.
-- 로그인 준비·콜백·로그아웃·약관 조회와 완료는 일반 세션 필터에서 제외하고 각 흐름의 검증을 적용한다.
+- 로그인 준비·콜백·로그아웃·약관 조회와 완료·아이디 가입과 로그인은 일반 세션 필터에서 제외하고 각 흐름의 검증을 적용한다.
 - 로그아웃은 본문 없이 호출한다. 세션 ID를 본문·쿼리·사용자 헤더로 받지 않는다.
 - 인증·계정 및 세션 쿠키를 갱신하는 응답에는 `Cache-Control: no-store`를 적용한다.
 - 오류 본문은 `code`, `message`, `next_action`이다. next_action은 `NONE`, `RELOGIN`, `RESTART_LOGIN`, `RETRY_LATER`다.
@@ -30,6 +30,8 @@ AI 챗 경로는 아래 [AI 챗 API](#ai-챗-api), 설정 오류 점검 경로�
 |---|---|---|
 | `GET /auth/oauth/google/prepare` | 없음 | 임시 쿠키 설정 후 Google로 `302` |
 | `GET /auth/oauth/google/callback` | Google callback 쿼리와 OAuth 임시 쿠키 | 세션 쿠키 설정 후 고정 프론트로 `303` |
+| `POST /auth/password/signup` | CSRF 헤더와 `login_id`·`password`·선택 `display_name` 본문 | `200`, `status`. 세션 쿠키 또는 동의 대기 쿠키 설정 |
+| `POST /auth/password/login` | CSRF 헤더와 `login_id`·`password` 본문 | `200`, `status`. 세션 쿠키 또는 동의 대기 쿠키 설정 |
 | `POST /auth/sessions/revoke` | CSRF 헤더와 세션 쿠키, 본문 없음 | 쿠키 삭제 헤더와 폐기 확인 결과 |
 | `GET /auth/users/me` | 세션 쿠키 | `200`, 계정 |
 | `PATCH /auth/users/me` | CSRF 헤더·세션 쿠키와 `display_name` 본문 | `200`, 수정된 계정 |
@@ -67,6 +69,26 @@ Auth 응답에 없으면 `null`, 그 밖의 값이면 502로 처리한다. 변�
 `Referrer-Policy: no-referrer`를 적용한다. 실패 시 기존 세션 쿠키는 변경하지 않는다.
 임시 쿠키는 [소비 결과](auth/LOGIN_FLOW.md#oauth-임시-쿠키)에 따라 정리한다.
 `result=success`는 안내 값이며 프론트는 `GET /auth/users/me`로 실제 로그인을 확인한다.
+
+## 아이디·비밀번호 API
+
+Google 계정 없이 쓰는 로그인 수단이다. 페이지 이동 없이 JSON으로 끝나며, 두 경로 모두 CSRF 검사를 받고
+일반 세션 필터에서는 제외한다. 입력 규칙과 오류 조건은 [Auth API](../../loresentry-authentication/docs/API.md#아이디비밀번호-가입과-로그인)를 따른다.
+
+| 제공 API | 브라우저 입력 | 성공 결과 |
+|---|---|---|
+| `POST /auth/password/signup` | CSRF 헤더, JSON의 `login_id`·`password`·선택 `display_name` | `200`, `{"status": ...}` |
+| `POST /auth/password/login` | CSRF 헤더, JSON의 `login_id`·`password` | `200`, `{"status": ...}` |
+
+| `status` | 쿠키 | 프론트 다음 동작 |
+|---|---|---|
+| `AUTHENTICATED` | 세션 쿠키 설정, 남은 동의 대기 쿠키 삭제 | `GET /auth/users/me`로 로그인을 확인하고 서비스로 이동 |
+| `TERMS_REQUIRED` | 동의 대기 쿠키 설정. 세션 쿠키는 바꾸지 않음 | `/login?result=terms_required`로 이동해 [약관 동의](#약관-동의-api)를 진행 |
+
+본문·필드 누락·빈 문자열·알 수 없는 필드는 Auth를 호출하지 않고 `400 INVALID_REQUEST`다. 그 밖의 오류는 Auth의
+`INVALID_LOGIN_ID`·`INVALID_PASSWORD`(400), `LOGIN_ID_TAKEN`(409), `INVALID_CREDENTIALS`(401)을 상태·code·`next_action` 그대로 전달하고,
+통신 실패는 `503 LOGIN_UNAVAILABLE`, 잘못된 내부 응답·만료 검증 실패는 `502 UPSTREAM_INVALID_RESPONSE`다. 오류 응답은 쿠키를 바꾸지 않는다.
+세션 ID·동의 대기 ID는 JSON에 넣지 않는다.
 
 ## 약관 동의 API
 
