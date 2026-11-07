@@ -31,6 +31,8 @@ client는 내부 DTO를 검증·변환하고 application은 후속 처리를 결
 |---|---|---|---|
 | `GET /auth/oauth/google/prepare` | `POST /auth/oauth/google/prepare` | 빈 JSON 객체 | 인가 URL로 리다이렉트하고 요청 식별자·만료로 임시 쿠키 설정 |
 | `GET /auth/oauth/google/callback` | `POST /auth/oauth/google/callback` | 쿼리의 code·state 또는 error와 임시 쿠키의 요청 식별자 | 세션 ID·만료로 세션 쿠키 설정, 소비 결과로 임시 쿠키 정리 |
+| `POST /auth/password/signup` | `POST /auth/password/signup` | CSRF·입력 검증 후 `login_id`·`password` 본문 | `status`에 따라 세션 쿠키 또는 동의 대기 쿠키 설정, 브라우저에는 `status`만 |
+| `POST /auth/password/login` | `POST /auth/password/login` | CSRF·입력 검증 후 `login_id`·`password` 본문 | 위와 같음 |
 | `POST /auth/sessions/revoke` | `POST /auth/sessions/revoke` | CSRF 통과 후 쿠키의 ID를 `session_id` 본문으로 구성. 쿠키가 없으면 호출 생략 | 폐기 결과와 브라우저 쿠키 삭제를 구분하여 반환 |
 | `GET /auth/users/me` | `GET /auth/users/me` | 인증된 사용자 UUID를 `X-User-Id`로 구성 | 본인 계정 외부 DTO로 변환 |
 | `PATCH /auth/users/me` | `PATCH /auth/users/me` | 인증된 사용자 UUID와 검증한 `display_name` | 수정된 본인 계정 외부 DTO로 변환 |

@@ -16,7 +16,7 @@ import tools.jackson.core.JacksonException;
 @Component
 public class AuthApiClient {
     private final RestClient client;
-    private enum Operation { PREPARE, CALLBACK, SESSION_REVOKE, ACCOUNT, TERMS }
+    private enum Operation { PREPARE, CALLBACK, SESSION_REVOKE, ACCOUNT, TERMS, PASSWORD }
     private static final JsonMapper JSON=JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
@@ -31,6 +31,12 @@ public class AuthApiClient {
     }
     public AuthData.LoginSession callback(AuthData.Callback input) {
         return call(HttpMethod.POST,"/auth/oauth/google/callback",null,input,AuthData.LoginSession.class,200,Operation.CALLBACK);
+    }
+    public AuthData.LoginSession signUp(AuthData.SignUp input) {
+        return call(HttpMethod.POST,"/auth/password/signup",null,input,AuthData.LoginSession.class,200,Operation.PASSWORD);
+    }
+    public AuthData.LoginSession passwordLogin(AuthData.PasswordLogin input) {
+        return call(HttpMethod.POST,"/auth/password/login",null,input,AuthData.LoginSession.class,200,Operation.PASSWORD);
     }
     public void revokeSession(String id) {
         call(HttpMethod.POST,"/auth/sessions/revoke",null,new AuthData.Session(id),Void.class,204,Operation.SESSION_REVOKE);
@@ -143,7 +149,10 @@ public class AuthApiClient {
         return switch(code) {
             case "INVALID_REQUEST" -> status==400&&"NONE".equals(action);
             case "INTERNAL_ERROR" -> operation!=Operation.TERMS&&status==500&&"NONE".equals(action);
-            case "LOGIN_UNAVAILABLE" -> (operation==Operation.PREPARE||operation==Operation.CALLBACK||operation==Operation.TERMS)&&status==503&&"RESTART_LOGIN".equals(action);
+            case "LOGIN_UNAVAILABLE" -> (operation==Operation.PREPARE||operation==Operation.CALLBACK||operation==Operation.TERMS||operation==Operation.PASSWORD)&&status==503&&"RESTART_LOGIN".equals(action);
+            case "INVALID_LOGIN_ID","INVALID_PASSWORD" -> operation==Operation.PASSWORD&&status==400&&"NONE".equals(action);
+            case "LOGIN_ID_TAKEN" -> operation==Operation.PASSWORD&&status==409&&"NONE".equals(action);
+            case "INVALID_CREDENTIALS" -> operation==Operation.PASSWORD&&status==401&&"NONE".equals(action);
             case "CONSENT_REQUEST_INVALID" -> operation==Operation.TERMS&&status==401&&"RESTART_LOGIN".equals(action);
             case "TERMS_VERSION_MISMATCH" -> operation==Operation.TERMS&&status==409&&"NONE".equals(action);
             case "OAUTH_REQUEST_INVALID","OAUTH_LOGIN_DENIED" -> operation==Operation.CALLBACK&&status==400&&"RESTART_LOGIN".equals(action);
