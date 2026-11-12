@@ -49,6 +49,7 @@ final class ChatValidation {
                 items(v.citations());
             }
             case Messages v -> { items(v.messages()); required(v.generating()); }
+            case SampleHistory v -> required(v.seeded());
             case Usage v -> { required(v.used(), v.limit(), v.resetsAt()); if (v.used() < 0 || v.limit() < 0) throw new IllegalArgumentException("Invalid usage"); }
             case Read v -> counts(v.manuscripts(), v.settings(), v.coreFacts());
             case Counts v -> counts(v.open(), v.intended(), v.notConflict());

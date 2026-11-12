@@ -162,6 +162,10 @@ public class ChatApiClient {
     public void deleteUserData(UUID userId) {
         call(HttpMethod.DELETE, "/users/me/data", Map.of(), userId, null, null, Void.class, 204);
     }
+    public ChatData.SampleHistory seedSampleHistory(UUID userId, UUID projectId) {
+        return call(HttpMethod.POST, "/projects/{projectId}/chat/sample-history", Map.of("projectId", projectId), userId, null, null, ChatData.SampleHistory.class, 200);
+    }
+
     public void deleteProjectData(UUID userId, UUID projectId) {
         call(HttpMethod.DELETE, "/projects/{projectId}/chat/data", Map.of("projectId", projectId), userId, null, null, Void.class, 204);
     }

@@ -29,6 +29,7 @@ public final class ChatData {
     public record Message(UUID id, @JsonProperty("session_id") UUID sessionId, String role, String content, String intent, Quote quote, List<Citation> citations, @JsonProperty("created_at") OffsetDateTime createdAt) {}
     public record Messages(List<Message> messages, Boolean generating) {}
     public record Usage(Integer used, Integer limit, @JsonProperty("resets_at") OffsetDateTime resetsAt) {}
+    public record SampleHistory(Boolean seeded) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Rename(String title) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
